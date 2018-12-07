@@ -1,0 +1,1 @@
+Binary file test is covered in integration tests.
