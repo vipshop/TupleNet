@@ -5,7 +5,7 @@ env_init ${0##*/} # 0##*/ is the filename
 
 # setup
 pmsg "building tpctl"
-sh ${CONTROL_BIN_PATH}/build.sh || exit_test
+bash ${CONTROL_BIN_PATH}/build.sh || exit_test
 
 # below command shall not require ectd to be up
 ! (tpctl | grep 'error') || exit_test

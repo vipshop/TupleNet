@@ -76,7 +76,7 @@ create_container() {
 
 # setup
 pmsg "building tpctl and tpcnm"
-sh ${CONTROL_BIN_PATH}/build.sh || exit_test
+bash ${CONTROL_BIN_PATH}/build.sh || exit_test
 
 
 # start ovs

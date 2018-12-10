@@ -82,6 +82,7 @@ def process_unknow_dst(unknow_dst_msg_seg):
             if chassis.uuid == chassis_uuid:
                 array.append(chassis)
                 return array
+        return array
 
     lsp_array = entity_zoo.touch_entity(LOGICAL_ENTITY_TYPE_LSP, fn_lsp, ip_int)
     if len(lsp_array) == 0:

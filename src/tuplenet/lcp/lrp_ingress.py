@@ -22,6 +22,10 @@ pyDatalog.create_terms('lrp_ip_route')
 pyDatalog.create_terms('lrp_ecmp_judge')
 
 
+# NOTE: all lsp and lrp use IP least 16bits as a portID,
+# so a lrp(ip=10.10.1.1) has same portID=0x0101, and lrp(ip=20.20.1.1)
+# has same portID=0x0101
+
 def init_lrp_ingress_clause(options):
 
     init_ecmp_clause(options)
