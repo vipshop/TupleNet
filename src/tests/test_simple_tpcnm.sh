@@ -35,10 +35,20 @@ run_tpcnm_with_cfg() {
 
 run_dockerd_and_build_image(){
     # can only use /tmp, or containerd complains: unix socket path too long (> 104)
+    if [ -n "$USE_SYSTEM_DOCKER" ]; then
+        DOCKER_PATH=/var
+        echo "pidof docker:`pidof dockerd`"
+        if [ -f "/etc/init.d/docker" ]; then
+            pmsg "try to stop and kill dockerd"
+            /etc/init.d/docker stop
+        fi
+
+        kill -TERM `pidof dockerd`
+    fi
     DOCKER_PATH=/tmp/$(basename $0)
     mkdir ${DOCKER_PATH}
     dockerd --cluster-store etcd://${etcd_client_specs} \
-            --data-root ${DOCKER_PATH}/lib --exec-root ${DOCKER_PATH}run \
+            --data-root ${DOCKER_PATH}/lib --exec-root ${DOCKER_PATH}/run \
             --pidfile ${DOCKER_PATH}/run/docker.pid \
             -H unix://${DOCKER_PATH}/run/docker.sock &>${test_path}/dockerd.log &
     pid=$!
@@ -177,7 +187,7 @@ container31=$(create_container $net3) || exit_test
 ip31=$(local_docker exec ${container31} ip -4 addr show eth0 | grep -oP "(?<=inet ).*(?=/)") || exit_test
 container32=$(create_container $net3) || exit_test
 ip32=$(local_docker exec ${container32} ip -4 addr show eth0 | grep -oP "(?<=inet ).*(?=/)") || exit_test
-sleep 2; # waiting for updating ovs-flow
+wait_for_flows_unchange  # waiting for updating ovs-flow
 local_docker exec ${container31} ping ${ip32} -c 1 -W 1 || exit_test
 !(local_docker exec ${container11} ping ${ip31} -c 1 -W 1) || exit_test
 !(local_docker exec ${container12} ping ${ip31} -c 1 -W 1) || exit_test

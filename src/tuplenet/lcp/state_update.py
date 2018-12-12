@@ -77,12 +77,7 @@ def process_unknow_dst(unknow_dst_msg_seg):
         return array
 
     def fn_chassis(chassis_set, chassis_uuid):
-        array = []
-        for _, chassis in chassis_set.items():
-            if chassis.uuid == chassis_uuid:
-                array.append(chassis)
-                return array
-        return array
+        return [chassis_set[chassis_uuid]] if chassis_set.has_key(chassis_uuid) else []
 
     lsp_array = entity_zoo.touch_entity(LOGICAL_ENTITY_TYPE_LSP, fn_lsp, ip_int)
     if len(lsp_array) == 0:
