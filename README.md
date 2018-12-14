@@ -34,7 +34,7 @@ TupleNet和Flannel，Calico类似采用的基于数据库的架构方式。Tuple
 ```
 
 ## Why TupleNet
-### 1. TupleNet 采用了及其简便的架构方式，没有中心控制节点，部署方便快捷###
+### 1. TupleNet 采用了及其简便的架构方式，没有中心控制节点，部署方便快捷
 TupleNet 是stateless的，它没有中控节点，TupleNet相互之间只需要通过etcd就可以相互构建完整的虚拟网络。其中TupleNet的重要节点（Edge TupleNet）是可以多套部署，所以在TupleNet的网络中是可以避免单点故障。
 
 ### 2. TupleNet 的redirecting特性可以支持让其他TupleNet节点作为中间节点转发数据报文，减少网络故障带来的影响
@@ -70,10 +70,10 @@ TupleNet 的所有ovs-flow都是在本地生成，不需要一个额外的contro
 
 
 ## TupleNet 概要 (What TupleNet is)
-- TupleNet的设计目标是尽量用最简单的方式建立一个支持**500**物理节点，**5000** 虚拟节点的中型网络。所以整个TupleNet代码架构非常精简，其主要使用[**PyDatalog**](https://sites.google.com/site/pydatalog/home)来根据目前的网络拓扑动态实时生成ovs-flow。 * TupleNet was designed to support a system which contains 500 physical node and 5000 virtual node at most. Therefore we simplify whole architecture and code in TupleNet to make it easy to be upgraded and understand. TupleNet consume pyDatalog to generate ovs-flows in run-time *
+- TupleNet的设计目标是尽量用最简单的方式建立一个支持**500**物理节点，**5000** 虚拟节点的中型网络。所以整个TupleNet代码架构非常精简，其主要使用[**PyDatalog**](https://sites.google.com/site/pydatalog/home)来根据目前的网络拓扑动态实时生成ovs-flow。 *TupleNet was designed to support a system which contains 500 physical node and 5000 virtual node at most. Therefore we simplify whole architecture and code in TupleNet to make it easy to be upgraded and understand. TupleNet consume pyDatalog to generate ovs-flows in run-time *
 - 同时TupleNet支持preprogrammed，ondemanded两种方式来生成ovs-flow，并支持将ondemand节点的packet offload给preprogrammed节点转发。 *TupleNet has two ways(on-demand and preprogrammed) to generate ovs-flow. Besides of that, tuplenet(on-demaned node ) can deliver traffic to other host to help forwarding*
 - 为了更好支持特性的添加，TupleNet目前只支持使用Geneve Tunnel进行网络虚拟化.   *TupleNet only support Geneve tunneling due to adding new feature easily*
-
+- [Want more details?](/Architecture.md)
 
 ## 如何编译TupleNet  (How to compile TupleNet)
 TupleNet目前主要由三种语言编写，分别是
@@ -95,4 +95,5 @@ TupleNet的主要逻辑都是由Python构建，只需要编译pkt_controller以�
 2. pip install tuplenet-xxx.whl(generate whl by running python setup.py  bdist_wheel in TupleNet folder)
 3. config & run tuplenet and enjoy it. For detail guide document, please visit [tutorials](/tutorials/README.md)
 
-### NOTE: You can download and consume latest pypy to speed up the control path to accerlate generating ovs-flow by pyDatalog
+### NOTE1: TupleNet还处于0.1.X的版本，还有很多不足也有很多工作要做。目前TupleNet使用在唯品会内网的测试开发云平台，只经过小规模集群验证。如果你在使用中遇到问题，欢迎告诉我们。
+### NOTE2: You can download and consume latest pypy to speed up the control path to accerlate generating ovs-flow
