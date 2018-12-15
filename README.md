@@ -1,5 +1,7 @@
 # TupleNet
 
+[![Build Status](https://www.travis-ci.org/vipshop/TupleNet.svg?branch=master)](https://www.travis-ci.org/vipshop/TupleNet)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](http://www.apache.org/licenses/LICENSE-2.0)
 
 TupleNet 是基于OVS提供网络虚拟化的系统，它利用Geneve tunnel技术在物理网络上建立虚拟网络。 使用TupleNet可以非常简便地建立一个高效灵活的虚拟网络。
 
