@@ -540,7 +540,11 @@ wait_for_flows_unchange()
     if [ $# == 1 ]; then
         sleep_time=$1
     else
-        sleep_time=3
+        if [ -z "$WAIT_FLOW_TIMEOUT" ]; then
+            sleep_time=3
+        else
+            sleep_time=$WAIT_FLOW_TIMEOUT
+        fi
     fi
 
     start_time=$(date +%s)

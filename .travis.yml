@@ -1,0 +1,40 @@
+sudo: required
+dist: xenial
+language: python
+python:
+    - "2.7"
+go:
+    - "1.11.x"
+
+before_install:
+    - sudo apt-get install autoconf automake libtool libssl-dev build-essential fakeroot dh-make dh-autoreconf
+    - wget http://openvswitch.org/releases/openvswitch-2.9.0.tar.gz
+    - tar -xf openvswitch-2.9.0.tar.gz
+    - cd openvswitch-2.9.0/
+    - ./boot.sh && ./configure
+    - DEB_BUILD_OPTIONS='parallel=8 nocheck' fakeroot debian/rules binary
+    - cd -
+    - sudo dpkg -i openvswitch-common_*.deb openvswitch-switch_*.deb libopenvswitch-dev_*.deb libopenvswitch_*.deb
+    - pip install pyDatalog etcd3
+
+install:
+    - cd src/tuplenet/pkt_controller
+    - ./boot.sh && ./configure CPPFLAGS=-I/usr/include/openvswitch && make
+    - cd -
+    - cd src/control
+    - ./build.sh
+    - cd -
+
+script:
+    - cd src/tests
+    - wget https://github.com/etcd-io/etcd/releases/download/v3.1.20/etcd-v3.1.20-linux-amd64.tar.gz
+    - tar -xf etcd-v3.1.20-linux-amd64.tar.gz
+    - sudo PATH=$PATH:`pwd`/etcd-v3.1.20-linux-amd64/ USE_SYSTEM_DOCKER=1 WAIT_FLOW_TIMEOUT=10 WAIT_PKT_TIMEOUT=0.2 ./runtest.sh
+    - cd -
+    - ./build-dist.sh
+
+notifications:
+    email:
+        - eggqq007@163.com
+
+

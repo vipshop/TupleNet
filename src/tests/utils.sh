@@ -53,7 +53,11 @@ fi
 
 wait_for_packet()
 {
-    sleep 0.1
+    if [ -z "$WAIT_PKT_TIMEOUT" ]; then
+        sleep 0.1
+    else
+        sleep $WAIT_PKT_TIMEOUT
+    fi
 }
 
 equal_str () {

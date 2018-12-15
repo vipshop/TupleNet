@@ -49,15 +49,10 @@ while [ $i -lt $LS_NUM ]; do
     # this block of code is for ONDEMAND feature.
     # pydatalog cost time to generate flows
     if [ $i == 0 ]; then
-        wait_for_packet # wait for packet
-        wait_for_packet # wait for packet
-        wait_for_packet # wait for packet
-        wait_for_packet # wait for packet
-        wait_for_packet # wait for packet
-        wait_for_packet # wait for packet
+        sleep 1 # wait for touching lsp/chassis
     fi
     # end of block
-    sleep 0.1
+    wait_for_packet
     expect_pkt=$packet
     real_pkt=`get_tx_pkt hv2 lsp-portB$i`
     verify_pkt $expect_pkt $real_pkt || exit_test

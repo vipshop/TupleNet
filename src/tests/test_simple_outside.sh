@@ -114,6 +114,7 @@ tpa=`ip_to_hex 172 20 11 12`
 # build arp request
 packet=ffffffffffff${sha}08060001080006040001${sha}${spa}ffffffffffff${tpa}
 inject_pkt ext1 br0 "$packet" || exit_test
+wait_for_packet # wait for packet
 reply_ha=000006080608
 expect_pkt=${sha}${reply_ha}08060001080006040002${reply_ha}${tpa}${sha}${spa}
 real_pkt=`get_tx_last_pkt ext1 br0`
@@ -141,6 +142,7 @@ tpa=`ip_to_hex 172 20 11 11`
 # build arp request
 packet=ffffffffffff${sha}08060001080006040001${sha}${spa}ffffffffffff${tpa}
 inject_pkt ext2 br0 "$packet" || exit_test
+wait_for_packet # wait for packet
 reply_ha=000006080607
 expect_pkt=${sha}${reply_ha}08060001080006040002${reply_ha}${tpa}${sha}${spa}
 real_pkt=`get_tx_last_pkt ext2 br0`

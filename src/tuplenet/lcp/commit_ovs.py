@@ -74,14 +74,12 @@ def parse_map(map_list):
 
 def update_ovsport(record, entity_zoo):
     action_type = record[1]
-    # insert action does not contain ofport, ignore it.
-    if action_type == 'insert':
-        return
-    elif action_type in ['new', 'initial', 'delete', 'old']:
+    if action_type in ['new', 'initial', 'delete', 'old', 'insert']:
         # some operations may not contain some essential fields
-        if record[3] == None or record[4] == None:
-            logger.info('action %s does not container enough info, msg:%s',
-                        action_type, record)
+        if not isinstance(record[2], int) or \
+           record[3] == None or record[4] == None:
+            logger.debug('action %s does not container enough info, msg:%s',
+                         action_type, record)
             return
     else:
         logger.warning("unknow action_type:%s", action_type)
