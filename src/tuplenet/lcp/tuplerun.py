@@ -210,8 +210,9 @@ def run_main(interval):
 def init_logger(log_dir, log_level = logging.DEBUG):
     global logger
 
-    format_type = '%(process)d %(asctime)s %(levelname)s %(filename)s[line:%(lineno)d]: %(message)s'
-    formatter = logging.Formatter(format_type)
+    format_type = '%(asctime)s.%(msecs)03d %(levelname)s %(process)d %(filename)s[line:%(lineno)d]: %(message)s'
+    datefmt = '%Y-%m-%d %H:%M:%S'
+    formatter = logging.Formatter(format_type, datefmt)
     logger = logging.getLogger('')
     logger.setLevel(log_level)
     if log_dir != "":
@@ -231,7 +232,7 @@ def init_logger(log_dir, log_level = logging.DEBUG):
         extra['log_dir'] = log_dir
 
     console = logging.StreamHandler();
-    console_formater = logging.Formatter(format_type)
+    console_formater = logging.Formatter(format_type, datefmt)
     console.setFormatter(console_formater)
     logger.addHandler(console)
 
