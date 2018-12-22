@@ -114,11 +114,8 @@ def init_env(options):
     logic = pyDatalog.Logic(True)
     extra['logic'] = logic
     create_watch_master(options.host, options.path_prefix, system_id)
-    cm.remove_all_tunnles()
     cm.build_br_integration()
-    cm.clean_ovs_flows()
     cm.set_tunnel_tlv()
-    cm.set_upcall_rate()
 
 def delete_self_chassis(system_id):
     wmaster = extra['lm']
