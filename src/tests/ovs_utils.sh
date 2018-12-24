@@ -402,6 +402,7 @@ dump_ovs_info()
         ovs-vsctl list interface > "$ovs_base/$sim_id/ovs-vsctl_list_interface.txt"
         ovs-vsctl list port > "$ovs_base/$sim_id/ovs-vsctl_list_port.txt"
         ovs-ofctl dump-flows br-int > "$ovs_base/$sim_id/ovs-ofctl_dump-flows.txt"
+        ovs-ofctl dump-tlv-map br-int > "$ovs_base/$sim_id/ovs-ofctl_dump-tlv.txt"
     done
 }
 

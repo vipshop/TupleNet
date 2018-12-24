@@ -1,9 +1,10 @@
-import sys
+import sys, os
 import json
 import subprocess
 import logging
 import threading
 import struct, socket
+import time, random, string
 import logicalview as lgview
 from pyDatalog import pyDatalog
 from onexit import on_parent_exit
@@ -11,6 +12,7 @@ from run_env import is_gateway_chassis
 
 logger = logging.getLogger(__name__)
 flow_lock = threading.Lock()
+TP_TUNNEL_PORT_NAME_PREFIX = "tupleNet-"
 
 class OVSToolErr(Exception):
     pass
@@ -23,7 +25,7 @@ def call_popen(cmd, commu=None, shell=False):
     else:
         output = child.communicate(commu)
     if child.returncode:
-        raise RuntimeError("error executing %s" % (cmd))
+        raise RuntimeError("error executing %s" % (' '.join(cmd)))
     if len(output) == 0 or output[0] is None:
         output = ""
     else:
@@ -157,6 +159,8 @@ def clean_ovs_flows(br = 'br-int'):
     except Exception as err:
         logger.error("failed to clean bridge %s flows", br)
         raise OVSToolErr("failed to clean ovs flows")
+    else:
+        logger.info("clean all flows in %s", br)
 
 def system_id():
     cmd = ['ovsdb-client', '-v', 'transact',
@@ -172,29 +176,6 @@ def system_id():
     external_ids = parse_map(output['rows'][0]['external_ids'])
     if external_ids.has_key('system-id'):
         return external_ids['system-id']
-
-
-def remove_all_tunnles():
-    cmd = ['ovsdb-client', '-v', 'transact',
-           '["Open_vSwitch",{"op":"select", \
-             "table":"Interface","columns":["name"], \
-             "where":[["type","==","geneve"]]}]']
-    try:
-        json_str = call_popen(cmd, shell=True)
-    except Exception:
-        logger.error("failed to get geneve tunnels")
-        raise OVSToolErr("failed to get geneve tunnels")
-
-    try:
-        output = json.loads(json_str)[0]
-        tunnel_name_list = output['rows']
-        for entry in tunnel_name_list:
-            name = entry['name']
-            remove_tunnel_by_name(name)
-    except Exception as err:
-        logger.error("failed to remove tunnel, err:%s", err)
-        raise OVSToolErr("failed to remove tunnel")
-
 
 def remove_tunnel_by_name(portname):
     try:
@@ -218,7 +199,7 @@ def get_tunnel_chassis_id(portname):
 
 def chassis_ip_to_portname(ip):
     chassis_ip_int = struct.unpack("!L", socket.inet_aton(ip))[0]
-    portname = 'tupleNet-{}'.format(chassis_ip_int)
+    portname = '{}{}'.format(TP_TUNNEL_PORT_NAME_PREFIX, chassis_ip_int)
     return portname
 
 def remove_tunnel_by_ip(ip):
@@ -230,7 +211,7 @@ def create_tunnel(ip, uuid):
     if get_tunnel_chassis_id(portname) == uuid:
         logger.info("found a exist tunnel ovsport has "
                     "same chassis-id and portname, skip adding tunnel ovsport")
-        return
+        return portname
     remove_tunnel_by_name(portname)
     cmd = ['add-port', 'br-int', portname, '--', 'set', 'interface',
            portname, 'type=geneve', 'options:remote_ip={}'.format(ip),
@@ -239,15 +220,17 @@ def create_tunnel(ip, uuid):
     try:
         ovs_vsctl(*cmd)
     except Exception as err:
-        logger.warning('cannot create tunnle, cmd:%s, err:%s', cmd, err)
+        logger.error('cannot create tunnle, cmd:%s, err:%s', cmd, err)
+        return portname
 
     # if this host is a gateway, then we should enable bfd for each tunnle port
     if is_gateway_chassis():
         logger.info("local host is gateway, enable bfd on %s", portname)
         config_ovsport_bfd(portname, 'enable=true')
+    return portname
 
 def create_flowbased_tunnel(chassis_id):
-    portname = "tupleNet-flowbased"
+    portname = "{}flowbased".format(TP_TUNNEL_PORT_NAME_PREFIX)
     remove_tunnel_by_name(portname)
     cmd = ['add-port', 'br-int', portname, '--', 'set', 'interface',
            portname, 'type=geneve', 'options:remote_ip=flow',
@@ -256,7 +239,9 @@ def create_flowbased_tunnel(chassis_id):
     try:
         ovs_vsctl(*cmd)
     except Exception as err:
-        logger.warning('cannot create flow-based tunnle, cmd:%s, err:%s', cmd, err)
+        logger.error('cannot create flow-based tunnle, cmd:%s, err:%s',
+                     cmd, err)
+    return portname
 
 
 def create_patch_port(uuid, peer_bridge):
@@ -272,6 +257,35 @@ def create_patch_port(uuid, peer_bridge):
            peername, 'type=patch',
            'options:peer={}'.format(portname)]
     ovs_vsctl(*cmd)
+
+
+def commit_replaceflows(replace_flows, br = 'br-int'):
+    # commit_replaceflows is only consumed by update_logical_view in booting
+    # tuplenet stage. Keep all flows in a file to avoid using stdin which may
+    # introduce buffer size issue.
+    # this function can help to avoid ports' issue of breaking-network, the
+    # replace-flows is a transaction, so would not change flows if it hit issue
+    filepath = '/tmp/ovs-flow-{}'.format(''.join(
+        random.choice(string.ascii_uppercase + string.digits) for _ in range(5)))
+    filepath += str(time.time())
+    try:
+        with open(filepath, 'w') as fp:
+            fp.write('\n'.join(replace_flows))
+        # In  OpenFlow  1.0  and  1.1,  re-adding a flow always resets the
+        # flow's packet and byte counters to 0.
+        ovs_ofctl('replace-flows', '-O' , 'OpenFlow14', br, filepath)
+        os.remove(filepath)
+    except IOError as err:
+        logger.error("failed to write flows into file %s", filepath)
+        raise
+    except RuntimeError as err:
+        logger.error("failed to replace flows in {}".format(filepath))
+        raise OVSToolErr("failed to replace flows")
+    except OSError as err:
+        logger.warning("failed to remove the %s", filepath)
+        raise
+
+
 
 def commit_flows(add_flows, del_flows):
     # consume batch method to insert/delete flows first.
@@ -327,19 +341,34 @@ def build_br_integration(br = 'br-int'):
         logger.error("failed to create %s", br)
         raise OVSToolErr("failed to create integration bridge")
 
-def set_tunnel_tlv(vipclass = 0xffee, br = 'br-int'):
-    try:
-        ovs_ofctl('del-tlv-map', br)
-    except Exception as err:
-        logger.error("failed to clean %s tlv, err:%s", br, err)
-        raise OVSToolErr("failed to clean tlv")
+    clean_ovs_flows()
 
-    tlv = "{{class={},type=0,len=8}}->tun_metadata0".format(vipclass)
-    try:
-        ovs_ofctl('add-tlv-map', br, tlv)
-    except Exception as err:
-        logger.error('failed to config tlv %s to %s, err:%s', tlv, br, err)
-        raise OVSToolErr("failed to config tlv")
+def set_tunnel_tlv(vipclass = 0xffee, br = 'br-int'):
+    while True:
+        try:
+            output = ovs_ofctl('dump-tlv-map', br)
+        except Exception as err:
+            logger.error("failed dump %s tlv, err:%s", br, err)
+            raise OVSToolErr("failed to dump tlv")
+        # TODO it is a fool check, update it
+        if "tun_metadata0" in output:
+            logger.info(output)
+            return
+
+        try:
+            ovs_ofctl('del-tlv-map', br)
+        except Exception as err:
+            logger.error("failed to clean %s tlv, err:%s", br, err)
+            raise OVSToolErr("failed to clean tlv")
+
+        tlv = "{{class={},type=0,len=8}}->tun_metadata0".format(vipclass)
+        try:
+            ovs_ofctl('add-tlv-map', br, tlv)
+        except Exception as err:
+            logger.error('failed to config tlv %s to %s, err:%s', tlv, br, err)
+            raise OVSToolErr("failed to config tlv")
+
+        logger.info("set tlv %s on %s", tlv, br)
 
 def set_upcall_rate(br = 'br-int', rate = 100):
     #TODO we need to limite the packet rate of upcalling to packet_controller

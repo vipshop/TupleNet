@@ -36,20 +36,52 @@ etcd_lsp_add LS-A lsp-portA 10.10.1.2 00:00:06:08:06:03
 etcd_lsp_add LS-B lsp-portB 10.10.2.3 00:00:06:08:06:04
 etcd_lsp_add LS-B lsp-portC 10.10.2.4 00:00:06:08:06:05
 
+wait_for_flows_unchange
+
+ip_src=`ip_to_hex 10 10 1 2`
+ip_dst=`ip_to_hex 10 10 2 3`
+ttl=09
+packet=`build_icmp_request 000006080603 000006080601 $ip_src $ip_dst $ttl 5b91 8510`
+inject_pkt hv1 lsp-portA "$packet" || exit_test
+wait_for_packet # wait for packet
+ttl=08
+expect_pkt=`build_icmp_request 000006080602 000006080604 $ip_src $ip_dst $ttl 5c91 8510`
+real_pkt=`get_tx_pkt hv2 lsp-portB`
+verify_pkt $expect_pkt $real_pkt || exit_test
+
+ovs_setenv hv2;
+hit_flow_n=`ovs-ofctl dump-flows br-int|grep -v "n_packets=0"|wc -l`
+pmsg "there are $hit_flow_n flows hit by packets in hv2"
+
+ofport_hv_agent=`get_ovs_iface_ofport hv2 tupleNet-3232261130`
+pmsg "ofport of tupleNet-3232261130 in hv2 is $ofport_hv_agent"
 # simulate the hv2's ovs & tuplenet hit error and die
 # and reboot hv2
 pmsg "terminate hv2"
 kill_tuplenet_daemon hv2 -TERM
-sim_destroy hv2
 wait_for_flows_unchange
 # tupleNet-3232261122 should not exist in hv1, because hv2 exit gracefull
 ! is_port_exist hv1 tupleNet-3232261122 || exit_test
 pmsg "restart hv2"
-ovs_boot hv2
 tuplenet_boot hv2 192.168.100.2
 wait_for_brint # waiting for building br-int bridge
 
 wait_for_flows_unchange 6 # waiting for install flows
+
+#restart tuplenet must not readd ovs-flows
+ovs_setenv hv2;
+hit_flow_n_current=`ovs-ofctl dump-flows br-int|grep -v "n_packets=0"|wc -l`
+pmsg "there are $hit_flow_n_current flows hit by packets in hv2"
+if [ "$hit_flow_n" != "$hit_flow_n_current" ]; then
+    exit_test
+fi
+
+# restart tuplenet must not create new tunnel port if this tunnel port already exist
+ofport_hv_agent_current=`get_ovs_iface_ofport hv2 tupleNet-3232261130`
+pmsg "after reboot, ofport of tupleNet-3232261130 in hv2 is $ofport_hv_agent"
+if [ "$ofport_hv_agent" != "$ofport_hv_agent_current" ]; then
+    exit_test
+fi
 
 ip_src=`ip_to_hex 10 10 1 2`
 ip_dst=`ip_to_hex 10 10 2 3`

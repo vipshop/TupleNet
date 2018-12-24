@@ -16,6 +16,8 @@ import tunnel
 
 logger = logging.getLogger(__name__)
 prev_zoo_ver = 0 # it should be 0 which same as entity_zoo's zoo_ver
+had_clean_tunnel_ports = False
+had_clean_ovs_flows = False
 pyDatalog.create_terms('Table, Priority, Match, Action, State')
 pyDatalog.create_terms('PORT_NAME, IP, UUID_CHASSIS')
 
@@ -103,6 +105,7 @@ def execute_pushed_cmd(cmd_set, entity_zoo):
             continue
 
 def rebuild_chassis_tunnel():
+    global had_clean_tunnel_ports
     tunnel.tunnel_port_oper(IP, UUID_CHASSIS, State)
     ips = IP.data
     uuids = UUID_CHASSIS.data
@@ -119,6 +122,13 @@ def rebuild_chassis_tunnel():
                 cm.create_tunnel(ip, uuid)
         else:
             cm.remove_tunnel_by_ip(ip)
+    if not had_clean_tunnel_ports:
+        logger.info("clean unused tunnel ports")
+        # clean tunnel ports which we don't need
+        had_clean_tunnel_ports = True
+        tunnel.tunnel_port_delete_exist(PORT_NAME)
+        for portname in PORT_NAME.data:
+            cm.remove_tunnel_by_name(portname)
 
 # NOTE: this function may update prev_zoo_ver
 def need_recompute(entity_zoo):
@@ -183,6 +193,7 @@ def config_tunnel_bfd():
         cm.config_ovsport_bfd(name, state)
 
 def update_ovs_side(entity_zoo):
+    global had_clean_ovs_flows
     # we must lock the whole process of generating flow and sweepping zoo
     # otherwise we may mark some new entities to State_NO, without generating
     # any ovs flows
@@ -203,7 +214,11 @@ def update_ovs_side(entity_zoo):
     logger.info('insert flow number:%d, del flow number:%d',
                 len(ovs_flows_add), len(ovs_flows_del))
     logger.info("pydatalog cost %fs in generating flows", cost_time)
-    cm.commit_flows(ovs_flows_add, ovs_flows_del)
+    if not had_clean_ovs_flows:
+        had_clean_ovs_flows = True
+        cm.commit_replaceflows(ovs_flows_add)
+    else:
+        cm.commit_flows(ovs_flows_add, ovs_flows_del)
 
 def update_logical_view(entity_zoo, extra):
     cnt_upload = 0

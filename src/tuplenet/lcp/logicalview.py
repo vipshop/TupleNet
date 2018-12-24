@@ -499,6 +499,7 @@ OVSPORT_State = 3
 +ovsport(0,0,0,0)
 -ovsport(0,0,0,0)
 +ovsport_chassis(0,0,0,0)
+-ovsport_chassis(0,0,0,0)
 class OVSPort(LogicalEntity):
     def __init__(self, name, iface_id, ofport, is_remote):
         super(OVSPort, self).__init__()
