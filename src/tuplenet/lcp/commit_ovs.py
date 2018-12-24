@@ -13,6 +13,9 @@ from run_env import is_gateway_chassis
 logger = logging.getLogger(__name__)
 flow_lock = threading.Lock()
 TP_TUNNEL_PORT_NAME_PREFIX = "tupleNet-"
+# In  OpenFlow  1.0  and  1.1,  re-adding a flow always resets the
+# flow's packet and byte counters to 0.
+OPENFLOW_VER = "OpenFlow12"
 
 class OVSToolErr(Exception):
     pass
@@ -55,13 +58,15 @@ def aggregate_flows(flows):
 
 def ovs_ofctl_delflows_batch(br, flows):
     for flow_combind in aggregate_flows(flows):
-        call_ovsprog("ovs-ofctl", ['del-flows', br, '--strict', '-'],
+        call_ovsprog("ovs-ofctl", ['del-flows', '-O', OPENFLOW_VER, br,
+                                   '--strict', '-'],
                      commu=flow_combind)
 
 
 def ovs_ofctl_addflows_batch(br, flows):
     for flow_combind in aggregate_flows(flows):
-        call_ovsprog("ovs-ofctl", ['add-flow', br, '-'], commu=flow_combind)
+        call_ovsprog("ovs-ofctl", ['add-flow', '-O', OPENFLOW_VER, br, '-'],
+                     commu=flow_combind)
 
 def ovs_vsctl(*args):
     return call_ovsprog("ovs-vsctl", list(args))
@@ -271,9 +276,7 @@ def commit_replaceflows(replace_flows, br = 'br-int'):
     try:
         with open(filepath, 'w') as fp:
             fp.write('\n'.join(replace_flows))
-        # In  OpenFlow  1.0  and  1.1,  re-adding a flow always resets the
-        # flow's packet and byte counters to 0.
-        ovs_ofctl('replace-flows', '-O' , 'OpenFlow14', br, filepath)
+        ovs_ofctl('replace-flows', '-O', OPENFLOW_VER, br, filepath)
         os.remove(filepath)
     except IOError as err:
         logger.error("failed to write flows into file %s", filepath)
