@@ -6,6 +6,7 @@ import (
 	. "github.com/coreos/etcd/clientv3/clientv3util"
 	"github.com/coreos/etcd/clientv3/namespace"
 	"github.com/pkg/errors"
+	"github.com/vipshop/tuplenet/control/controllers/bookkeeping"
 	. "github.com/vipshop/tuplenet/control/logicaldev"
 	"go.uber.org/zap"
 	"reflect"
@@ -412,12 +413,12 @@ func (ptr *Controller) SyncDeviceID(forceSync bool) error {
 }
 
 // getIPMap is a helper function to read id map from db
-func (ptr *Controller) getIDMap(key string) (*IDMap, string, error) {
+func (ptr *Controller) getIDMap(key string) (*bookkeeping.IDMap, string, error) {
 	value, err := ptr.getKV(key)
 	if err != nil && errors.Cause(err) != ErrKeyNotFound {
 		return nil, "", err
 	}
-	return NewIDMap(value), value, nil
+	return bookkeeping.NewIDMap(value), value, nil
 }
 
 // Save the object implemented interface{} into db.
@@ -431,7 +432,7 @@ func (ptr *Controller) Save(devs ...interface{}) error {
 	var (
 		err    error
 		idMaps = make(map[string]struct {
-			m *IDMap
+			m *bookkeeping.IDMap
 			o string
 		}) // o: old value
 		cmps []Cmp
@@ -461,7 +462,7 @@ func (ptr *Controller) Save(devs ...interface{}) error {
 			}
 			idMaps[key] = idMap
 		}
-		ok := idMap.m.OccupyMasked(ipv4ToU32(ip))
+		ok := idMap.m.OccupyMasked(bookkeeping.IPv4ToU32(ip))
 		if !ok {
 			return errors.Errorf("lower 16 bits of %s conflict with other IP", ip)
 		}
@@ -541,7 +542,7 @@ func (ptr *Controller) Delete(recursive bool, devs ...interface{}) error {
 	var (
 		err    error
 		idMaps = make(map[string]struct {
-			m *IDMap
+			m *bookkeeping.IDMap
 			o string
 		}) // o: old value
 		cmps []Cmp
@@ -571,7 +572,7 @@ func (ptr *Controller) Delete(recursive bool, devs ...interface{}) error {
 			}
 			idMaps[key] = idMap
 		}
-		idMap.m.ReturnMasked(ipv4ToU32(ip))
+		idMap.m.ReturnMasked(bookkeeping.IPv4ToU32(ip))
 		return nil
 	}
 

@@ -126,16 +126,3 @@ func UnmarshalTuplenet(ptr interface{}, text string) (err error) {
 
 	return
 }
-
-// the function assume ip address in xxx.xxx.xxx.xxx pattern
-func ipv4ToU32(ip string) uint32 {
-	parts := strings.Split(ip, ".")
-	a, _ := strconv.ParseUint(parts[0], 10, 8)
-	b, _ := strconv.ParseUint(parts[1], 10, 8)
-	c, _ := strconv.ParseUint(parts[2], 10, 8)
-	d, _ := strconv.ParseUint(parts[3], 10, 8)
-
-	r := a<<24 | b<<16 | c<<8 | d
-
-	return uint32(r)
-}
