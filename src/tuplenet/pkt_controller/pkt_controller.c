@@ -307,7 +307,7 @@ process_unknow_dst_pkt(struct ofputil_packet_in *pin, struct ofpbuf *userdata)
                                                     sizeof(struct eth_header));
         if (tmhashmap_add_node(ntohl(ip_hdr->ip_dst)) != TP_STATUS_OK) {
             VLOG_INFO_RL(&rl, "we may receive same ip packet before in 100ms, "
-                      "ignore this packet");
+                        "ignore this packet");
             return TP_STATUS_OK;
         }
 
@@ -318,8 +318,8 @@ process_unknow_dst_pkt(struct ofputil_packet_in *pin, struct ofpbuf *userdata)
             return status;
         }
     } else {
-        VLOG_WARN("invalid type in eth header:0x%x, maybe a vlan packet",
-                  eth_hdr->type);
+        VLOG_INFO_RL(&rl, "receive a packet with invalid type in eth "
+                     "header:0x%x", eth_hdr->type);
         //would not process vlan packet
         return TP_STATUS_ERR_PKT;
     }

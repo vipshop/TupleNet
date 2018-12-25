@@ -59,8 +59,9 @@ pmsg "ofport of tupleNet-3232261130 in hv2 is $ofport_hv_agent"
 # and reboot hv2
 pmsg "terminate hv2"
 kill_tuplenet_daemon hv2 -TERM
+tpctl ch del hv2 || exit_test
 wait_for_flows_unchange
-# tupleNet-3232261122 should not exist in hv1, because hv2 exit gracefull
+# tupleNet-3232261122 should not exist in hv1
 ! is_port_exist hv1 tupleNet-3232261122 || exit_test
 pmsg "restart hv2"
 tuplenet_boot hv2 192.168.100.2
@@ -96,6 +97,7 @@ verify_pkt $expect_pkt $real_pkt || exit_test
 
 # kill hv2, create a new hv3 but get same IP
 kill_tuplenet_daemon hv2 -TERM
+tpctl ch del hv2 || exit_test
 sim_destroy hv2
 remove_sim_id_from_array hv2 # remove the hv2 from sim_array
 sleep 1
@@ -190,7 +192,7 @@ wait_for_flows_unchange
 is_port_exist hv1 tupleNet-3232261124 || exit_test
 
 # delete hv4, add hv6 at same time
-etcd_chassis_del hv4
+tpctl ch del hv4 || exit_test
 etcd_chassis_add hv6 192.168.100.6 10
 etcd_lr_add LR-dummy1 hv6 # hv6 is a chassis in virtual network map, it will
                          # be touched automaticlly

@@ -49,13 +49,11 @@ def create_runtime_folder():
     except Exception as err:
         logger.error("failed to create tuplenet runtime files, err:%s", err)
 
-def destory_runtime_folder():
+def destory_runtime_files():
     try:
         if os.path.exists(PKT_CONTROLLER_PIPE_PATH):
             os.remove(PKT_CONTROLLER_PIPE_PATH)
         if os.path.exists(DEBUG_PIPE_PATH):
             os.remove(DEBUG_PIPE_PATH)
-        if os.path.exists(RUNNING_ENV_PATH):
-            os.rmdir(RUNNING_ENV_PATH)
     except Exception as err:
         logger.warning("failed to clear tuplenet runtime files, err:%s", err)
