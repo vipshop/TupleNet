@@ -10,6 +10,7 @@ type SwitchPort struct {
 	IP                 string `tn:"ip" json:"ip"`
 	MAC                string `tn:"mac" json:"mac"`
 	PeerRouterPortName string `tn:"peer,omitempty" json:"peer,omitempty"`
+	Chassis            string `tn:"chassis,omitempty" json:"chassis,omitempty"`
 
 	Owner *Switch
 }

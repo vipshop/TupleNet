@@ -112,7 +112,7 @@ def update_ovsport(record, entity_zoo):
         return
 
     if action_type in ['old', 'delete']:
-        logger.info("try to move port to sink %s uuid:%s", name, uuid)
+        logger.info("try to move port %s to sink uuid:%s", name, uuid)
         entity_zoo.move_entity2sink(entity_type, name)
     else:
         logger.info("try to add ovsport entity %s ofport:%d, uuid:%s in zoo",

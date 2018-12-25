@@ -187,9 +187,10 @@ for i in `seq 1 4`; do
   result="$(tpctl lsp show LS-${i})"
   expected="
 LS-${i}_to_LR-${i}:
-  - ip  : 10.0.0.${i}
-  - mac : f2:01:0a:00:00:0${i}
-  - peer: LR-${i}_to_LS-${i}
+  - ip     : 10.0.0.${i}
+  - mac    : f2:01:0a:00:00:0${i}
+  - peer   : LR-${i}_to_LS-${i}
+  - chassis: 
 "
 
   equal_str "$result" "$expected" || exit_test

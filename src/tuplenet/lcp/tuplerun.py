@@ -51,10 +51,7 @@ def clean_env(extra, ret):
         os.remove(extra['flock'])
     if extra.has_key('lm'):
         extra['lm'].stop_all_watches()
-    if extra.has_key('system_id'):
-        logger.info("clean etcd side system_id record")
-        delete_self_chassis(extra['system_id'])
-    pipe.destory_runtime_folder()
+    pipe.destory_runtime_files()
 
 def get_if_ip(ifname_list = ['eth0', 'br0']):
     for ifname in ifname_list:
@@ -116,11 +113,6 @@ def init_env(options):
     create_watch_master(options.host, options.path_prefix, system_id)
     cm.build_br_integration()
     cm.set_tunnel_tlv()
-
-def delete_self_chassis(system_id):
-    wmaster = extra['lm']
-    key = 'chassis/{}'.format(system_id)
-    wmaster.delete_entity_no_retry(key)
 
 def update_chassis(interface_list):
     if re.match(r"^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$", interface_list[0]):
