@@ -204,6 +204,7 @@ def init_logger(log_dir, log_level = logging.DEBUG):
     formatter = logging.Formatter(format_type, datefmt)
     logger = logging.getLogger('')
     logger.setLevel(log_level)
+    extra['log_dir'] = log_dir
     if log_dir != "":
         if not os.path.exists(log_dir):
             try:
@@ -217,8 +218,6 @@ def init_logger(log_dir, log_level = logging.DEBUG):
                                              backupCount = 5)
         rotate_handler.setFormatter(formatter)
         logger.addHandler(rotate_handler)
-    else:
-        extra['log_dir'] = log_dir
 
     console = logging.StreamHandler();
     console_formater = logging.Formatter(format_type, datefmt)
