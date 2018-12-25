@@ -109,6 +109,15 @@ func TestController_DeviceOperation(t *testing.T) {
 	controller, err := NewController([]string{"http://localhost:2379"}, "/test-prefix", true)
 	expectSucceed("controller shall be able to connects to etcd")
 
+	// test invalid devs to save and delete
+	invalidDevs := []interface{} {nil, 32, "string", 15.1, true, struct{}{}}
+	for i := range invalidDevs {
+		err = controller.Save(invalidDevs[i:])
+		expectFail("save invalid dev starting from %d", i)
+		err = controller.Delete(false,invalidDevs[i:])
+		expectFail("delete invalid dev starting from %d", i)
+	}
+
 	// test Router creation
 	name := "router-1"
 	r, err := controller.CreateRouter(name)

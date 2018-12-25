@@ -8,6 +8,7 @@ import (
 	"github.com/pkg/errors"
 	. "github.com/vipshop/tuplenet/control/logicaldev"
 	"go.uber.org/zap"
+	"reflect"
 	"strings"
 	"time"
 )
@@ -468,6 +469,10 @@ func (ptr *Controller) Save(devs ...interface{}) error {
 	}
 
 	for _, dev := range devs {
+		if !reflect.ValueOf(dev).IsValid() {
+			return errors.Errorf("unable to save %+v, invalid dev passed ", dev)
+		}
+
 		err = nil
 		switch t := dev.(type) {
 		case *Switch:
@@ -493,7 +498,7 @@ func (ptr *Controller) Save(devs ...interface{}) error {
 		case *NAT:
 			k = routerNATPath(t.Owner.Name, t.Name)
 		default:
-			continue
+			err = errors.New("supported type")
 		}
 
 		if err != nil {
@@ -571,8 +576,11 @@ func (ptr *Controller) Delete(recursive bool, devs ...interface{}) error {
 	}
 
 	for _, dev := range devs {
-		keys, err = keys[:0], nil
+		if !reflect.ValueOf(dev).IsValid() {
+			return errors.Errorf("unable to delete %+v, invalid dev passed ", dev)
+		}
 
+		keys, err = keys[:0], nil
 		switch t := dev.(type) {
 		case *Switch:
 			err = returnID(t.ID)
@@ -599,7 +607,7 @@ func (ptr *Controller) Delete(recursive bool, devs ...interface{}) error {
 		case *NAT:
 			keys = append(keys, routerNATPath(t.Owner.Name, t.Name))
 		default:
-			continue
+			err = errors.New("supported type")
 		}
 
 		if err != nil {
