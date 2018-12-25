@@ -617,10 +617,9 @@ func (ptr *Controller) Delete(recursive bool, devs ...interface{}) error {
 		for _, k := range keys {
 			ptr.logger.Debugf("deleting: %s", k)
 			if recursive {
-				ops = append(ops, OpDelete(k, WithPrefix()))
-			} else {
-				ops = append(ops, OpDelete(k))
+				ops = append(ops, OpDelete(k +"/", WithPrefix()))
 			}
+			ops = append(ops, OpDelete(k))
 		}
 	}
 

@@ -207,9 +207,21 @@ func TestController_DeviceOperation(t *testing.T) {
 	expectSucceed("read nat2 in db")
 	expectSame(nat2, nat2InDb)
 
-	// delete the router and others
+	// delete the router recursively
+	r2, err := controller.CreateRouter(r.Name + "1")
+	expectSucceed("create %s", r2.Name)
+	err = controller.Save(r2)
+	expectSucceed("save %s", r2.Name)
+
 	err = controller.Delete(true, r)
 	expectSucceed("remove %s and its children", r.Name)
+
+	// delete r shall not delete r2
+	_, err = controller.GetRouter(r2.Name)
+	expectSucceed("read %s from etcd", r2.Name)
+
+	err = controller.Delete(false, r2)
+	expectSucceed("remove %s", r2.Name)
 
 	// delete the switch and port
 	err = controller.Delete(false, s, switchPort)
