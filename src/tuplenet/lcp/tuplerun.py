@@ -213,7 +213,7 @@ def init_logger(log_dir, log_level = logging.DEBUG):
                 sys.exit(1)
 
         log_path = log_dir + '/tuplenet.log'
-        rotate_handler = RotatingFileHandler(log_path, maxBytes = 50 * 1024 * 1024,
+        rotate_handler = RotatingFileHandler(log_path, maxBytes = 2000 * 1024 * 1024,
                                              backupCount = 5)
         rotate_handler.setFormatter(formatter)
         logger.addHandler(rotate_handler)
