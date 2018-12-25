@@ -131,7 +131,7 @@ func routerNATPath(r, n string) string {
 	return routerPath(r) + "/lnat/" + n
 }
 
-// GetSwitch read switch from db given by Name
+// GetSwitch read the named switch from db
 func (ptr *Controller) GetSwitch(name string) (*Switch, error) {
 	value, err := ptr.getKV(switchPath(name))
 	if err != nil {
@@ -161,7 +161,7 @@ func (ptr *Controller) GetSwitches() ([]*Switch, error) {
 	return switches, nil
 }
 
-// GetSwitchPort reads a port with Name portName under switch s
+// GetSwitchPort reads named port under Switch s from db
 func (ptr *Controller) GetSwitchPort(s *Switch, portName string) (*SwitchPort, error) {
 	key := switchPortPath(s.Name, portName)
 	value, err := ptr.getKV(key)
@@ -174,7 +174,7 @@ func (ptr *Controller) GetSwitchPort(s *Switch, portName string) (*SwitchPort, e
 	return sp, nil
 }
 
-// GetSwitchPorts reads all ports of switch s
+// GetSwitchPorts reads all ports under Switch s from db
 func (ptr *Controller) GetSwitchPorts(s *Switch) ([]*SwitchPort, error) {
 	kvs, err := ptr.getKVs(switchPortPath(s.Name, ""))
 	if err != nil {
@@ -191,7 +191,7 @@ func (ptr *Controller) GetSwitchPorts(s *Switch) ([]*SwitchPort, error) {
 	return ports, nil
 }
 
-// GetRouter read router from db given by Name
+// GetRouter reads the named router from db
 func (ptr *Controller) GetRouter(name string) (*Router, error) {
 	value, err := ptr.getKV(routerPath(name))
 	if err != nil {
@@ -204,7 +204,7 @@ func (ptr *Controller) GetRouter(name string) (*Router, error) {
 	return r, nil
 }
 
-// GetRouters read all routers from db
+// GetRouters reads all routers from db
 func (ptr *Controller) GetRouters() ([]*Router, error) {
 	kvs, err := ptr.getKVs(routerPath(""))
 	if err != nil {
@@ -221,7 +221,7 @@ func (ptr *Controller) GetRouters() ([]*Router, error) {
 	return routers, nil
 }
 
-// GetRouterPort reads a port with Name portName under router
+// GetRouterPort reads the named port under Router r
 func (ptr *Controller) GetRouterPort(r *Router, portName string) (*RouterPort, error) {
 	value, err := ptr.getKV(routerPortPath(r.Name, portName))
 	if err != nil {
@@ -234,7 +234,7 @@ func (ptr *Controller) GetRouterPort(r *Router, portName string) (*RouterPort, e
 	return rp, nil
 }
 
-// GetRouterPorts reads all ports of router r
+// GetRouterPorts reads all ports of Router r from db
 func (ptr *Controller) GetRouterPorts(r *Router) ([]*RouterPort, error) {
 	kvs, err := ptr.getKVs(routerPortPath(r.Name, ""))
 	if err != nil {
@@ -251,7 +251,7 @@ func (ptr *Controller) GetRouterPorts(r *Router) ([]*RouterPort, error) {
 	return ports, nil
 }
 
-// GetRouterStaticRoutes reads all static routes of router r
+// GetRouterStaticRoutes reads all static routes of router r from db
 func (ptr *Controller) GetRouterStaticRoutes(r *Router) ([]*StaticRoute, error) {
 	kvs, err := ptr.getKVs(routerStaticRoutePath(r.Name, ""))
 	if err != nil {
@@ -268,7 +268,7 @@ func (ptr *Controller) GetRouterStaticRoutes(r *Router) ([]*StaticRoute, error) 
 	return srs, nil
 }
 
-// GetRouterStaticRoute
+// GetRouterStaticRoute reads the named static route under Router r from db
 func (ptr *Controller) GetRouterStaticRoute(r *Router, name string) (*StaticRoute, error) {
 	value, err := ptr.getKV(routerStaticRoutePath(r.Name, name))
 	if err != nil {
@@ -281,6 +281,7 @@ func (ptr *Controller) GetRouterStaticRoute(r *Router, name string) (*StaticRout
 	return sr, nil
 }
 
+// GetRouterNATs reads all NAT config under Router r from db
 func (ptr *Controller) GetRouterNATs(r *Router) ([]*NAT, error) {
 	kvs, err := ptr.getKVs(routerNATPath(r.Name, ""))
 	if err != nil {
@@ -297,6 +298,7 @@ func (ptr *Controller) GetRouterNATs(r *Router) ([]*NAT, error) {
 	return nats, nil
 }
 
+// GetRouterNATs reads named NAT config under Router r from db
 func (ptr *Controller) GetRouterNAT(r *Router, name string) (*NAT, error) {
 	value, err := ptr.getKV(routerNATPath(r.Name, name))
 	if err != nil {
@@ -309,6 +311,7 @@ func (ptr *Controller) GetRouterNAT(r *Router, name string) (*NAT, error) {
 	return nat, nil
 }
 
+// GetChassis reads named chassis from db
 func (ptr *Controller) GetChassis(name string) (*Chassis, error) {
 	value, err := ptr.getKV(chassisPath(name))
 	if err != nil {
@@ -321,7 +324,7 @@ func (ptr *Controller) GetChassis(name string) (*Chassis, error) {
 	return c, nil
 }
 
-// GetSwitches reads all switches from db
+// GetChassises reads all chasisses from db
 func (ptr *Controller) GetChassises() ([]*Chassis, error) {
 	kvs, err := ptr.getKVs(chassisPath(""))
 	if err != nil {
@@ -393,9 +396,10 @@ func (ptr *Controller) getIDMap(key string) (*bookkeeping.IDMap, string, error) 
 	return bookkeeping.NewIDMap(value), value, nil
 }
 
-// Save the object implemented interface{} into db.
-// It also performs the heavy lifting of getting a valid device id for router, switch
-// checking it an IP is already used by other port
+// Save devices into db.
+// It also performs the heavy lifting of:
+//   1. getting a valid device id for router, switch
+//   2. checking if an IP is already used by other port
 func (ptr *Controller) Save(devs ...interface{}) error {
 	// logging can be removed when it becomes stable
 	ptr.logger.Debugf("-----start: save transaction-----")
@@ -484,14 +488,14 @@ func (ptr *Controller) Save(devs ...interface{}) error {
 		ops = append(ops, OpPut(k, v))
 	}
 
-	for k, idmap := range idMaps {
-		n := idmap.m.String()
-		if idmap.o == "" {
+	for k, idMap := range idMaps {
+		n := idMap.m.String()
+		if idMap.o == "" {
 			ptr.logger.Debugf("creating %s: %s", k, n)
 			cmps = append(cmps, KeyMissing(k))
 		} else {
-			ptr.logger.Debugf("updating %s: %s -> %s", k, idmap.o, n)
-			cmps = append(cmps, Compare(Value(k), "=", idmap.o))
+			ptr.logger.Debugf("updating %s: %s -> %s", k, idMap.o, n)
+			cmps = append(cmps, Compare(Value(k), "=", idMap.o))
 		}
 		ops = append(ops, OpPut(k, n))
 	}
@@ -504,9 +508,8 @@ func (ptr *Controller) Save(devs ...interface{}) error {
 	return nil
 }
 
-// Delete any device from db, recycle the device id
-// is recursive is true, the provided key is used as a prefix
-// It also performs the heavy lifting of reclaim the id for router, switch and ip for port
+// Delete devices from db, recycle the device id or IP map if neccessary
+// if recursive is true, all children devices will be removed as well
 func (ptr *Controller) Delete(recursive bool, devs ...interface{}) error {
 	// logging can be removed when it becomes stable
 	ptr.logger.Debugf("-----start: delete transaction-----")
@@ -596,18 +599,18 @@ func (ptr *Controller) Delete(recursive bool, devs ...interface{}) error {
 		}
 	}
 
-	for key, idmap := range idMaps {
-		n := idmap.m.String()
-		if idmap.o == "" {
+	for key, idMap := range idMaps {
+		n := idMap.m.String()
+		if idMap.o == "" {
 			cmps = append(cmps, KeyMissing(key))
 		} else {
-			cmps = append(cmps, Compare(Value(key), "=", idmap.o))
+			cmps = append(cmps, Compare(Value(key), "=", idMap.o))
 		}
-		if idmap.m.Size() == 0 {
+		if idMap.m.Size() == 0 {
 			ptr.logger.Debugf("deleting: %s", key)
 			ops = append(ops, OpDelete(key))
 		} else {
-			ptr.logger.Debugf("updating: %s %s -> %s", key, idmap.o, n)
+			ptr.logger.Debugf("updating: %s %s -> %s", key, idMap.o, n)
 			ops = append(ops, OpPut(key, n))
 		}
 	}
@@ -620,7 +623,7 @@ func (ptr *Controller) Delete(recursive bool, devs ...interface{}) error {
 	return nil
 }
 
-// txn perform a transaction given the predicated and actions
+// txn performs a etcd transaction given the predicates and actions
 func (ptr *Controller) txn(cmps []Cmp, ops []Op) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(requestTimeoutSeconds))
 	resp, err := ptr.etcdClient.Txn(ctx).
@@ -657,7 +660,7 @@ func (ptr *Controller) getKV(key string) (string, error) {
 	return string(resp.Kvs[0].Value), nil
 }
 
-// getKVs retrieves all key,value from a prefix (key = prefix is ignored)
+// getKVs retrieves all kv pairs from a prefix, if the prefix happens to be the a key, that kv pair will be excluded
 func (ptr *Controller) getKVs(prefix string) (map[string]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(requestTimeoutSeconds))
 	resp, err := ptr.etcdClient.Get(ctx, prefix, WithPrefix())
@@ -679,6 +682,7 @@ func (ptr *Controller) getKVs(prefix string) (map[string]string, error) {
 	return result, nil
 }
 
+// Close the etcd connection
 func (ptr *Controller) Close() {
 	ptr.etcdClient.Close()
 }

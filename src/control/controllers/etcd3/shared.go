@@ -8,10 +8,9 @@ import (
 	"strings"
 )
 
-/*
-MarshalTuplenet serialize a struct into a string of the form: a=b,c=d,e=f
-field type of int, uint and string is supported
-*/
+
+// MarshalTuplenet serializes a struct into a string of the form: a=b,c=d,e=f
+// field type of int, uint, float and string is supported
 func MarshalTuplenet(ptr interface{}) string {
 	theStructValue := reflect.ValueOf(ptr)
 	for {
@@ -59,10 +58,9 @@ func MarshalTuplenet(ptr interface{}) string {
 	return strings.Join(kvs, ",")
 }
 
-/*
-UnmarshalTuplenet deserialize from a string of the form: a=b,c=d,e=f into a struct
-field type of int, uint and string is supported
-*/
+
+// UnmarshalTuplenet deserializes from a string of the form: a=b,c=d,e=f into a struct
+// field type of int, uint, float and string is supported
 func UnmarshalTuplenet(ptr interface{}, text string) (err error) {
 	theStructValue := reflect.ValueOf(ptr)
 	if theStructValue.Kind() != reflect.Ptr {
