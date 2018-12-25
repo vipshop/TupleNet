@@ -15,17 +15,13 @@ import (
 func addRouter(ctx *cli.Context) error {
 	checkArgs(ctx, 1, 2, "require a name,  an optional chassis")
 
-	name := ctx.Args().Get(0)
+	name := validateAndTrimSpace(ctx.Args().Get(0))
+
 	chassis := ctx.Args().Get(1)
 
-	r, err := controller.CreateRouter(name)
-	if err != nil {
-		fail(err)
-	}
+	r := logicaldev.NewRouter(name, chassis)
 
-	r.Chassis = chassis
-
-	err = controller.Save(r)
+	err := controller.Save(r)
 	if err != nil {
 		fail(err)
 	}
@@ -144,7 +140,7 @@ func addStaticRoute(ctx *cli.Context) error {
 	checkArgs(ctx, 5, 5, "require router name, static route name, CIDR, next_hop and outport")
 
 	routerName := ctx.Args().Get(0)
-	rName := ctx.Args().Get(1)
+	rName := validateAndTrimSpace(ctx.Args().Get(1))
 	cidrStr := ctx.Args().Get(2)
 	nextHop := ctx.Args().Get(3)
 	outport := ctx.Args().Get(4)
@@ -248,7 +244,7 @@ func addRouterPort(ctx *cli.Context) error {
 	checkArgs(ctx, 3, 5, "require a router name, a port name, an CIDR and optionally a MAC, a peer port")
 
 	routerName := ctx.Args().Get(0)
-	portName := ctx.Args().Get(1)
+	portName := validateAndTrimSpace(ctx.Args().Get(1))
 	cidr := ctx.Args().Get(2)
 	mac := ctx.Args().Get(3)
 	peer := ctx.Args().Get(4)
@@ -370,10 +366,10 @@ func linkSwitch(ctx *cli.Context) error {
 }
 
 func addNAT(ctx *cli.Context) error {
-	checkArgs(ctx, 5, 5, "require router, NAT name, CIDR TRANSLATE_TYPE and TRANSLATE_IP")
+	checkArgs(ctx, 5, 5, "require router, NAT name, CIDR, TRANSLATE_TYPE and TRANSLATE_IP")
 
 	routerName := ctx.Args().Get(0)
-	natName := ctx.Args().Get(1)
+	natName := validateAndTrimSpace(ctx.Args().Get(1))
 	cidr := ctx.Args().Get(2)
 	xlateType := strings.ToLower(ctx.Args().Get(3))
 	xlateIP := strings.ToLower(ctx.Args().Get(4))

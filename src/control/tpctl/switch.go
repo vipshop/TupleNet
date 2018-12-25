@@ -11,14 +11,9 @@ import (
 func addSwitch(ctx *cli.Context) error {
 	checkArgs(ctx, 1, 1, "require a name")
 
-	name := ctx.Args().Get(0)
+	name := validateAndTrimSpace(ctx.Args().Get(0))
 
-	r, err := controller.CreateSwitch(name)
-	if err != nil {
-		fail(err)
-	}
-
-	err = controller.Save(r)
+	err := controller.Save(logicaldev.NewSwitch(name))
 	if err != nil {
 		fail(err)
 	}
@@ -132,7 +127,7 @@ func addSwitchPort(ctx *cli.Context) error {
 	checkArgs(ctx, 3, 5, "require a switch name, a port name, an IP and optionally a MAC, a peer port")
 
 	switchName := ctx.Args().Get(0)
-	portName := ctx.Args().Get(1)
+	portName := validateAndTrimSpace(ctx.Args().Get(1))
 	ip := ctx.Args().Get(2)
 	mac := ctx.Args().Get(3)
 	peer := ctx.Args().Get(4)

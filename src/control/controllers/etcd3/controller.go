@@ -309,34 +309,6 @@ func (ptr *Controller) GetRouterNAT(r *Router, name string) (*NAT, error) {
 	return nat, nil
 }
 
-// CreateRouter create a router instance, but it will not be saved to db until you explicitly called Save
-func (ptr *Controller) CreateRouter(name string) (*Router, error) {
-	_, err := ptr.getKV(routerPath(name))
-	if err == nil {
-		return nil, errors.Errorf("there already exists a router with the same Name: %s", name)
-	} else {
-		if errors.Cause(err) != ErrKeyNotFound {
-			return nil, err
-		}
-	}
-
-	return &Router{Name: name}, nil
-}
-
-// CreateSwitch create a switch instance, but it will not be saved to db until you explicitly called Save
-func (ptr *Controller) CreateSwitch(name string) (*Switch, error) {
-	_, err := ptr.getKV(switchPath(name))
-	if err == nil {
-		return nil, errors.Errorf("there already exists a switch with the same Name: %s", name)
-	} else {
-		if errors.Cause(err) != ErrKeyNotFound {
-			return nil, err
-		}
-	}
-
-	return &Switch{Name: name}, nil
-}
-
 func (ptr *Controller) GetChassis(name string) (*Chassis, error) {
 	value, err := ptr.getKV(chassisPath(name))
 	if err != nil {
@@ -668,7 +640,7 @@ func (ptr *Controller) txn(cmps []Cmp, ops []Op) error {
 	return nil
 }
 
-// getKV retrieves the value from Controller.keyPrefix + halfPath
+// getKV retrieves the value of key
 func (ptr *Controller) getKV(key string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(requestTimeoutSeconds))
 	resp, err := ptr.etcdClient.Get(ctx, key)
@@ -685,10 +657,10 @@ func (ptr *Controller) getKV(key string) (string, error) {
 	return string(resp.Kvs[0].Value), nil
 }
 
-// getKVs retrieves all key,value from a prefix as: Controller.keyPrefix + halfPrefix
+// getKVs retrieves all key,value from a prefix (key = prefix is ignored)
 func (ptr *Controller) getKVs(prefix string) (map[string]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(requestTimeoutSeconds))
-	resp, err := ptr.etcdClient.Get(ctx, prefix, WithPrefix(), WithSort(SortByKey, SortAscend))
+	resp, err := ptr.etcdClient.Get(ctx, prefix, WithPrefix())
 	cancel()
 
 	if err != nil {
@@ -699,7 +671,7 @@ func (ptr *Controller) getKVs(prefix string) (map[string]string, error) {
 	for _, kv := range resp.Kvs {
 		key := string(kv.Key)
 		name := key[len(prefix):]
-		if !strings.Contains(name, "/") { // "sub-folder" skipped
+		if !strings.Contains(name, "/") {
 			result[name] = string(kv.Value)
 		}
 	}

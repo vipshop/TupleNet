@@ -2,11 +2,11 @@ package etcd3
 
 import (
 	"fmt"
+	"github.com/vipshop/tuplenet/control/logicaldev"
 	"os/exec"
 	"reflect"
 	"regexp"
 	"testing"
-	"time"
 )
 
 // TestMarshalUnmarshalTuplenet test the correctness of tuplnet marshaller and unmarshaller
@@ -120,29 +120,24 @@ func TestController_DeviceOperation(t *testing.T) {
 
 	// test Router creation
 	name := "router-1"
-	r, err := controller.CreateRouter(name)
-	expectSucceed("create %s", name)
+	r := logicaldev.NewRouter(name,"asdfasdfasdfasdfasdf")
 
 	// create a router
 	err = controller.Save(r)
 	expectSucceed("save %s", r)
 
 	// create a router with same Name
-	_, err = controller.CreateRouter(name)
+	err = controller.Save(r)
 	expectFail("creation of %s for the second time", name)
 
 	// test Router creation
 	name = "switch-1"
-	s, err := controller.CreateSwitch(name)
+	s := logicaldev.NewSwitch(name)
+	err = controller.Save(s)
 	expectSucceed("create %s", s)
 
-	// create a switch
-	err = controller.Save(s)
-	expectSucceed("save %s", s)
-	time.Sleep(100 * time.Millisecond)
-
 	// create a switch with same Name
-	_, err = controller.CreateSwitch(name)
+	err = controller.Save(s)
 	expectFail("switch creation of %s for the second time", name)
 
 	// create a router port and switch port
@@ -208,8 +203,7 @@ func TestController_DeviceOperation(t *testing.T) {
 	expectSame(nat2, nat2InDb)
 
 	// delete the router recursively
-	r2, err := controller.CreateRouter(r.Name + "1")
-	expectSucceed("create %s", r2.Name)
+	r2 := logicaldev.NewRouter(r.Name+ "1", "")
 	err = controller.Save(r2)
 	expectSucceed("save %s", r2.Name)
 

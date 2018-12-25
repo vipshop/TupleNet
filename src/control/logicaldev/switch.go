@@ -14,6 +14,10 @@ type SwitchPort struct {
 	Owner *Switch
 }
 
+func NewSwitch(name string) *Switch {
+	return &Switch{Name:name}
+}
+
 func (ptr *Switch) CreatePort(name, ip string, mac string) *SwitchPort {
 	return &SwitchPort{
 		Name:  name,

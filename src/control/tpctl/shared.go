@@ -242,3 +242,16 @@ func printDevices(aSlice interface{}) {
 		printStruct(theSlice.Index(i).Interface())
 	}
 }
+
+func validateAndTrimSpace(s string) string {
+	if strings.Contains(s, "/") {
+		fail(`"/" is not allowed`)
+	}
+
+	ns := strings.TrimSpace(s)
+	if ns == "" {
+		fail("string provided contains only spaces")
+	}
+
+	return ns
+}
