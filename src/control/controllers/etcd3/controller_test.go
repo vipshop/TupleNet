@@ -217,6 +217,9 @@ func TestController_DeviceOperation(t *testing.T) {
 	err = controller.Delete(false, r2)
 	expectSucceed("remove %s", r2.Name)
 
+	err = controller.Delete(false, r2)
+	expectFail("remove %s", r2.Name)
+
 	// delete the switch and port
 	err = controller.Delete(false, s, switchPort)
 	expectSucceed("remove %s, %s", r.Name, routerPort.Name)

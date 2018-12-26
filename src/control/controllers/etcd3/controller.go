@@ -1,10 +1,13 @@
 package etcd3
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	. "github.com/coreos/etcd/clientv3"
 	. "github.com/coreos/etcd/clientv3/clientv3util"
 	"github.com/coreos/etcd/clientv3/namespace"
+	"github.com/coreos/etcd/etcdserver/etcdserverpb"
 	"github.com/pkg/errors"
 	"github.com/vipshop/tuplenet/control/controllers/bookkeeping"
 	. "github.com/vipshop/tuplenet/control/logicaldev"
@@ -71,7 +74,10 @@ func NewController(serverAddresses []string, prefix string, loggingOn bool) (*Co
 	v, err := controller.getKV(versionPath)
 	if err != nil {
 		if errors.Cause(err) == ErrKeyNotFound {
-			controller.txn([]Cmp{KeyMissing(versionPath)}, []Op{OpPut(versionPath, currentVersion)})
+			err = controller.txn([]Cmp{KeyMissing(versionPath)}, []Op{OpPut(versionPath, currentVersion)})
+			if err != nil {
+				return nil, errors.Wrap(err, "unable to create version key")
+			}
 		} else {
 			return nil, errors.Wrapf(err, "unable to read version key %s", versionPath)
 		}
@@ -80,8 +86,10 @@ func NewController(serverAddresses []string, prefix string, loggingOn bool) (*Co
 			return nil, errors.Errorf("db accessed by higher version controller: %s, local: %s",
 				v, currentVersion)
 		} else if currentVersion > v {
-			controller.txn([]Cmp{Compare(Value(versionPath), "=", v)},
-				[]Op{OpPut(versionPath, "")})
+			err = controller.txn([]Cmp{Compare(Value(versionPath), "=", v)},[]Op{OpPut(versionPath, currentVersion)})
+					if err != nil {
+					return nil, errors.Wrap(err, "unable to update version key")
+				}
 		}
 	}
 
@@ -408,9 +416,9 @@ func (ptr *Controller) Save(devs ...interface{}) error {
 	var (
 		err    error
 		idMaps = make(map[string]struct {
-			m *bookkeeping.IDMap
-			o string
-		}) // o: old value
+			m      *bookkeeping.IDMap
+			oldVal string
+		})
 		cmps []Cmp
 		ops  []Op
 		k    string
@@ -420,7 +428,7 @@ func (ptr *Controller) Save(devs ...interface{}) error {
 	allocateID := func() (uint32, error) {
 		idMap, found := idMaps[deviceIDsPath]
 		if !found {
-			idMap.m, idMap.o, err = ptr.getIDMap(deviceIDsPath)
+			idMap.m, idMap.oldVal, err = ptr.getIDMap(deviceIDsPath)
 			if err != nil {
 				return 0, err
 			}
@@ -432,7 +440,7 @@ func (ptr *Controller) Save(devs ...interface{}) error {
 	markIPUsed := func(key, ip string) error {
 		idMap, found := idMaps[key]
 		if !found {
-			idMap.m, idMap.o, err = ptr.getIDMap(key)
+			idMap.m, idMap.oldVal, err = ptr.getIDMap(key)
 			if err != nil {
 				return err
 			}
@@ -488,16 +496,20 @@ func (ptr *Controller) Save(devs ...interface{}) error {
 		ops = append(ops, OpPut(k, v))
 	}
 
-	for k, idMap := range idMaps {
-		n := idMap.m.String()
-		if idMap.o == "" {
-			ptr.logger.Debugf("creating %s: %s", k, n)
-			cmps = append(cmps, KeyMissing(k))
+	for key, idMap := range idMaps {
+		newVal := idMap.m.String()
+
+		if idMap.oldVal == "" { // new switch or router is created
+			ptr.logger.Debugf("creating %s: %s", key, newVal)
+			cmps = append(cmps, KeyMissing(key))
+			ops = append(ops, OpPut(key, newVal))
 		} else {
-			ptr.logger.Debugf("updating %s: %s -> %s", k, idMap.o, n)
-			cmps = append(cmps, Compare(Value(k), "=", idMap.o))
+			ptr.logger.Debugf("updating %s: %s -> %s", key, idMap.oldVal, newVal)
+			cmps = append(cmps, Compare(Value(key), "=", idMap.oldVal))
+			if newVal != idMap.oldVal {
+				ops = append(ops, OpPut(key, newVal))
+			}
 		}
-		ops = append(ops, OpPut(k, n))
 	}
 
 	err = ptr.txn(cmps, ops)
@@ -517,18 +529,18 @@ func (ptr *Controller) Delete(recursive bool, devs ...interface{}) error {
 	var (
 		err    error
 		idMaps = make(map[string]struct {
-			m *bookkeeping.IDMap
-			o string
-		}) // o: old value
+			m      *bookkeeping.IDMap
+			oldVal string
+		})
 		cmps []Cmp
 		ops  []Op
-		keys = make([]string, 0)
+		keys    = make([]string, 0)
 	)
 
 	returnID := func(id uint32) error {
 		idMap, found := idMaps[deviceIDsPath]
 		if !found {
-			idMap.m, idMap.o, err = ptr.getIDMap(deviceIDsPath)
+			idMap.m, idMap.oldVal, err = ptr.getIDMap(deviceIDsPath)
 			if err != nil {
 				return errors.Wrap(err, "unable to read device map")
 			}
@@ -541,8 +553,8 @@ func (ptr *Controller) Delete(recursive bool, devs ...interface{}) error {
 	returnIP := func(key, ip string) error {
 		idMap, found := idMaps[key]
 		if !found {
-			idMap.m, idMap.o, err = ptr.getIDMap(key)
-			if err != nil && errors.Cause(err) != ErrKeyNotFound {
+			idMap.m, idMap.oldVal, err = ptr.getIDMap(key)
+			if err != nil {
 				return err
 			}
 			idMaps[key] = idMap
@@ -596,22 +608,22 @@ func (ptr *Controller) Delete(recursive bool, devs ...interface{}) error {
 				ops = append(ops, OpDelete(k +"/", WithPrefix()))
 			}
 			ops = append(ops, OpDelete(k))
+			cmps = append(cmps, KeyExists(k))
 		}
 	}
 
 	for key, idMap := range idMaps {
-		n := idMap.m.String()
-		if idMap.o == "" {
-			cmps = append(cmps, KeyMissing(key))
-		} else {
-			cmps = append(cmps, Compare(Value(key), "=", idMap.o))
-		}
+		newVal := idMap.m.String()
+
+		cmps = append(cmps, Compare(Value(key), "=", idMap.oldVal))
 		if idMap.m.Size() == 0 {
 			ptr.logger.Debugf("deleting: %s", key)
 			ops = append(ops, OpDelete(key))
 		} else {
-			ptr.logger.Debugf("updating: %s %s -> %s", key, idMap.o, n)
-			ops = append(ops, OpPut(key, n))
+			ptr.logger.Debugf("updating: %s %s -> %s", key, idMap.oldVal, newVal)
+			if newVal != idMap.oldVal {
+				ops = append(ops, OpPut(key, newVal))
+			}
 		}
 	}
 
@@ -625,19 +637,50 @@ func (ptr *Controller) Delete(recursive bool, devs ...interface{}) error {
 
 // txn performs a etcd transaction given the predicates and actions
 func (ptr *Controller) txn(cmps []Cmp, ops []Op) error {
+	retrieveOps := make([]Op, 0, len(cmps))
+	for _, cmp := range cmps {
+		retrieveOps = append(retrieveOps, OpGet(string(cmp.Key)))
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(requestTimeoutSeconds))
 	resp, err := ptr.etcdClient.Txn(ctx).
 		If(cmps...).
 		Then(ops...).
+		Else(retrieveOps...).
 		Commit()
 	cancel()
 
 	if err != nil {
-		return errors.Wrap(err, "unable to transaction %v")
+		return errors.Wrap(err, "unable to perform transaction")
 	}
 
 	if !resp.Succeeded {
-		return errors.Errorf("put fail with comparisons evaluated as false")
+		var reasons []string
+		for i := range cmps {
+			switch cmps[i].Target {
+			case etcdserverpb.Compare_VERSION:
+				if len(resp.Responses[i].GetResponseRange().Kvs) == 0 { // deleted case
+					reasons = append(reasons, fmt.Sprintf("%s does not exist", string(cmps[i].Key)))
+				} else { // create case
+					reasons = append(reasons, fmt.Sprintf("%s already exists", string(cmps[i].Key)))
+				}
+			case etcdserverpb.Compare_VALUE: // update case
+				kvs := resp.Responses[i].GetResponseRange().Kvs
+				if len(kvs) == 0 {
+					reasons = append(reasons, fmt.Sprintf("%s does not exist", string(cmps[i].Key)))
+				} else {
+					valInDb := kvs[0].Value
+					if !bytes.Equal(cmps[i].ValueBytes(), valInDb) {
+						reasons = append(reasons,
+							fmt.Sprintf(`key %s previous != current: "%s" != "%s"`,
+								string(cmps[i].Key), string(cmps[i].ValueBytes()), string(valInDb)))
+					}
+				}
+			}
+		}
+
+		return errors.Errorf("transaction fail with comparisons evaluated as false: %s",
+			strings.Join(reasons, ";"))
 	}
 
 	return nil
