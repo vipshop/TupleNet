@@ -66,10 +66,8 @@ func NewController(serverAddresses []string, prefix string, loggingOn bool) (*Co
 
 	prefix = strings.TrimRight(prefix, "/")
 	etcdClient.KV = namespace.NewKV(etcdClient.KV, prefix)
-
-	// NOTE: enable when needed
-	// etcdClient.Watcher = namespace.NewWatcher(etcdClient.Watcher, prefix)
-	// etcdClient.Lease = namespace.NewLease(etcdClient.Lease, prefix)
+	etcdClient.Watcher = namespace.NewWatcher(etcdClient.Watcher, prefix)
+	etcdClient.Lease = namespace.NewLease(etcdClient.Lease, prefix)
 
 	controller := Controller{
 		etcdClient: etcdClient,
