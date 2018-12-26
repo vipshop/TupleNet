@@ -63,7 +63,7 @@ func createNetwork(w http.ResponseWriter, r *http.Request) {
 
 		devices []interface{}
 		router  *logicaldev.Router
-		swtch   *logicaldev.Switch
+		sw      *logicaldev.Switch
 		rport   *logicaldev.RouterPort
 		sport   *logicaldev.SwitchPort
 	)
@@ -86,12 +86,8 @@ func createNetwork(w http.ResponseWriter, r *http.Request) {
 		goto Done
 	}
 
-	swtch, err = controller.CreateSwitch(req.NetworkID)
-	if err != nil {
-		resp.Err = err.Error()
-		goto Done
-	}
-	devices = append(devices, swtch)
+	sw = logicaldev.NewSwitch(req.NetworkID)
+	devices = append(devices, sw)
 
 	if egressRouterName != "" {
 		cidrParts = strings.SplitN(req.IPv4Data[0].Gateway, "/", 2)
@@ -114,7 +110,7 @@ func createNetwork(w http.ResponseWriter, r *http.Request) {
 
 		mac = macFromIP(cidrParts[0])
 		rport = router.CreatePort(portNameByPeer(req.NetworkID), cidrParts[0], uint8(prefix), mac)
-		sport = swtch.CreatePort(portNameByPeer(router.Name), cidrParts[0], mac)
+		sport = sw.CreatePort(portNameByPeer(router.Name), cidrParts[0], mac)
 		rport.Link(sport)
 
 		devices = append(devices, sport, rport)

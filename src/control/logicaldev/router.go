@@ -36,6 +36,10 @@ type NAT struct {
 	Owner *Router
 }
 
+func NewRouter(name string, chassis string) *Router {
+	return &Router{Name:name, Chassis:chassis}
+}
+
 func (ptr *Router) CreatePort(name, ip string, prefix uint8, mac string) *RouterPort {
 	return &RouterPort{
 		Name:   name,

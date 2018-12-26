@@ -1,8 +1,10 @@
-package etcd3
+package bookkeeping
 
 import (
 	"github.com/RoaringBitmap/roaring"
 	"github.com/pkg/errors"
+	"strconv"
+	"strings"
 )
 
 // IDMap is a helper type for handling device ids
@@ -53,9 +55,22 @@ func (ptr *IDMap) Size() uint64 {
 	return ptr.GetCardinality()
 }
 
-// UpdKV return a key, old value, current value to facilitate the update operation to db
 func (ptr *IDMap) String() string {
 	// in what situation shall an error be returned? just ignore it for now
 	value, _ := ptr.ToBase64()
 	return value
+}
+
+
+// the function assume ip address in xxx.xxx.xxx.xxx pattern
+func IPv4ToU32(ip string) uint32 {
+	parts := strings.Split(ip, ".")
+	a, _ := strconv.ParseUint(parts[0], 10, 8)
+	b, _ := strconv.ParseUint(parts[1], 10, 8)
+	c, _ := strconv.ParseUint(parts[2], 10, 8)
+	d, _ := strconv.ParseUint(parts[3], 10, 8)
+
+	r := a<<24 | b<<16 | c<<8 | d
+
+	return uint32(r)
 }

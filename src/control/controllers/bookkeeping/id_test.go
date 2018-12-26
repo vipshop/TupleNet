@@ -1,6 +1,7 @@
-package etcd3
+package bookkeeping
 
 import (
+	"fmt"
 	"github.com/RoaringBitmap/roaring"
 	"testing"
 )
@@ -25,7 +26,7 @@ func TestIP4ToU32(t *testing.T) {
 		"255.255.255.255": 4294967295,
 	}
 	for ip, expected := range data {
-		output := ipv4ToU32(ip)
+		output := IPv4ToU32(ip)
 		if output != expected {
 			t.Fatalf("%s shall be converted to %d, but got %d", ip, expected, output)
 		}
@@ -33,15 +34,23 @@ func TestIP4ToU32(t *testing.T) {
 }
 
 func TestIDMap(t *testing.T) {
+
 	idmap := NewIDMap("")
 
-	idmap.OccupyMasked(4294902017) // 255.255.1.1
-
-	if idmap.OccupyMasked(257) { // 0.0.1.1
-		t.Fatal("OccupyMasked() expected to fail")
+	bookkeeping := make(map[uint16]string)
+	for i := 0; i < 256; i++ {
+		for j := 0; j < 256; j++ {
+			ip := fmt.Sprintf("10.0.%d.%d", i, j)
+			id := IPv4ToU32(ip)
+			if !idmap.OccupyMasked(id) {
+				t.Fatalf("unable to add %s, previous added: %s\n", ip, bookkeeping[uint16(id)])
+			}
+			bookkeeping[uint16(id)] = ip
+		}
 	}
 
-	if !idmap.OccupyMasked(513) { // 0.0.2.1
-		t.Fatal("OccupyMasked() expected to succeed")
+	ip := "10.1.0.1"
+	if idmap.OccupyMasked(IPv4ToU32(ip)) {
+		t.Fatalf("shall not allow to add %s\n", ip)
 	}
 }

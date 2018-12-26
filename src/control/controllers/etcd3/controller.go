@@ -1,13 +1,18 @@
 package etcd3
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	. "github.com/coreos/etcd/clientv3"
 	. "github.com/coreos/etcd/clientv3/clientv3util"
 	"github.com/coreos/etcd/clientv3/namespace"
+	"github.com/coreos/etcd/etcdserver/etcdserverpb"
 	"github.com/pkg/errors"
+	"github.com/vipshop/tuplenet/control/controllers/bookkeeping"
 	. "github.com/vipshop/tuplenet/control/logicaldev"
 	"go.uber.org/zap"
+	"reflect"
 	"strings"
 	"time"
 )
@@ -69,7 +74,10 @@ func NewController(serverAddresses []string, prefix string, loggingOn bool) (*Co
 	v, err := controller.getKV(versionPath)
 	if err != nil {
 		if errors.Cause(err) == ErrKeyNotFound {
-			controller.txn([]Cmp{KeyMissing(versionPath)}, []Op{OpPut(versionPath, currentVersion)})
+			err = controller.txn([]Cmp{KeyMissing(versionPath)}, []Op{OpPut(versionPath, currentVersion)})
+			if err != nil {
+				return nil, errors.Wrap(err, "unable to create version key")
+			}
 		} else {
 			return nil, errors.Wrapf(err, "unable to read version key %s", versionPath)
 		}
@@ -78,8 +86,10 @@ func NewController(serverAddresses []string, prefix string, loggingOn bool) (*Co
 			return nil, errors.Errorf("db accessed by higher version controller: %s, local: %s",
 				v, currentVersion)
 		} else if currentVersion > v {
-			controller.txn([]Cmp{Compare(Value(versionPath), "=", v)},
-				[]Op{OpPut(versionPath, "")})
+			err = controller.txn([]Cmp{Compare(Value(versionPath), "=", v)},[]Op{OpPut(versionPath, currentVersion)})
+					if err != nil {
+					return nil, errors.Wrap(err, "unable to update version key")
+				}
 		}
 	}
 
@@ -129,7 +139,7 @@ func routerNATPath(r, n string) string {
 	return routerPath(r) + "/lnat/" + n
 }
 
-// GetSwitch read switch from db given by Name
+// GetSwitch read the named switch from db
 func (ptr *Controller) GetSwitch(name string) (*Switch, error) {
 	value, err := ptr.getKV(switchPath(name))
 	if err != nil {
@@ -159,7 +169,7 @@ func (ptr *Controller) GetSwitches() ([]*Switch, error) {
 	return switches, nil
 }
 
-// GetSwitchPort reads a port with Name portName under switch s
+// GetSwitchPort reads named port under Switch s from db
 func (ptr *Controller) GetSwitchPort(s *Switch, portName string) (*SwitchPort, error) {
 	key := switchPortPath(s.Name, portName)
 	value, err := ptr.getKV(key)
@@ -172,7 +182,7 @@ func (ptr *Controller) GetSwitchPort(s *Switch, portName string) (*SwitchPort, e
 	return sp, nil
 }
 
-// GetSwitchPorts reads all ports of switch s
+// GetSwitchPorts reads all ports under Switch s from db
 func (ptr *Controller) GetSwitchPorts(s *Switch) ([]*SwitchPort, error) {
 	kvs, err := ptr.getKVs(switchPortPath(s.Name, ""))
 	if err != nil {
@@ -189,7 +199,7 @@ func (ptr *Controller) GetSwitchPorts(s *Switch) ([]*SwitchPort, error) {
 	return ports, nil
 }
 
-// GetRouter read router from db given by Name
+// GetRouter reads the named router from db
 func (ptr *Controller) GetRouter(name string) (*Router, error) {
 	value, err := ptr.getKV(routerPath(name))
 	if err != nil {
@@ -202,7 +212,7 @@ func (ptr *Controller) GetRouter(name string) (*Router, error) {
 	return r, nil
 }
 
-// GetRouters read all routers from db
+// GetRouters reads all routers from db
 func (ptr *Controller) GetRouters() ([]*Router, error) {
 	kvs, err := ptr.getKVs(routerPath(""))
 	if err != nil {
@@ -219,7 +229,7 @@ func (ptr *Controller) GetRouters() ([]*Router, error) {
 	return routers, nil
 }
 
-// GetRouterPort reads a port with Name portName under router
+// GetRouterPort reads the named port under Router r
 func (ptr *Controller) GetRouterPort(r *Router, portName string) (*RouterPort, error) {
 	value, err := ptr.getKV(routerPortPath(r.Name, portName))
 	if err != nil {
@@ -232,7 +242,7 @@ func (ptr *Controller) GetRouterPort(r *Router, portName string) (*RouterPort, e
 	return rp, nil
 }
 
-// GetRouterPorts reads all ports of router r
+// GetRouterPorts reads all ports of Router r from db
 func (ptr *Controller) GetRouterPorts(r *Router) ([]*RouterPort, error) {
 	kvs, err := ptr.getKVs(routerPortPath(r.Name, ""))
 	if err != nil {
@@ -249,7 +259,7 @@ func (ptr *Controller) GetRouterPorts(r *Router) ([]*RouterPort, error) {
 	return ports, nil
 }
 
-// GetRouterStaticRoutes reads all static routes of router r
+// GetRouterStaticRoutes reads all static routes of router r from db
 func (ptr *Controller) GetRouterStaticRoutes(r *Router) ([]*StaticRoute, error) {
 	kvs, err := ptr.getKVs(routerStaticRoutePath(r.Name, ""))
 	if err != nil {
@@ -266,7 +276,7 @@ func (ptr *Controller) GetRouterStaticRoutes(r *Router) ([]*StaticRoute, error) 
 	return srs, nil
 }
 
-// GetRouterStaticRoute
+// GetRouterStaticRoute reads the named static route under Router r from db
 func (ptr *Controller) GetRouterStaticRoute(r *Router, name string) (*StaticRoute, error) {
 	value, err := ptr.getKV(routerStaticRoutePath(r.Name, name))
 	if err != nil {
@@ -279,6 +289,7 @@ func (ptr *Controller) GetRouterStaticRoute(r *Router, name string) (*StaticRout
 	return sr, nil
 }
 
+// GetRouterNATs reads all NAT config under Router r from db
 func (ptr *Controller) GetRouterNATs(r *Router) ([]*NAT, error) {
 	kvs, err := ptr.getKVs(routerNATPath(r.Name, ""))
 	if err != nil {
@@ -295,6 +306,7 @@ func (ptr *Controller) GetRouterNATs(r *Router) ([]*NAT, error) {
 	return nats, nil
 }
 
+// GetRouterNATs reads named NAT config under Router r from db
 func (ptr *Controller) GetRouterNAT(r *Router, name string) (*NAT, error) {
 	value, err := ptr.getKV(routerNATPath(r.Name, name))
 	if err != nil {
@@ -307,34 +319,7 @@ func (ptr *Controller) GetRouterNAT(r *Router, name string) (*NAT, error) {
 	return nat, nil
 }
 
-// CreateRouter create a router instance, but it will not be saved to db until you explicitly called Save
-func (ptr *Controller) CreateRouter(name string) (*Router, error) {
-	_, err := ptr.getKV(routerPath(name))
-	if err == nil {
-		return nil, errors.Errorf("there already exists a router with the same Name: %s", name)
-	} else {
-		if errors.Cause(err) != ErrKeyNotFound {
-			return nil, err
-		}
-	}
-
-	return &Router{Name: name}, nil
-}
-
-// CreateSwitch create a switch instance, but it will not be saved to db until you explicitly called Save
-func (ptr *Controller) CreateSwitch(name string) (*Switch, error) {
-	_, err := ptr.getKV(switchPath(name))
-	if err == nil {
-		return nil, errors.Errorf("there already exists a switch with the same Name: %s", name)
-	} else {
-		if errors.Cause(err) != ErrKeyNotFound {
-			return nil, err
-		}
-	}
-
-	return &Switch{Name: name}, nil
-}
-
+// GetChassis reads named chassis from db
 func (ptr *Controller) GetChassis(name string) (*Chassis, error) {
 	value, err := ptr.getKV(chassisPath(name))
 	if err != nil {
@@ -347,7 +332,7 @@ func (ptr *Controller) GetChassis(name string) (*Chassis, error) {
 	return c, nil
 }
 
-// GetSwitches reads all switches from db
+// GetChassises reads all chasisses from db
 func (ptr *Controller) GetChassises() ([]*Chassis, error) {
 	kvs, err := ptr.getKVs(chassisPath(""))
 	if err != nil {
@@ -411,17 +396,18 @@ func (ptr *Controller) SyncDeviceID(forceSync bool) error {
 }
 
 // getIPMap is a helper function to read id map from db
-func (ptr *Controller) getIDMap(key string) (*IDMap, string, error) {
+func (ptr *Controller) getIDMap(key string) (*bookkeeping.IDMap, string, error) {
 	value, err := ptr.getKV(key)
 	if err != nil && errors.Cause(err) != ErrKeyNotFound {
 		return nil, "", err
 	}
-	return NewIDMap(value), value, nil
+	return bookkeeping.NewIDMap(value), value, nil
 }
 
-// Save the object implemented interface{} into db.
-// It also performs the heavy lifting of getting a valid device id for router, switch
-// checking it an IP is already used by other port
+// Save devices into db.
+// It also performs the heavy lifting of:
+//   1. getting a valid device id for router, switch
+//   2. checking if an IP is already used by other port
 func (ptr *Controller) Save(devs ...interface{}) error {
 	// logging can be removed when it becomes stable
 	ptr.logger.Debugf("-----start: save transaction-----")
@@ -430,9 +416,9 @@ func (ptr *Controller) Save(devs ...interface{}) error {
 	var (
 		err    error
 		idMaps = make(map[string]struct {
-			m *IDMap
-			o string
-		}) // o: old value
+			m      *bookkeeping.IDMap
+			oldVal string
+		})
 		cmps []Cmp
 		ops  []Op
 		k    string
@@ -442,7 +428,7 @@ func (ptr *Controller) Save(devs ...interface{}) error {
 	allocateID := func() (uint32, error) {
 		idMap, found := idMaps[deviceIDsPath]
 		if !found {
-			idMap.m, idMap.o, err = ptr.getIDMap(deviceIDsPath)
+			idMap.m, idMap.oldVal, err = ptr.getIDMap(deviceIDsPath)
 			if err != nil {
 				return 0, err
 			}
@@ -454,13 +440,13 @@ func (ptr *Controller) Save(devs ...interface{}) error {
 	markIPUsed := func(key, ip string) error {
 		idMap, found := idMaps[key]
 		if !found {
-			idMap.m, idMap.o, err = ptr.getIDMap(key)
+			idMap.m, idMap.oldVal, err = ptr.getIDMap(key)
 			if err != nil {
 				return err
 			}
 			idMaps[key] = idMap
 		}
-		ok := idMap.m.OccupyMasked(ipv4ToU32(ip))
+		ok := idMap.m.OccupyMasked(bookkeeping.IPv4ToU32(ip))
 		if !ok {
 			return errors.Errorf("lower 16 bits of %s conflict with other IP", ip)
 		}
@@ -468,6 +454,10 @@ func (ptr *Controller) Save(devs ...interface{}) error {
 	}
 
 	for _, dev := range devs {
+		if !reflect.ValueOf(dev).IsValid() {
+			return errors.Errorf("unable to save %+v, invalid dev passed ", dev)
+		}
+
 		err = nil
 		switch t := dev.(type) {
 		case *Switch:
@@ -493,7 +483,7 @@ func (ptr *Controller) Save(devs ...interface{}) error {
 		case *NAT:
 			k = routerNATPath(t.Owner.Name, t.Name)
 		default:
-			continue
+			err = errors.New("supported type")
 		}
 
 		if err != nil {
@@ -506,16 +496,20 @@ func (ptr *Controller) Save(devs ...interface{}) error {
 		ops = append(ops, OpPut(k, v))
 	}
 
-	for k, idmap := range idMaps {
-		n := idmap.m.String()
-		if idmap.o == "" {
-			ptr.logger.Debugf("creating %s: %s", k, n)
-			cmps = append(cmps, KeyMissing(k))
+	for key, idMap := range idMaps {
+		newVal := idMap.m.String()
+
+		if idMap.oldVal == "" { // new switch or router is created
+			ptr.logger.Debugf("creating %s: %s", key, newVal)
+			cmps = append(cmps, KeyMissing(key))
+			ops = append(ops, OpPut(key, newVal))
 		} else {
-			ptr.logger.Debugf("updating %s: %s -> %s", k, idmap.o, n)
-			cmps = append(cmps, Compare(Value(k), "=", idmap.o))
+			ptr.logger.Debugf("updating %s: %s -> %s", key, idMap.oldVal, newVal)
+			cmps = append(cmps, Compare(Value(key), "=", idMap.oldVal))
+			if newVal != idMap.oldVal {
+				ops = append(ops, OpPut(key, newVal))
+			}
 		}
-		ops = append(ops, OpPut(k, n))
 	}
 
 	err = ptr.txn(cmps, ops)
@@ -526,9 +520,8 @@ func (ptr *Controller) Save(devs ...interface{}) error {
 	return nil
 }
 
-// Delete any device from db, recycle the device id
-// is recursive is true, the provided key is used as a prefix
-// It also performs the heavy lifting of reclaim the id for router, switch and ip for port
+// Delete devices from db, recycle the device id or IP map if neccessary
+// if recursive is true, all children devices will be removed as well
 func (ptr *Controller) Delete(recursive bool, devs ...interface{}) error {
 	// logging can be removed when it becomes stable
 	ptr.logger.Debugf("-----start: delete transaction-----")
@@ -536,18 +529,18 @@ func (ptr *Controller) Delete(recursive bool, devs ...interface{}) error {
 	var (
 		err    error
 		idMaps = make(map[string]struct {
-			m *IDMap
-			o string
-		}) // o: old value
+			m      *bookkeeping.IDMap
+			oldVal string
+		})
 		cmps []Cmp
 		ops  []Op
-		keys = make([]string, 0)
+		keys    = make([]string, 0)
 	)
 
 	returnID := func(id uint32) error {
 		idMap, found := idMaps[deviceIDsPath]
 		if !found {
-			idMap.m, idMap.o, err = ptr.getIDMap(deviceIDsPath)
+			idMap.m, idMap.oldVal, err = ptr.getIDMap(deviceIDsPath)
 			if err != nil {
 				return errors.Wrap(err, "unable to read device map")
 			}
@@ -560,19 +553,22 @@ func (ptr *Controller) Delete(recursive bool, devs ...interface{}) error {
 	returnIP := func(key, ip string) error {
 		idMap, found := idMaps[key]
 		if !found {
-			idMap.m, idMap.o, err = ptr.getIDMap(key)
-			if err != nil && errors.Cause(err) != ErrKeyNotFound {
+			idMap.m, idMap.oldVal, err = ptr.getIDMap(key)
+			if err != nil {
 				return err
 			}
 			idMaps[key] = idMap
 		}
-		idMap.m.ReturnMasked(ipv4ToU32(ip))
+		idMap.m.ReturnMasked(bookkeeping.IPv4ToU32(ip))
 		return nil
 	}
 
 	for _, dev := range devs {
-		keys, err = keys[:0], nil
+		if !reflect.ValueOf(dev).IsValid() {
+			return errors.Errorf("unable to delete %+v, invalid dev passed ", dev)
+		}
 
+		keys, err = keys[:0], nil
 		switch t := dev.(type) {
 		case *Switch:
 			err = returnID(t.ID)
@@ -599,7 +595,7 @@ func (ptr *Controller) Delete(recursive bool, devs ...interface{}) error {
 		case *NAT:
 			keys = append(keys, routerNATPath(t.Owner.Name, t.Name))
 		default:
-			continue
+			err = errors.New("supported type")
 		}
 
 		if err != nil {
@@ -609,26 +605,25 @@ func (ptr *Controller) Delete(recursive bool, devs ...interface{}) error {
 		for _, k := range keys {
 			ptr.logger.Debugf("deleting: %s", k)
 			if recursive {
-				ops = append(ops, OpDelete(k, WithPrefix()))
-			} else {
-				ops = append(ops, OpDelete(k))
+				ops = append(ops, OpDelete(k +"/", WithPrefix()))
 			}
+			ops = append(ops, OpDelete(k))
+			cmps = append(cmps, KeyExists(k))
 		}
 	}
 
-	for key, idmap := range idMaps {
-		n := idmap.m.String()
-		if idmap.o == "" {
-			cmps = append(cmps, KeyMissing(key))
-		} else {
-			cmps = append(cmps, Compare(Value(key), "=", idmap.o))
-		}
-		if idmap.m.Size() == 0 {
+	for key, idMap := range idMaps {
+		newVal := idMap.m.String()
+
+		cmps = append(cmps, Compare(Value(key), "=", idMap.oldVal))
+		if idMap.m.Size() == 0 {
 			ptr.logger.Debugf("deleting: %s", key)
 			ops = append(ops, OpDelete(key))
 		} else {
-			ptr.logger.Debugf("updating: %s %s -> %s", key, idmap.o, n)
-			ops = append(ops, OpPut(key, n))
+			ptr.logger.Debugf("updating: %s %s -> %s", key, idMap.oldVal, newVal)
+			if newVal != idMap.oldVal {
+				ops = append(ops, OpPut(key, newVal))
+			}
 		}
 	}
 
@@ -640,27 +635,58 @@ func (ptr *Controller) Delete(recursive bool, devs ...interface{}) error {
 	return nil
 }
 
-// txn perform a transaction given the predicated and actions
+// txn performs a etcd transaction given the predicates and actions
 func (ptr *Controller) txn(cmps []Cmp, ops []Op) error {
+	retrieveOps := make([]Op, 0, len(cmps))
+	for _, cmp := range cmps {
+		retrieveOps = append(retrieveOps, OpGet(string(cmp.Key)))
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(requestTimeoutSeconds))
 	resp, err := ptr.etcdClient.Txn(ctx).
 		If(cmps...).
 		Then(ops...).
+		Else(retrieveOps...).
 		Commit()
 	cancel()
 
 	if err != nil {
-		return errors.Wrap(err, "unable to transaction %v")
+		return errors.Wrap(err, "unable to perform transaction")
 	}
 
 	if !resp.Succeeded {
-		return errors.Errorf("put fail with comparisons evaluated as false")
+		var reasons []string
+		for i := range cmps {
+			switch cmps[i].Target {
+			case etcdserverpb.Compare_VERSION:
+				if len(resp.Responses[i].GetResponseRange().Kvs) == 0 { // deleted case
+					reasons = append(reasons, fmt.Sprintf("%s does not exist", string(cmps[i].Key)))
+				} else { // create case
+					reasons = append(reasons, fmt.Sprintf("%s already exists", string(cmps[i].Key)))
+				}
+			case etcdserverpb.Compare_VALUE: // update case
+				kvs := resp.Responses[i].GetResponseRange().Kvs
+				if len(kvs) == 0 {
+					reasons = append(reasons, fmt.Sprintf("%s does not exist", string(cmps[i].Key)))
+				} else {
+					valInDb := kvs[0].Value
+					if !bytes.Equal(cmps[i].ValueBytes(), valInDb) {
+						reasons = append(reasons,
+							fmt.Sprintf(`key %s previous != current: "%s" != "%s"`,
+								string(cmps[i].Key), string(cmps[i].ValueBytes()), string(valInDb)))
+					}
+				}
+			}
+		}
+
+		return errors.Errorf("transaction fail with comparisons evaluated as false: %s",
+			strings.Join(reasons, ";"))
 	}
 
 	return nil
 }
 
-// getKV retrieves the value from Controller.keyPrefix + halfPath
+// getKV retrieves the value of key
 func (ptr *Controller) getKV(key string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(requestTimeoutSeconds))
 	resp, err := ptr.etcdClient.Get(ctx, key)
@@ -677,10 +703,10 @@ func (ptr *Controller) getKV(key string) (string, error) {
 	return string(resp.Kvs[0].Value), nil
 }
 
-// getKVs retrieves all key,value from a prefix as: Controller.keyPrefix + halfPrefix
+// getKVs retrieves all kv pairs from a prefix, if the prefix happens to be the a key, that kv pair will be excluded
 func (ptr *Controller) getKVs(prefix string) (map[string]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(requestTimeoutSeconds))
-	resp, err := ptr.etcdClient.Get(ctx, prefix, WithPrefix(), WithSort(SortByKey, SortAscend))
+	resp, err := ptr.etcdClient.Get(ctx, prefix, WithPrefix())
 	cancel()
 
 	if err != nil {
@@ -691,7 +717,7 @@ func (ptr *Controller) getKVs(prefix string) (map[string]string, error) {
 	for _, kv := range resp.Kvs {
 		key := string(kv.Key)
 		name := key[len(prefix):]
-		if !strings.Contains(name, "/") { // "sub-folder" skipped
+		if !strings.Contains(name, "/") {
 			result[name] = string(kv.Value)
 		}
 	}
@@ -699,6 +725,7 @@ func (ptr *Controller) getKVs(prefix string) (map[string]string, error) {
 	return result, nil
 }
 
+// Close the etcd connection
 func (ptr *Controller) Close() {
 	ptr.etcdClient.Close()
 }

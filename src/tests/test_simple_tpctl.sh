@@ -14,6 +14,8 @@ bash ${CONTROL_BIN_PATH}/build.sh || exit_test
 (tpctl lr show aaa bbb | grep 'require')|| exit_test
 (tpctl lr add | grep 'require')|| exit_test
 (tpctl lr add aaa bbb cc| grep 'require')|| exit_test
+(tpctl lr add "  " bbb | grep 'only spaces')|| exit_test
+(tpctl lr add a/aa bbb | grep 'not allowed')|| exit_test
 (tpctl lr del | grep 'require') || exit_test
 (tpctl lr del aaa bbb | grep 'require') || exit_test
 
@@ -25,6 +27,9 @@ bash ${CONTROL_BIN_PATH}/build.sh || exit_test
 (tpctl lrp add aaa bbb 10.200.100.1 00:00:00:00:00:00 | grep 'invalid') || exit_test
 (tpctl lrp add aaa bbb 10.200.100.1/24 ccc | grep 'invalid') || exit_test
 (tpctl lrp add aaa bbb 10.200.100.1/24 00:00:00:00:00:00 ccc ddd | grep 'require') || exit_test
+(tpctl lrp add aaa bbb 10.200.100.1/24 00:00:00:00:00:00 ccc ddd | grep 'require') || exit_test
+(tpctl lrp add aaa "  " 10.200.100.1/24 00:00:00:00:00:00 peer | grep 'only spaces') || exit_test
+(tpctl lrp add aaa b/bb 10.200.100.1/24 00:00:00:00:00:00 peer | grep 'not allowed') || exit_test
 (tpctl lrp del | grep 'require') || exit_test
 (tpctl lrp del aaa | grep 'require') || exit_test
 (tpctl lrp del aaa bbb ccc | grep 'require') || exit_test
@@ -40,6 +45,8 @@ bash ${CONTROL_BIN_PATH}/build.sh || exit_test
 (tpctl lsr add aaa bbb 10.200.100.1 ccc ddd | grep 'invalid') || exit_test
 (tpctl lsr add aaa bbb 10.200.100.1/24 ccc ddd | grep 'invalid') || exit_test
 (tpctl lsr add aaa bbb 10.200.100.1/24 ccc ddd eee | grep 'require') || exit_test
+(tpctl lsr add aaa "  " 10.200.100.1/24 10.200.100.1 ddd | grep 'only spaces') || exit_test
+(tpctl lsr add aaa b/bb 10.200.100.1/24 10.200.100.1 ddd | grep 'not allowed') || exit_test
 
 (tpctl lnat show aaa bbb ccc | grep 'require') || exit_test
 (tpctl lnat add | grep 'require') || exit_test
@@ -52,11 +59,15 @@ bash ${CONTROL_BIN_PATH}/build.sh || exit_test
 (tpctl lnat add aaa bbb 10.200.100.1 ccc ddd | grep 'invalid') || exit_test
 (tpctl lnat add aaa bbb 10.200.100.1/24 ccc ddd | grep 'invalid') || exit_test
 (tpctl lnat add aaa bbb 10.200.100.1/24 snat ddd | grep 'invalid') || exit_test
-(tpctl lsr add aaa bbb 10.200.100.1/24 ccc ddd eee | grep 'require') || exit_test
+(tpctl lnat add aaa bbb 10.200.100.1/24 ccc ddd eee | grep 'require') || exit_test
+(tpctl lnat add aaa "  " 10.200.100.1/24 snat 10.200.100.1 | grep 'only spaces') || exit_test
+(tpctl lnat add aaa b/bb 10.200.100.1/24 snat 10.200.100.1 | grep 'not allowed') || exit_test
 
 (tpctl ls show aaa bbb | grep 'require')|| exit_test
 (tpctl ls add | grep 'require') || exit_test
 (tpctl ls add aaa bbb | grep 'require') || exit_test
+(tpctl ls add "  " | grep 'only spaces')|| exit_test
+(tpctl ls add a/aa | grep 'not allowed')|| exit_test
 (tpctl ls del | grep 'require') || exit_test
 (tpctl ls del aaa bbb | grep 'require') || exit_test
 
@@ -67,6 +78,8 @@ bash ${CONTROL_BIN_PATH}/build.sh || exit_test
 (tpctl lsp add aaa bbb 10.200.100.1/24 ccc | grep 'invalid') || exit_test
 (tpctl lsp add aaa bbb 10.200.100.1 zz:00:00:00:00:00 ddd | grep 'invalid') || exit_test
 (tpctl lsp add aaa bbb 10.200.100.1 00:00:00:00:00:00 ddd eee | grep 'require') || exit_test
+(tpctl lsp add aaa "  " 10.200.100.1 00:00:00:00:00:00 peer | grep 'only spaces') || exit_test
+(tpctl lsp add aaa b/bb 10.200.100.1 00:00:00:00:00:00 peer | grep 'not allowed') || exit_test
 (tpctl lsp del | grep 'require') || exit_test
 (tpctl lsp del aaa bbb ccc | grep 'require') || exit_test
 
@@ -110,18 +123,18 @@ equal_str "$result" "$expected" || exit_test
 tpctl lr add LR-2 || exit_test
 tpctl lr add LR-3 || exit_test
 tpctl lr add LR-4 || exit_test
-(tpctl lr add LR-1 | grep 'exists') || exit_test
-(tpctl lr add LR-2 | grep 'exists') || exit_test
-(tpctl lr add LR-3 | grep 'exists') || exit_test
-(tpctl lr add LR-4 | grep 'exists') || exit_test
+(tpctl lr add LR-1 | grep 'unable to perform save') || exit_test
+(tpctl lr add LR-2 | grep 'unable to perform save') || exit_test
+(tpctl lr add LR-3 | grep 'unable to perform save') || exit_test
+(tpctl lr add LR-4 | grep 'unable to perform save') || exit_test
 
 tpctl ls add LS-2 || exit_test
 tpctl ls add LS-3 || exit_test
 tpctl ls add LS-4 || exit_test
-(tpctl ls add LS-1 | grep 'exists') || exit_test
-(tpctl ls add LS-2 | grep 'exists') || exit_test
-(tpctl ls add LS-3 | grep 'exists') || exit_test
-(tpctl ls add LS-4 | grep 'exists') || exit_test
+(tpctl ls add LS-1 | grep 'unable to perform save') || exit_test
+(tpctl ls add LS-2 | grep 'unable to perform save') || exit_test
+(tpctl ls add LS-3 | grep 'unable to perform save') || exit_test
+(tpctl ls add LS-4 | grep 'unable to perform save') || exit_test
 
 result="$(tpctl lr show)"
 expected="
