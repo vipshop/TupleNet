@@ -21,6 +21,15 @@ const (
 	versionPath           = "/globals/version"
 	deviceIDsPath         = "/globals/device_ids"
 	requestTimeoutSeconds = 3
+
+
+	switchRootPath       = "/entity_view/LS/"
+	switchIPBookRootPath = "/ip_book/LS/"
+
+	routerRootPath       = "/entity_view/LR/"
+	routerIPBookRootPath = "/ip_book/LR/"
+
+	chassisRootPath = "/entity_view/chassis/"
 )
 
 var (
@@ -104,7 +113,7 @@ func NewController(serverAddresses []string, prefix string, loggingOn bool) (*Co
 }
 
 func switchPath(s string) string {
-	return "/entity_view/LS/" + s
+	return switchRootPath + s
 }
 
 func switchPortPath(s, p string) string {
@@ -112,11 +121,11 @@ func switchPortPath(s, p string) string {
 }
 
 func switchIPBookPath(s string) string {
-	return "/ip_book/LS/" + s
+	return switchIPBookRootPath + s
 }
 
 func routerPath(r string) string {
-	return "/entity_view/LR/" + r
+	return routerRootPath + r
 }
 
 func routerPortPath(r, p string) string {
@@ -124,7 +133,7 @@ func routerPortPath(r, p string) string {
 }
 
 func routerIPBookPath(r string) string {
-	return "/ip_book/LR/" + r
+	return routerIPBookRootPath + r
 }
 
 func routerStaticRoutePath(r, s string) string {
@@ -132,7 +141,7 @@ func routerStaticRoutePath(r, s string) string {
 }
 
 func chassisPath(c string) string {
-	return "/entity_view/chassis/" + c
+	return chassisRootPath + c
 }
 
 func routerNATPath(r, n string) string {
