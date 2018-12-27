@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"github.com/vipshop/tuplenet/control/controllers/etcd3"
 	"net"
 	"os"
 	"reflect"
@@ -14,29 +15,29 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-func succeedf(format string, args ...interface{}) {
-	fmt.Printf(format+"\n", args...)
-	controller.Close()
-	os.Exit(0)
-}
-
 func fail(args ...interface{}) {
-	fmt.Println(args...)
-	controller.Close()
-	os.Exit(1)
+	panic(fmt.Sprintln(args...))
 }
 
 func failf(format string, args ...interface{}) {
-	fmt.Printf(format+"\n", args...)
-	controller.Close()
-	os.Exit(1)
+	panic(fmt.Sprintf(format, args...))
 }
 
-func checkArgs(ctx *cli.Context, min, max int, usage string) {
-	args := ctx.Args()
+func checkArgsThenConnect(ctx *cli.Context, min, max int, usage string) {
+	var (
+		args = ctx.Args()
+		err error
+	)
+
 	if len(args) < min || len(args) > max {
 		fail(usage)
 	}
+
+	controller, err = etcd3.NewController(strings.Split(endpoints, ","), keyPrefix, false)
+	if err != nil {
+		fail(err)
+	}
+
 	if ctx.BoolT("json") {
 		outputFormat = "json"
 	}
