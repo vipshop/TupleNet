@@ -239,13 +239,7 @@ func main() {
 				{
 					Name:  "sync-device-map",
 					Usage: "sync device id map within tuplenet",
-					Action: func(ctx *cli.Context) (err error) {
-						err = controller.SyncDeviceID(true)
-						if err != nil {
-							fail(err)
-						}
-						return
-					},
+					Action: syncDeviceID,
 				},
 				{
 					Name:   "find-ip-conflict",
@@ -256,6 +250,11 @@ func main() {
 					Name:   "find-id-conflict",
 					Usage:  "find device id conflict within tuplenet",
 					Action: findIDConflict,
+				},
+				{
+					Name:   "rebuild-ip-book",
+					Usage:  "rebuild IP books if they are somehow corrupted",
+					Action: rebuildIPBooks,
 				},
 			},
 		},

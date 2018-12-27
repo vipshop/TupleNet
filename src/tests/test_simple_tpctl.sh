@@ -236,6 +236,21 @@ for j in `seq 1 255`;do
   (tpctl lnat add LR-1 LNAT-${j} 10.${a}.${b}.1/24 dnat 10.${a}.${b}.1 | grep 'exists')  || exit_test
 done
 
+# remove LR-1 ip book data and rebuild
+before="$(etcdctl --endpoints ${etcd_client_specs} get ${DATA_STORE_PREFIX}/ip_book/LR/LR-1)"
+etcdctl --endpoints ${etcd_client_specs} get ${DATA_STORE_PREFIX}/ip_book/LR/LR-1 || exit_test
+tpctl toolbox rebuild-ip-book || exit_test
+after="$(etcdctl --endpoints ${etcd_client_specs} get ${DATA_STORE_PREFIX}/ip_book/LR/LR-1)"
+equal_str "$before" "$after" || exit_test
+
+# remove LS-1 ip book data and rebuild
+before="$(etcdctl --endpoints ${etcd_client_specs} get ${DATA_STORE_PREFIX}/ip_book/LS/LS-1)"
+etcdctl --endpoints ${etcd_client_specs} get ${DATA_STORE_PREFIX}/ip_book/LS/LS-1 || exit_test
+tpctl toolbox rebuild-ip-book || exit_test
+after="$(etcdctl --endpoints ${etcd_client_specs} get ${DATA_STORE_PREFIX}/ip_book/LS/LS-1)"
+equal_str "$before" "$after" || exit_test
+
+
 # delete all things
 for i in `seq 1 3`; do
   (echo "asdf" | tpctl lr del -r LR-${i} | grep 'operation canceled') || exit_test

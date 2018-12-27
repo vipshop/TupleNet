@@ -356,6 +356,82 @@ func (ptr *Controller) GetChassises() ([]*Chassis, error) {
 	return chs, nil
 }
 
+func (ptr *Controller) RebuildIPBooks() (err error) {
+	defer func() {
+		if err != nil { // give error a context
+			err = errors.Wrap(err,"unable to rebuild IP book")
+		}
+	}()
+
+	routers, err := ptr.GetRouters()
+	if err != nil {
+		return
+	}
+
+	for _, r := range routers {
+		key := routerIPBookPath(r.Name)
+		oldVal, _ := ptr.getKV(key)
+		ipBook := bookkeeping.NewIDMap("")
+
+		ports, err := ptr.GetRouterPorts(r)
+		if err != nil {
+			return err
+		}
+		for _, p := range ports {
+			if !ipBook.OccupyMasked(bookkeeping.IPv4ToU32(p.IP)) {
+				return errors.Errorf("%s of %s with others in %s", p.IP, p.Name, r.Name)
+			}
+		}
+
+		newVal := ipBook.String()
+		if newVal != oldVal {
+			if oldVal == "" {
+				err = ptr.txn([]Cmp{KeyMissing(key)}, []Op{OpPut(key, newVal)})
+			} else {
+				err = ptr.txn([]Cmp{Compare(Value(key), "=", oldVal)}, []Op{OpPut(key, newVal)})
+			}
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	switches, err := ptr.GetSwitches()
+	if err != nil {
+		return
+	}
+
+	for _, sw := range switches {
+		key := switchIPBookPath(sw.Name)
+		oldVal, _ := ptr.getKV(key)
+		ipBook := bookkeeping.NewIDMap("")
+
+		ports, err := ptr.GetSwitchPorts(sw)
+		if err != nil {
+			return err
+		}
+		for _, p := range ports {
+			if !ipBook.OccupyMasked(bookkeeping.IPv4ToU32(p.IP)) {
+				return errors.Errorf("%s of %s with others in %s", p.IP, p.Name, sw.Name)
+			}
+		}
+
+		newVal := ipBook.String()
+		if newVal != oldVal {
+			if oldVal == "" {
+				err = ptr.txn([]Cmp{KeyMissing(key)}, []Op{OpPut(key, newVal)})
+			} else {
+				err = ptr.txn([]Cmp{Compare(Value(key), "=", oldVal)}, []Op{OpPut(key, newVal)})
+			}
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
 // SyncDeviceID will sync the device id bitmap based on all routers and switches in db
 func (ptr *Controller) SyncDeviceID(forceSync bool) error {
 	// record old bitmap first before reading devices
