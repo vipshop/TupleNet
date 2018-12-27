@@ -58,7 +58,8 @@ def parse_key(key):
         return key, None
 
 class WatchMaster():
-    def __init__(self, host_spec_array, prefix_path, system_id, timeout = 3):
+    def __init__(self, host_spec_array, prefix_path,
+                 system_id = None, timeout = 3):
         self.last_ver = -1
         self.host_spec_array = host_spec_array
         self.system_id = system_id
@@ -348,8 +349,9 @@ class WatchMaster():
         return watch_id
 
     def _run_communicate_watch(self):
-        watch_id = self._add_watch(PREFIX_PATH_COMMU_PUSH + self.system_id)
-        return watch_id
+        if self.system_id is not None:
+            watch_id = self._add_watch(PREFIX_PATH_COMMU_PUSH + self.system_id)
+            return watch_id
 
     def run_default_watch(self):
         self._run_entity_watch()

@@ -268,8 +268,11 @@ REG_ACTION_DICT = {
           PACKET_TYPE_IDX:'OXM_OF_PACKET_TYPE'
         }
 
-
+# Reg10[0..7] is for flags of packet
+# Reg10[8..15] is for seq of pkt-trace
+# Reg10[16..31] is for cmd_id
 # loopback occupies first bit
+# NOTE: do not change to order of flag bits
 FLAG_LOOPBACK = 1
 FLAG_LOOPBACK_BIT_IDX = 0
 # tracing packet occupies second bit

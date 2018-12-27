@@ -426,29 +426,37 @@ fail_parse_action:
 }
 
 static tp_status
-process_trace(struct ofputil_packet_in *pin)
+process_trace(struct ofputil_packet_in *pin,
+              const struct action_header *ah,
+              struct ofpbuf *continuation)
 {
     tp_status status;
-    static uint32_t seq_n = 0;
-    uint8_t table_id = pin->table_id;
+    enum ofp_version version = rconn_get_version(swconn);
+    enum ofputil_protocol proto = ofputil_protocol_from_ofp_version(version);
+    // controller(pause) set pin->table_id=0, consume action_header which
+    // store the right table_id
+    uint8_t table_id = ah->pad[3];
     uint32_t src_port_id = pin->flow_metadata.flow.regs[REG_SRC_IDX];
     uint32_t dst_port_id = pin->flow_metadata.flow.regs[REG_DST_IDX];
     uint32_t flag = pin->flow_metadata.flow.regs[REG_FLAG_IDX];
     uint32_t datapath_id = ntohll(pin->flow_metadata.flow.metadata);
     VLOG_DBG_RL(&rl, "receive tracing packet, datapath_id=%u", datapath_id);
 
+    // seq occupies reg[8..15]
+    uint8_t *seq_n = ((uint8_t*)(&pin->flow_metadata.flow.regs[REG_FLAG_IDX])) + 1;
+    (*seq_n)++;
     char tp_buf[128];
     status = write_tp_fifo(tp_buf, sizeof(tp_buf),
                            "%s,%u,%u,%u,%u,%u,%u,%u;",
                            OPCODE_TRACE_STR,
                            table_id, datapath_id,
                            flag, src_port_id, dst_port_id,
-                           ntohl(pin->flow_metadata.flow.tunnel.ip_src), seq_n);
+                           ntohl(pin->flow_metadata.flow.tunnel.ip_src), *seq_n);
     if (status != TP_STATUS_OK) {
-        return status;
+        VLOG_WARN("failed to upload trace info to tuplenet");
     }
 
-    seq_n++;
+    queue_msg(ofputil_encode_resume(pin, continuation, proto));
     return status;
 }
 
@@ -480,7 +488,7 @@ process_packet_in(const struct ofp_header *msg)
         status = process_beg_arp(&pin, &userdata);
         break;
     case PKT_IN_OPCODE_TRACE:
-        status = process_trace(&pin);
+        status = process_trace(&pin, ah, &continuation);
         break;
     case PKT_IN_OPCODE_UNKNOW_DST:
         status = process_unknow_dst_pkt(&pin, &userdata);
