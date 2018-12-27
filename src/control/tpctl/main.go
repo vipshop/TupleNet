@@ -256,6 +256,11 @@ func main() {
 					Usage:  "rebuild IP books if they are somehow corrupted",
 					Action: rebuildIPBooks,
 				},
+				{
+					Name:   "decode-id-string",
+					Usage:  "show what is store in the id string",
+					Action: decodeIDString,
+				},
 			},
 		},
 	}

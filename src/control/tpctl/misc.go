@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/vipshop/tuplenet/control/controllers/bookkeeping"
 	"gopkg.in/urfave/cli.v1"
 	"strings"
 )
@@ -120,4 +121,18 @@ func rebuildIPBooks(ctx *cli.Context) (err error) {
 	}
 	fmt.Println("done")
 	return
+}
+
+func decodeIDString(ctx *cli.Context) {
+	input := ctx.Args().Get(0)
+
+	u32ToIP := func(i uint32) string {
+		return fmt.Sprintf("%d.%d.%d.%d",
+			0xFF & i >> 24,0xFF & (i >> 16),0xFF & (i >> 8),0xFF & i)
+	}
+
+	for iter := bookkeeping.NewIDMap(input).Iterator();iter.HasNext(); {
+		i := iter.Next()
+		fmt.Printf("%d => %s\n", i, u32ToIP(i))
+	}
 }
