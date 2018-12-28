@@ -293,3 +293,31 @@ etcd_inject_packet()
     local prefix=${tuplenet_prefix}communicate/
     etcdctl --endpoints $etcd_client_specs put ${prefix}${hv}/cmd/1 cmd=pkt_trace,port=$port,packet=$data || return 1
 }
+
+etcd_ipbook()
+{
+    local action=$1
+    local type=$2
+    local key=${tuplenet_prefix}ip_book/LS/$3
+    local val=$4
+
+    case ${type} in
+    LS|LR)
+    ;;
+    *)
+        pmsg "invalid type ${type}"; return 1
+    ;;
+    esac
+
+    case ${action} in
+    get|del)
+        etcdctl --endpoints "$etcd_client_specs" ${action} ${key} || return 1
+    ;;
+    put)
+        etcdctl --endpoints "$etcd_client_specs" ${action} ${key} "${val}" || return 1
+    ;;
+    *)
+        pmsg "invalid action: ${action}"; return 1
+    ;;
+    esac
+}

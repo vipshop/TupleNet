@@ -237,17 +237,17 @@ for j in `seq 1 255`;do
 done
 
 # remove LR-1 ip book data and rebuild
-before="$(etcdctl --endpoints ${etcd_client_specs} get ${DATA_STORE_PREFIX}/ip_book/LR/LR-1)"
-etcdctl --endpoints ${etcd_client_specs} get ${DATA_STORE_PREFIX}/ip_book/LR/LR-1 || exit_test
+before="$(etcd_ipbook get LR LR-1)"
+etcd_ipbook del LR LR-1
 tpctl toolbox rebuild-ip-book || exit_test
-after="$(etcdctl --endpoints ${etcd_client_specs} get ${DATA_STORE_PREFIX}/ip_book/LR/LR-1)"
+after="$(etcd_ipbook get LR LR-1)"
 equal_str "$before" "$after" || exit_test
 
 # remove LS-1 ip book data and rebuild
-before="$(etcdctl --endpoints ${etcd_client_specs} get ${DATA_STORE_PREFIX}/ip_book/LS/LS-1)"
-etcdctl --endpoints ${etcd_client_specs} get ${DATA_STORE_PREFIX}/ip_book/LS/LS-1 || exit_test
+before="$(etcd_ipbook get LS LS-1)"
+etcd_ipbook del LS LS-1
 tpctl toolbox rebuild-ip-book || exit_test
-after="$(etcdctl --endpoints ${etcd_client_specs} get ${DATA_STORE_PREFIX}/ip_book/LS/LS-1)"
+after="$(etcd_ipbook get LS LS-1)"
 equal_str "$before" "$after" || exit_test
 
 
