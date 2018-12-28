@@ -1,13 +1,14 @@
 package main
 
 import (
+	"fmt"
 	"github.com/vipshop/tuplenet/control/logicaldev"
 	"gopkg.in/urfave/cli.v1"
 	"sort"
 )
 
 func showChassis(ctx *cli.Context) error {
-	checkArgs(ctx, 0, 1, "require only one name")
+	checkArgsThenConnect(ctx, 0, 1, "require only one name")
 
 	var (
 		chs []*logicaldev.Chassis
@@ -35,7 +36,7 @@ func showChassis(ctx *cli.Context) error {
 }
 
 func delChassis(ctx *cli.Context) error {
-	checkArgs(ctx, 1, 1, "require a name")
+	checkArgsThenConnect(ctx, 1, 1, "require a name")
 
 	name := ctx.Args().Get(0)
 	chassis, err := controller.GetChassis(name)
@@ -48,6 +49,6 @@ func delChassis(ctx *cli.Context) error {
 		failf("failed to delete %s: %v", name, err)
 	}
 
-	succeedf("%s deleted", name)
+	fmt.Printf("%s deleted\n", name)
 	return nil
 }

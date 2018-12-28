@@ -14,8 +14,8 @@ bash ${CONTROL_BIN_PATH}/build.sh || exit_test
 (tpctl lr show aaa bbb | grep 'require')|| exit_test
 (tpctl lr add | grep 'require')|| exit_test
 (tpctl lr add aaa bbb cc| grep 'require')|| exit_test
-(tpctl lr add "  " bbb | grep 'only spaces')|| exit_test
-(tpctl lr add a/aa bbb | grep 'not allowed')|| exit_test
+(tpctl lr add "  " bbb | grep 'contains only spaces')|| exit_test
+(tpctl lr add a/aa bbb | grep '"/" is not allowed')|| exit_test
 (tpctl lr del | grep 'require') || exit_test
 (tpctl lr del aaa bbb | grep 'require') || exit_test
 
@@ -28,8 +28,8 @@ bash ${CONTROL_BIN_PATH}/build.sh || exit_test
 (tpctl lrp add aaa bbb 10.200.100.1/24 ccc | grep 'invalid') || exit_test
 (tpctl lrp add aaa bbb 10.200.100.1/24 00:00:00:00:00:00 ccc ddd | grep 'require') || exit_test
 (tpctl lrp add aaa bbb 10.200.100.1/24 00:00:00:00:00:00 ccc ddd | grep 'require') || exit_test
-(tpctl lrp add aaa "  " 10.200.100.1/24 00:00:00:00:00:00 peer | grep 'only spaces') || exit_test
-(tpctl lrp add aaa b/bb 10.200.100.1/24 00:00:00:00:00:00 peer | grep 'not allowed') || exit_test
+(tpctl lrp add aaa "  " 10.200.100.1/24 00:00:00:00:00:00 peer | grep 'contains only spaces') || exit_test
+(tpctl lrp add aaa b/bb 10.200.100.1/24 00:00:00:00:00:00 peer | grep '"/" is not allowed') || exit_test
 (tpctl lrp del | grep 'require') || exit_test
 (tpctl lrp del aaa | grep 'require') || exit_test
 (tpctl lrp del aaa bbb ccc | grep 'require') || exit_test
@@ -45,8 +45,8 @@ bash ${CONTROL_BIN_PATH}/build.sh || exit_test
 (tpctl lsr add aaa bbb 10.200.100.1 ccc ddd | grep 'invalid') || exit_test
 (tpctl lsr add aaa bbb 10.200.100.1/24 ccc ddd | grep 'invalid') || exit_test
 (tpctl lsr add aaa bbb 10.200.100.1/24 ccc ddd eee | grep 'require') || exit_test
-(tpctl lsr add aaa "  " 10.200.100.1/24 10.200.100.1 ddd | grep 'only spaces') || exit_test
-(tpctl lsr add aaa b/bb 10.200.100.1/24 10.200.100.1 ddd | grep 'not allowed') || exit_test
+(tpctl lsr add aaa "  " 10.200.100.1/24 10.200.100.1 ddd | grep 'contains only spaces') || exit_test
+(tpctl lsr add aaa b/bb 10.200.100.1/24 10.200.100.1 ddd | grep '"/" is not allowed') || exit_test
 
 (tpctl lnat show aaa bbb ccc | grep 'require') || exit_test
 (tpctl lnat add | grep 'require') || exit_test
@@ -60,14 +60,14 @@ bash ${CONTROL_BIN_PATH}/build.sh || exit_test
 (tpctl lnat add aaa bbb 10.200.100.1/24 ccc ddd | grep 'invalid') || exit_test
 (tpctl lnat add aaa bbb 10.200.100.1/24 snat ddd | grep 'invalid') || exit_test
 (tpctl lnat add aaa bbb 10.200.100.1/24 ccc ddd eee | grep 'require') || exit_test
-(tpctl lnat add aaa "  " 10.200.100.1/24 snat 10.200.100.1 | grep 'only spaces') || exit_test
-(tpctl lnat add aaa b/bb 10.200.100.1/24 snat 10.200.100.1 | grep 'not allowed') || exit_test
+(tpctl lnat add aaa "  " 10.200.100.1/24 snat 10.200.100.1 | grep 'contains only spaces') || exit_test
+(tpctl lnat add aaa b/bb 10.200.100.1/24 snat 10.200.100.1 | grep '"/" is not allowed') || exit_test
 
 (tpctl ls show aaa bbb | grep 'require')|| exit_test
 (tpctl ls add | grep 'require') || exit_test
 (tpctl ls add aaa bbb | grep 'require') || exit_test
-(tpctl ls add "  " | grep 'only spaces')|| exit_test
-(tpctl ls add a/aa | grep 'not allowed')|| exit_test
+(tpctl ls add "  " | grep 'contains only spaces')|| exit_test
+(tpctl ls add a/aa | grep '"/" is not allowed')|| exit_test
 (tpctl ls del | grep 'require') || exit_test
 (tpctl ls del aaa bbb | grep 'require') || exit_test
 
@@ -78,8 +78,8 @@ bash ${CONTROL_BIN_PATH}/build.sh || exit_test
 (tpctl lsp add aaa bbb 10.200.100.1/24 ccc | grep 'invalid') || exit_test
 (tpctl lsp add aaa bbb 10.200.100.1 zz:00:00:00:00:00 ddd | grep 'invalid') || exit_test
 (tpctl lsp add aaa bbb 10.200.100.1 00:00:00:00:00:00 ddd eee | grep 'require') || exit_test
-(tpctl lsp add aaa "  " 10.200.100.1 00:00:00:00:00:00 peer | grep 'only spaces') || exit_test
-(tpctl lsp add aaa b/bb 10.200.100.1 00:00:00:00:00:00 peer | grep 'not allowed') || exit_test
+(tpctl lsp add aaa "  " 10.200.100.1 00:00:00:00:00:00 peer | grep 'contains only spaces') || exit_test
+(tpctl lsp add aaa b/bb 10.200.100.1 00:00:00:00:00:00 peer | grep '"/" is not allowed') || exit_test
 (tpctl lsp del | grep 'require') || exit_test
 (tpctl lsp del aaa bbb ccc | grep 'require') || exit_test
 
@@ -123,18 +123,18 @@ equal_str "$result" "$expected" || exit_test
 tpctl lr add LR-2 || exit_test
 tpctl lr add LR-3 || exit_test
 tpctl lr add LR-4 || exit_test
-(tpctl lr add LR-1 | grep 'unable to perform save') || exit_test
-(tpctl lr add LR-2 | grep 'unable to perform save') || exit_test
-(tpctl lr add LR-3 | grep 'unable to perform save') || exit_test
-(tpctl lr add LR-4 | grep 'unable to perform save') || exit_test
+(tpctl lr add LR-1 | grep 'LR-1 already exist') || exit_test
+(tpctl lr add LR-2 | grep 'LR-2 already exist') || exit_test
+(tpctl lr add LR-3 | grep 'LR-3 already exist') || exit_test
+(tpctl lr add LR-4 | grep 'LR-4 already exist') || exit_test
 
 tpctl ls add LS-2 || exit_test
 tpctl ls add LS-3 || exit_test
 tpctl ls add LS-4 || exit_test
-(tpctl ls add LS-1 | grep 'unable to perform save') || exit_test
-(tpctl ls add LS-2 | grep 'unable to perform save') || exit_test
-(tpctl ls add LS-3 | grep 'unable to perform save') || exit_test
-(tpctl ls add LS-4 | grep 'unable to perform save') || exit_test
+(tpctl ls add LS-1 | grep 'LS-1 already exist') || exit_test
+(tpctl ls add LS-2 | grep 'LS-2 already exist') || exit_test
+(tpctl ls add LS-3 | grep 'LS-3 already exist') || exit_test
+(tpctl ls add LS-4 | grep 'LS-4 already exist') || exit_test
 
 result="$(tpctl lr show)"
 expected="
@@ -195,7 +195,7 @@ tpctl ls del dummy || exit_test
 # batch link lsp to lrp
 for i in `seq 1 4`; do
   (tpctl lr link LR-${i} LS-${i} 10.0.0.${i}/24 | grep -F "LR-${i} linked to LS-${i}") || exit_test
-  (tpctl lr link LR-${i} LS-${i} 10.0.0.${i}/24 | grep 'exists') || exit_test
+  (tpctl lr link LR-${i} LS-${i} 10.0.0.${i}/24 | grep "switch port LS-${i}_to_LR-${i} exists") || exit_test
 
   result="$(tpctl lsp show LS-${i})"
   expected="
@@ -224,18 +224,33 @@ for j in `seq 1 255`;do
   a=$(expr ${j} / 256)
   b=$(expr ${j} % 256)
   tpctl lsp add LS-1 LSP-${j} 10.${a}.${b}.1 || exit_test
-  (tpctl lsp add LS-1 LSP-${j} 10.${a}.${b}.1 | grep 'exists') || exit_test
+  (tpctl lsp add LS-1 LSP-${j} 10.${a}.${b}.1 | grep "LSP-${j} exists") || exit_test
   (tpctl lsp add LS-1 LSP-A 10.${a}.${b}.1 | grep 'conflict with other IP') || exit_test
 
   tpctl lrp add LR-1 LRP-${j} 10.${a}.${b}.1/24 || exit_test
   (tpctl lrp add LR-1 LRP-A 20.${a}.${b}.1/24 | grep 'conflict with other IP') || exit_test
 
   tpctl lsr add LR-1 LSR-${j} 10.${a}.${b}.1/24 10.${a}.${b}.1 outport || exit_test
-  (tpctl lsr add LR-1 LSR-${j} 10.${a}.${b}.1/24 10.${a}.${b}.1 outport | grep 'exists')  || exit_test
+  (tpctl lsr add LR-1 LSR-${j} 10.${a}.${b}.1/24 10.${a}.${b}.1 outport | grep "LSR-${j} exists")  || exit_test
 
   tpctl lnat add LR-1 LNAT-${j} 10.${a}.${b}.1/24 snat 10.${a}.${b}.1 || exit_test
-  (tpctl lnat add LR-1 LNAT-${j} 10.${a}.${b}.1/24 dnat 10.${a}.${b}.1 | grep 'exists')  || exit_test
+  (tpctl lnat add LR-1 LNAT-${j} 10.${a}.${b}.1/24 dnat 10.${a}.${b}.1 | grep "LNAT-${j} exists")  || exit_test
 done
+
+# remove LR-1 ip book data and rebuild
+before="$(etcd_ipbook get LR LR-1)"
+etcd_ipbook del LR LR-1
+tpctl toolbox rebuild-ip-book || exit_test
+after="$(etcd_ipbook get LR LR-1)"
+equal_str "$before" "$after" || exit_test
+
+# remove LS-1 ip book data and rebuild
+before="$(etcd_ipbook get LS LS-1)"
+etcd_ipbook del LS LS-1
+tpctl toolbox rebuild-ip-book || exit_test
+after="$(etcd_ipbook get LS LS-1)"
+equal_str "$before" "$after" || exit_test
+
 
 # delete all things
 for i in `seq 1 3`; do
@@ -268,18 +283,18 @@ LNAT4:
   - xlate_ip  : 10.0.1.1
 "
 equal_str "$result" "$expected" || exit_test
-(tpctl lr del LR-4 | grep 'failed to delete') || exit_test
+(tpctl lr del LR-4 | grep 'failed to delete LR-4') || exit_test
 
 tpctl lsr del LR-4 LSR-4 || exit_test
-(tpctl lr del LR-4 | grep 'failed to delete') || exit_test
+(tpctl lr del LR-4 | grep 'failed to delete LR-4') || exit_test
 tpctl lnat del LR-4 LNAT4 || exit_test
-(tpctl lr del LR-4 | grep 'failed to delete') || exit_test
+(tpctl lr del LR-4 | grep 'failed to delete LR-4') || exit_test
 
 yes | tpctl lr del -r LR-4 || exit_test
 (yes | tpctl lr del -r LR-4 | grep 'not found') || exit_test
 
 # delete with remaining ports
-(tpctl ls del LS-4 | grep 'failed to delete') || exit_test
+(tpctl ls del LS-4 | grep 'failed to delete LS-4') || exit_test
 (yes | tpctl ls del -r LS-4) || exit_test
 (yes | tpctl ls del -r LS-4 | grep 'not found') || exit_test
 
@@ -291,7 +306,7 @@ CH-A:
   - tick: 1524118021
 "
 equal_str "$result" "$expected" || exit_test
-(tpctl ch del CH-A | grep 'deleted') || exit_test
+(tpctl ch del CH-A | grep 'CH-A deleted') || exit_test
 
 # inject conflicted data and test
 tpctl ls add LS-A || exit_test

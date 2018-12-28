@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"github.com/vipshop/tuplenet/control/controllers/etcd3"
 	"net"
 	"os"
 	"reflect"
@@ -14,29 +15,29 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-func succeedf(format string, args ...interface{}) {
-	fmt.Printf(format+"\n", args...)
-	controller.Close()
-	os.Exit(0)
-}
-
 func fail(args ...interface{}) {
-	fmt.Println(args...)
-	controller.Close()
-	os.Exit(1)
+	panic(fmt.Sprintln(args...))
 }
 
 func failf(format string, args ...interface{}) {
-	fmt.Printf(format+"\n", args...)
-	controller.Close()
-	os.Exit(1)
+	panic(fmt.Sprintf(format, args...))
 }
 
-func checkArgs(ctx *cli.Context, min, max int, usage string) {
-	args := ctx.Args()
+func checkArgsThenConnect(ctx *cli.Context, min, max int, usage string) {
+	var (
+		args = ctx.Args()
+		err error
+	)
+
 	if len(args) < min || len(args) > max {
 		fail(usage)
 	}
+
+	controller, err = etcd3.NewController(strings.Split(endpoints, ","), keyPrefix, false)
+	if err != nil {
+		fail(err)
+	}
+
 	if ctx.BoolT("json") {
 		outputFormat = "json"
 	}
@@ -55,98 +56,6 @@ func confirmDelete(ctx *cli.Context) (_ error) {
 	}
 
 	return
-}
-
-func findIPConflict(_ *cli.Context) {
-	var errMsgs []string
-	if routers, err := controller.GetRouters(); err != nil {
-		errMsgs = append(errMsgs, err.Error())
-	} else {
-		for _, router := range routers {
-			if ports, err := controller.GetRouterPorts(router); err != nil {
-				errMsgs = append(errMsgs, err.Error())
-			} else {
-				ips := make(map[string]string)
-				for _, port := range ports {
-					if name, found := ips[port.IP]; found {
-						errMsgs = append(errMsgs, fmt.Sprintf("in %s, %s use the same IP as %s: %s",
-							router.Name, name, port.Name, port.IP))
-					} else {
-						ips[port.IP] = port.Name
-					}
-				}
-			}
-		}
-	}
-
-	if switches, err := controller.GetSwitches(); err != nil {
-		errMsgs = append(errMsgs, err.Error())
-	} else {
-		for _, swtch := range switches {
-			if ports, err := controller.GetSwitchPorts(swtch); err != nil {
-				errMsgs = append(errMsgs, err.Error())
-			} else {
-				ips := make(map[string]string)
-				for _, port := range ports {
-					if name, found := ips[port.IP]; found {
-						errMsgs = append(errMsgs, fmt.Sprintf("in %s, %s use the same IP as %s: %s",
-							swtch.Name, name, port.Name, port.IP))
-					} else {
-						ips[port.IP] = port.Name
-					}
-				}
-			}
-		}
-	}
-
-	if len(errMsgs) != 0 {
-		fail(strings.Join(errMsgs, "\n"))
-	}
-
-	fmt.Println("looks good!")
-}
-
-func findIDConflict(_ *cli.Context) {
-	var (
-		errMsgs   []string
-		deviceIds map[uint32]string
-	)
-
-	routers, err := controller.GetRouters()
-	if err != nil {
-		fail(errMsgs, err.Error())
-	}
-
-	switches, err := controller.GetSwitches()
-	if err != nil {
-		fail(errMsgs, err.Error())
-	}
-
-	deviceIds = make(map[uint32]string, len(routers)+len(switches))
-
-	for _, r := range routers {
-		if name, found := deviceIds[r.ID]; found {
-			errMsgs = append(errMsgs, fmt.Sprintf("%s has the same id of %s: %d\n",
-				r.Name, name, r.ID))
-		} else {
-			deviceIds[r.ID] = r.Name
-		}
-	}
-
-	for _, s := range switches {
-		if name, found := deviceIds[s.ID]; found {
-			errMsgs = append(errMsgs, fmt.Sprintf("%s has the same id of %s: %d\n",
-				s.Name, name, s.ID))
-		} else {
-			deviceIds[s.ID] = s.Name
-		}
-	}
-
-	if len(errMsgs) != 0 {
-		fail(strings.Join(errMsgs, "\n"))
-	}
-
-	fmt.Println("looks good!")
 }
 
 // parseCIDR parse the input string, returns ip and prefix
