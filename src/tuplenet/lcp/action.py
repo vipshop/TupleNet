@@ -121,7 +121,7 @@ ACTION_STR_MAP = {
         Action_exchange:'push:{},push:{},pop:{},pop:{}',
         Action_upload_arp:'controller(userdata=00.00.00.01.00.00.00.00)',
         Action_generate_arp:'controller(userdata=00.00.00.02.00.00.00.00.ff.ff.00.10.00.00.23.20.00.0e.ff.f8.{:02x}.00.00.00)',
-        Action_upload_trace:'controller(userdata=00.00.00.03.00.00.00.00)',
+        Action_upload_trace:'controller(userdata=00.00.00.03.00.00.00.{:02x},pause)',
         Action_upload_unknow_dst:'controller(userdata=00.00.00.04.00.00.00.00)',
         }
 
@@ -241,6 +241,8 @@ def parse_action_tuple(action_tuple, cur_table):
         action = action.format(",".join(str(n) for n in action_tuple[1]))
     elif action_tuple[0] == Action_bundle_load:
         action = action.format(action_tuple[1], ",".join(str(n) for n in action_tuple[2]))
+    elif action_tuple[0] == Action_upload_trace:
+        action = action.format(cur_table)
     elif len(action_tuple) > 1:
         action = action.format(*action_tuple[1:])
     return action

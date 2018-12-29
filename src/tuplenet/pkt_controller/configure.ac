@@ -16,12 +16,12 @@ AC_PROG_CC
 AC_CHECK_LIB([crypto], [main])
 # FIXME: Replace `main' with a function in `-lm':
 AC_CHECK_LIB([m], [main])
-# FIXME: Replace `main' with a function in ` -lofproto':
-AC_CHECK_LIB([ofproto], [main], [], [AC_MSG_ERROR([cannot found libofproto])])
 # FIXME: Replace `main' with a function in `-lopenvswitch':
 AC_CHECK_LIB([openvswitch], [main], [], [AC_MSG_ERROR([cannot found libopenvswitch])])
 # FIXME: Replace `main' with a function in `-lovsdb':
 AC_CHECK_LIB([ovsdb], [main], [], [AC_MSG_ERROR([cannot found libovsdb])])
+# FIXME: Replace `main' with a function in ` -lofproto':
+AC_CHECK_LIB([ofproto], [main], [], [AC_MSG_ERROR([cannot found libofproto])])
 # FIXME: Replace `main' with a function in `-lpthread':
 AC_CHECK_LIB([pthread], [pthread_rwlock_init])
 # FIXME: Replace `main' with a function in `-lrt':

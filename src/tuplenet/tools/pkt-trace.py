@@ -1,184 +1,140 @@
+#!/usr/bin/python
 from __future__ import print_function
 import os
-import sys
-import subprocess
+import sys, threading
+import logging
 import time
 import struct
 import socket
 from optparse import OptionParser
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent_dir)
+from lcp import link_master as lm
 from lcp.flow_common import table_note_dict
 from lcp import flow_common
 
+
+logger = None
 TUPLENET_DIR = ''
-TUPLENET_ENTITY_VIEW_DIR = 'entity_view/'
 UNKNOW_SYMBOL = "<UNKNOW>"
-logical_view = None
-etcd_env = os.environ.copy()
-etcd_env['ETCDCTL_API'] = '3'
-etcd_endpoints = "localhost:2379"
+wmaster = None
+entity_zoo = {}
+entity_lock = threading.RLock()
+
+class TPObject:
+    def __init__(self, name, properties):
+        self.__setattr__('name', name)
+        for k,v in properties.items():
+            self.__setattr__(k, v)
+
+
+    def __setattr__(self, name, value):
+        self.__dict__[name] = value
+
+    def __getattr__(self, name):
+        return self.__dict__.get(name)
+
+    def __str__(self):
+        ret = self.name + ":"
+        for k,v in self.__dict__.items():
+            ret += "{}={}, ".format(k,v)
+        return ret
+
+    __repr__ = __str__
+
+def init_logger():
+    global logger
+    env = os.environ.copy()
+    if env.has_key('LOGDIR'):
+        log_type = logging.FileHandler(os.path.join(env['LOGDIR'], 'pkt-trace.log'))
+    else:
+        log_type = logging.NullHandler()
+
+    logger = logging.getLogger('')
+    format_type = '%(asctime)s.%(msecs)03d %(levelname)s %(filename)s [line:%(lineno)d]: %(message)s'
+    datefmt = '%Y-%m-%d %H:%M:%S'
+    console = log_type
+    console_formater = logging.Formatter(format_type, datefmt)
+    console.setFormatter(console_formater)
+    logger.setLevel(logging.DEBUG)
+    logger.addHandler(console)
+    logger.info("")
 
 def errprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
-def call_popen(cmd, shell=False):
-    child = subprocess.Popen(cmd, shell, stdout=subprocess.PIPE,
-                             stderr=subprocess.PIPE,
-                             env=etcd_env)
-    output = child.communicate()
-    if child.returncode:
-        raise RuntimeError("error executing %s" % (cmd))
-    if len(output) == 0 or output[0] is None:
-        output = ""
-    else:
-        output = output[0].strip()
-    return output
 
-def call_prog(prog, args_list):
-    cmd = [prog] + args_list
-    return call_popen(cmd)
+def update_entity_data(add_pool, del_pool):
+    with entity_lock:
+        if del_pool is not None:
+            for etype,entity_dict in del_pool.items():
+                if not entity_zoo.has_key(etype):
+                    continue
+                for key, entity in entity_dict.items():
+                    key = key.split('/')[-1]
+                    entity_zoo[etype].pop(key)
+        if add_pool is not None:
+            for etype,entity_dict in add_pool.items():
+                if not entity_zoo.has_key(etype):
+                    entity_zoo[etype] = {}
+                for k, entity in entity_dict.items():
+                    parent,type,key = k.split('/')[-3:]
+                    type = k.split('/')[-2]
+                    entity_zoo[etype][key] = TPObject(key, entity)
+                    entity_zoo[etype][key].type = type
+                    entity_zoo[etype][key].parent = parent
 
-def etcdctl(*args):
-    args = ['--endpoints={}'.format(etcd_endpoints)] + list(args)
-    return call_prog("etcdctl", args)
 
-def etcdctl_lease(key, value, ttl):
-    key = TUPLENET_DIR + 'communicate/push/' + key
-    lease_str = etcdctl('lease', 'grant', str(ttl))
-    lease = lease_str.split(' ')[1]
-    etcdctl('put', '--lease={}'.format(lease), key, value)
 
-def split_hop_path(other_hop_path, prev_hop_tun_ip, prev_hop_src_port_id):
-    trace_path = []
-    total_trace_num = 0
-    try_num = 0
-    for _, path in other_hop_path.items():
-        total_trace_num += len(path)
-    while len(trace_path) != total_trace_num and try_num < 100:
-        try_num += 1
-        for chassis_id, path in other_hop_path.items():
-            if len(path) == 0:
-                continue
-            # only need to check first trace path in each hop
-            table_id = int(path[0]["table_id"])
-            src_port_id = path[0]["src_port_id"]
-            tun_src = path[0]["tun_src"]
-            if tun_src != prev_hop_tun_ip or \
-               (table_id != flow_common.TABLE_LSP_TRACE_EGRESS_IN and table_id != flow_common.TABLE_LRP_TRACE_INGRESS_OUT) or \
-               src_port_id != prev_hop_src_port_id:
-                continue
-
-            final_idx = 0
-            for i in xrange(len(path)):
-                trace = path[i]
-                if trace["tun_src"] != prev_hop_tun_ip:
-                    break
-                trace_path.append(trace)
-                final_idx = i
-                # check if next trace not in same hop
-                if int(trace["table_id"]) == \
-                        flow_common.TABLE_LSP_TRACE_INGRESS_OUT and \
-                   i + 1 < len(path) and \
-                   path[i+1]["src_port_id"] != trace["src_port_id"]:
-                    break
-            # del trace which had been inserted in trace_path
-            other_hop_path[chassis_id] = path[final_idx+1:]
-
-            prev_hop_tun_ip = get_ip_by_chassis(trace_path[-1]["chassis_id"])
-            prev_hop_src_port_id = trace_path[-1]["src_port_id"]
-    return trace_path
-
-def get_ip_by_chassis(chassis_id):
-    for i in xrange(0, len(logical_view), 2):
-        if logical_view[i] != TUPLENET_ENTITY_VIEW_DIR + 'chassis/{}'.format(chassis_id):
-            continue
-        properties = logical_view[i + 1].split(',')
-        for p in properties:
-            p = p.split('=')
-            pname = p[0]
-            if pname == 'ip':
-                ip = p[1]
-                return ip
+def sync_etcd_data(etcd_endpoints):
+    global wmaster
+    wmaster = lm.WatchMaster(etcd_endpoints, TUPLENET_DIR)
+    data_type, add_pool, del_pool = wmaster.read_remote_kvdata()
+    update_entity_data(add_pool, del_pool)
+    time.sleep(1)
 
 def find_chassis_by_port(lport):
-    global logical_view
-    chassis_id = None
-    output = etcdctl('get', '--prefix', TUPLENET_ENTITY_VIEW_DIR)
-    output = output.split('\n')
-    if len(output) < 2:
-        errprint('cannot get enough data from etcd')
-        return
-    for i in xrange(0, len(output), 2):
-        key = output[i].split('/')
-        if key[-2] != 'lsp' or key[-1] != lport:
-            continue
-        properties = output[i + 1].split(',')
-        for p in properties:
-            p = p.split('=')
-            pname = p[0]
-            if pname == 'chassis':
-                chassis_id = p[1]
-                break
-    logical_view = output
-    return chassis_id
+    with entity_lock:
+        lsp = entity_zoo['lsp'].get(lport)
+        if lsp is None:
+            return
+        ch = entity_zoo['chassis'].get(lsp.chassis)
+        return ch.name if ch is not None else None
 
-def etcdctl_config_pkt_trace(lport, packet):
+def etcd_config_pkt_trace(lport, packet):
     chassis_id = find_chassis_by_port(lport)
     if chassis_id is None:
         errprint("cannot found logical port %s pin on a chassis" % lport)
         return
     cmd_id = int(time.time() * 100) & 0xffff
-    key = chassis_id + '/cmd/' + str(cmd_id)
+    key = 'push/' + chassis_id + '/cmd/' + str(cmd_id)
     value = "cmd=pkt_trace,packet={},port={}".format(packet, lport)
-    etcdctl_lease(key, value, 10)
+    wmaster.lease_communicate(key, value, 10)
     return cmd_id
 
-def etcdctl_read_cmd_result(cmd_id):
-    output = etcdctl('get', '--prefix',
-                     TUPLENET_DIR + 'communicate/cmd_result/{}/'.format(cmd_id))
-    output = output.split('\n')
-    if len(output) < 2:
-        errprint("cannot read any cmd result from etcd")
-        return []
+def etcd_read_cmd_result(cmd_id):
+    ret_data = wmaster.get_prefix(TUPLENET_DIR +
+                        'communicate/cmd_result/{}/'.format(cmd_id))
+
     trace_info = []
-    for i in xrange(0, len(output), 2):
-        key = output[i].split('/')
+    for value, meta in ret_data:
+        key = meta.key.split('/')
         chassis_id = key[-1]
         seq_n = int(key[-2])
-        value = output[i + 1]
         trace_info.append((chassis_id, value, seq_n))
-    trace_info = sorted(trace_info, key = lambda t:(t[0], t[2]))
+    trace_info = sorted(trace_info, key = lambda t:t[2])
 
-    first_hop_path = []
-    other_hop_path = {}
-    for i in xrange(len(trace_info)):
-        chassis_id, trace_path, _ = trace_info[i]
-        table_id, datapath_id, src_port_id, dst_port_id, tun_src = parse_trace_path(trace_path)
-        # the first hop should get no tun_src
-        if tun_src != '0.0.0.0':
-            if not other_hop_path.has_key(chassis_id):
-                other_hop_path[chassis_id] = []
-            other_hop_path[chassis_id].append({"table_id":table_id,
-                                               "datapath_id":datapath_id,
-                                               "src_port_id":src_port_id,
-                                               "dst_port_id":dst_port_id,
-                                               "tun_src":tun_src,
-                                               "chassis_id":chassis_id})
-            continue
-        first_hop_path.append({"table_id":table_id,
-                               "datapath_id":datapath_id,
-                               "src_port_id":src_port_id,
-                               "dst_port_id":dst_port_id,
-                               "tun_src":tun_src,
-                               "chassis_id":chassis_id})
+    trace_path = []
+    for chassis_id,path,_ in trace_info:
+        table_id, datapath_id, src_port_id, dst_port_id, tun_src = \
+                                            parse_trace_path(path)
+        trace_path.append({"table_id":table_id,
+                           "datapath_id":datapath_id,
+                           "src_port_id":src_port_id,
+                           "dst_port_id":dst_port_id,
+                           "tun_src":tun_src,
+                           "chassis_id":chassis_id})
 
-    first_hop_chassis = first_hop_path[0]["chassis_id"]
-    prev_hop_src_port_id = first_hop_path[-1]["src_port_id"]
-    prev_hop_tun_ip = get_ip_by_chassis(first_hop_chassis)
-    trace_path = split_hop_path(other_hop_path, prev_hop_tun_ip,
-                                prev_hop_src_port_id)
-    trace_path = first_hop_path + trace_path
     #TODO
     # we have to replace current datapath with previous datapath,
     # before entering TABLE_LRP_TRACE_EGRESS_OUT, the datapath had been
@@ -191,45 +147,39 @@ def etcdctl_read_cmd_result(cmd_id):
     return trace_path
 
 def find_datapath_by_id(datapath_id):
-    for i in xrange(0, len(logical_view), 2):
-        key = logical_view[i].split('/')
-        if key[-2] != 'LR' and key[-2] != 'LS':
-            continue
-        datapath_name = logical_view[i]
-        properties = logical_view[i + 1].split(',')
-        for p in properties:
-            p = p.split('=')
-            pname = p[0]
-            pval = p[1]
-            if pname == 'id' and pval == datapath_id:
-                return datapath_name
+    for ls in entity_zoo['LS'].values():
+        if ls.id == datapath_id:
+            return ls
 
-def find_port_by_id(datapath_name, port_id):
+    for lr in entity_zoo['LR'].values():
+        if lr.id == datapath_id:
+            return lr
+
+def find_port_by_id(datapath, port_id):
     if port_id == '0':
         return UNKNOW_SYMBOL
-    for i in xrange(0, len(logical_view), 2):
-        if not logical_view[i].startswith(datapath_name):
-            continue
-        if logical_view[i] == datapath_name:
-            # the LS/LR, not lsp,lrp
-            continue
-        port_name = logical_view[i].split('/')[-1]
-        properties = logical_view[i + 1].split(',')
-        for p in properties:
-            p = p.split('=')
-            pname = p[0]
-            pval = p[1]
-            if pname == 'ip':
-                ip_int = struct.unpack("!L", socket.inet_aton(pval))[0]
-                if str(ip_int & 0xffff) == port_id:
-                    return port_name
+    if datapath.type == 'LS':
+        for lsp in entity_zoo['lsp'].values():
+            if lsp.parent != datapath.name:
+                continue
+            ip_int = struct.unpack("!L", socket.inet_aton(lsp.ip))[0]
+            if str(ip_int & 0xffff) == port_id:
+                return lsp.name
+    elif datapath.type == 'LR':
+        for lrp in entity_zoo['lrp'].values():
+            if lrp.parent != datapath.name:
+                continue
+            ip_int = struct.unpack("!L", socket.inet_aton(lrp.ip))[0]
+            if str(ip_int & 0xffff) == port_id:
+                return lrp.name
+    else:
+        raise Exception("Unknow datapath type")
+    return UNKNOW_SYMBOL
 
 def parse_trace_path(trace_path):
     properties = trace_path.split(',')
     for p in properties:
-        p = p.split('=')
-        pname = p[0]
-        pval = p[1]
+        pname, pval = p.split('=')
         if pname == 'table_id':
             table_id = pval
             continue
@@ -249,25 +199,26 @@ def parse_trace_path(trace_path):
     return table_id, datapath_id, src_port_id, dst_port_id, tun_src
 
 def run_pkt_trace(lport, packet):
-    cmd_id = etcdctl_config_pkt_trace(lport, packet)
-    try:
-        cmd_id = int(cmd_id)
-    except Exception as err:
-        errprint('config pkt trace cmd hit error')
+    cmd_id = etcd_config_pkt_trace(lport, packet)
+    if cmd_id is None:
         return
-    time.sleep(5)
-    trace_path = etcdctl_read_cmd_result(cmd_id)
-    for trace in trace_path:
-        datapath_name = find_datapath_by_id(trace["datapath_id"])
-        src_port_name = find_port_by_id(datapath_name, trace["src_port_id"])
-        dst_port_name = find_port_by_id(datapath_name, trace["dst_port_id"])
-        entity_name = datapath_name.split('/')[-1]
-        entity_type = datapath_name.split('/')[-2]
-        stage = table_note_dict[int(trace["table_id"])]
-        trace = "type:{},pipeline:{},from:{},to:{},stage:{},chassis:{}".format(
-                        entity_type, entity_name, src_port_name, dst_port_name,
-                        stage, trace["chassis_id"])
-        print(trace)
+
+    time.sleep(3)
+    trace_path = etcd_read_cmd_result(cmd_id)
+    with entity_lock:
+        for trace in trace_path:
+            datapath = find_datapath_by_id(trace["datapath_id"])
+            if datapath is None:
+                errprint("<ERROR>")
+                continue
+            src_port_name = find_port_by_id(datapath, trace["src_port_id"])
+            dst_port_name = find_port_by_id(datapath, trace["dst_port_id"])
+            stage = table_note_dict[int(trace["table_id"])]
+            trace = "type:{},pipeline:{},from:{},to:{},stage:{},chassis:{}".format(
+                            datapath.type, datapath.name,
+                            src_port_name, dst_port_name,
+                            stage, trace["chassis_id"])
+            print(trace)
 
 def cal_checksum(header):
     header = struct.unpack("!10H", header)
@@ -335,6 +286,7 @@ def construct_icmp(src_mac, dst_mac, src_ip, dst_ip):
 
 if __name__ == "__main__":
     usage = """usage: python %prog [options]
+            --endpoints       the etcd cluster
             -j, --port        inject src port
             -p, --prefix      prefix path in etcd
             --src_mac         source macaddress of packet
@@ -381,9 +333,10 @@ if __name__ == "__main__":
 
 
     TUPLENET_DIR = options.path_prefix
-    TUPLENET_ENTITY_VIEW_DIR = TUPLENET_DIR + TUPLENET_ENTITY_VIEW_DIR
-    etcd_endpoints = options.endpoints
+    etcd_endpoints = lm.sanity_etcdhost(options.endpoints)
 
+    init_logger()
+    sync_etcd_data(etcd_endpoints)
     if options.packet != "":
         run_pkt_trace(options.inject_port, options.packet)
     else:
