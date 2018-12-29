@@ -5,12 +5,11 @@ import (
 	"github.com/vipshop/tuplenet/control/controllers/etcd3"
 	"gopkg.in/urfave/cli.v1"
 	"os"
-	"strings"
 )
 
 var (
 	controller *etcd3.Controller
-	version    = "0.0.1"
+	version    = "untagged"
 	commit     = "undefined"
 
 	// global control param
@@ -20,7 +19,7 @@ var (
 
 func main() {
 	app := cli.NewApp()
-	app.Version = version + "-" + commit
+	app.Version = version + "@" + commit
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
 			Name:        "endpoints, e",
@@ -38,25 +37,6 @@ func main() {
 			Name:  "json, j",
 			Usage: "output as json",
 		},
-	}
-
-	app.Before = func(ctx *cli.Context) (err error) {
-		// don't initialize controller if help is printed
-		if ctx.GlobalBool("help") || len(ctx.Args()) < 2 {
-			return nil
-		}
-
-		controller, err = etcd3.NewController(strings.Split(endpoints, ","), keyPrefix, false)
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-
-		if ctx.Bool("json") {
-			outputFormat = "json"
-		}
-
-		return
 	}
 
 	app.Commands = []cli.Command{
@@ -259,13 +239,7 @@ func main() {
 				{
 					Name:  "sync-device-map",
 					Usage: "sync device id map within tuplenet",
-					Action: func(ctx *cli.Context) (err error) {
-						err = controller.SyncDeviceID(true)
-						if err != nil {
-							fail(err)
-						}
-						return
-					},
+					Action: syncDeviceID,
 				},
 				{
 					Name:   "find-ip-conflict",
@@ -277,9 +251,30 @@ func main() {
 					Usage:  "find device id conflict within tuplenet",
 					Action: findIDConflict,
 				},
+				{
+					Name:   "rebuild-ip-book",
+					Usage:  "rebuild IP books if they are somehow corrupted",
+					Action: rebuildIPBooks,
+				},
+				{
+					Name:   "decode-id-string",
+					Usage:  "show what is store in the id string",
+					Action: decodeIDString,
+				},
 			},
 		},
 	}
+
+	// any error will just panic and we capture it and close the connection before exit
+	defer func() {
+		if controller != nil {
+			controller.Close()
+		}
+		if r := recover(); r != nil {
+			fmt.Println(r)
+			os.Exit(1)
+		}
+	}()
 
 	app.Run(os.Args)
 }

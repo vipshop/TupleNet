@@ -2,11 +2,11 @@ package etcd3
 
 import (
 	"fmt"
+	"github.com/vipshop/tuplenet/control/logicaldev"
 	"os/exec"
 	"reflect"
 	"regexp"
 	"testing"
-	"time"
 )
 
 // TestMarshalUnmarshalTuplenet test the correctness of tuplnet marshaller and unmarshaller
@@ -109,31 +109,35 @@ func TestController_DeviceOperation(t *testing.T) {
 	controller, err := NewController([]string{"http://localhost:2379"}, "/test-prefix", true)
 	expectSucceed("controller shall be able to connects to etcd")
 
+	// test invalid devs to save and delete
+	invalidDevs := []interface{} {nil, 32, "string", 15.1, true, struct{}{}}
+	for i := range invalidDevs {
+		err = controller.Save(invalidDevs[i:])
+		expectFail("save invalid dev starting from %d", i)
+		err = controller.Delete(false,invalidDevs[i:])
+		expectFail("delete invalid dev starting from %d", i)
+	}
+
 	// test Router creation
 	name := "router-1"
-	r, err := controller.CreateRouter(name)
-	expectSucceed("create %s", name)
+	r := logicaldev.NewRouter(name,"asdfasdfasdfasdfasdf")
 
 	// create a router
 	err = controller.Save(r)
 	expectSucceed("save %s", r)
 
 	// create a router with same Name
-	_, err = controller.CreateRouter(name)
+	err = controller.Save(r)
 	expectFail("creation of %s for the second time", name)
 
 	// test Router creation
 	name = "switch-1"
-	s, err := controller.CreateSwitch(name)
+	s := logicaldev.NewSwitch(name)
+	err = controller.Save(s)
 	expectSucceed("create %s", s)
 
-	// create a switch
-	err = controller.Save(s)
-	expectSucceed("save %s", s)
-	time.Sleep(100 * time.Millisecond)
-
 	// create a switch with same Name
-	_, err = controller.CreateSwitch(name)
+	err = controller.Save(s)
 	expectFail("switch creation of %s for the second time", name)
 
 	// create a router port and switch port
@@ -198,9 +202,23 @@ func TestController_DeviceOperation(t *testing.T) {
 	expectSucceed("read nat2 in db")
 	expectSame(nat2, nat2InDb)
 
-	// delete the router and others
+	// delete the router recursively
+	r2 := logicaldev.NewRouter(r.Name+ "1", "")
+	err = controller.Save(r2)
+	expectSucceed("save %s", r2.Name)
+
 	err = controller.Delete(true, r)
 	expectSucceed("remove %s and its children", r.Name)
+
+	// delete r shall not delete r2
+	_, err = controller.GetRouter(r2.Name)
+	expectSucceed("read %s from etcd", r2.Name)
+
+	err = controller.Delete(false, r2)
+	expectSucceed("remove %s", r2.Name)
+
+	err = controller.Delete(false, r2)
+	expectFail("remove %s", r2.Name)
 
 	// delete the switch and port
 	err = controller.Delete(false, s, switchPort)

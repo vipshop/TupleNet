@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/pkg/errors"
 	"github.com/vipshop/tuplenet/control/controllers/etcd3"
 	"github.com/vipshop/tuplenet/control/logicaldev"
@@ -9,27 +10,22 @@ import (
 )
 
 func addSwitch(ctx *cli.Context) error {
-	checkArgs(ctx, 1, 1, "require a name")
+	checkArgsThenConnect(ctx, 1, 1, "require a name")
 
-	name := ctx.Args().Get(0)
+	name := validateAndTrimSpace(ctx.Args().Get(0))
 
-	r, err := controller.CreateSwitch(name)
+	err := controller.Save(logicaldev.NewSwitch(name))
 	if err != nil {
 		fail(err)
 	}
 
-	err = controller.Save(r)
-	if err != nil {
-		fail(err)
-	}
-
-	succeedf("switch %s created", name)
+	fmt.Printf("switch %s created\n", name)
 
 	return nil
 }
 
 func showSwitch(ctx *cli.Context) error {
-	checkArgs(ctx, 0, 1, "require at most one name")
+	checkArgsThenConnect(ctx, 0, 1, "require at most one name")
 
 	var (
 		switches []*logicaldev.Switch
@@ -57,7 +53,7 @@ func showSwitch(ctx *cli.Context) error {
 }
 
 func delSwitch(ctx *cli.Context) error {
-	checkArgs(ctx, 1, 1, "require a name")
+	checkArgsThenConnect(ctx, 1, 1, "require a name")
 
 	name := ctx.Args().Get(0)
 	swtch, err := controller.GetSwitch(name)
@@ -88,12 +84,12 @@ func delSwitch(ctx *cli.Context) error {
 		}
 	}
 
-	succeedf("%s deleted", name)
+	fmt.Printf("%s deleted\n", name)
 	return nil
 }
 
 func showSwitchPort(ctx *cli.Context) error {
-	checkArgs(ctx, 1, 2, "require at least switch name and optionally a port name")
+	checkArgsThenConnect(ctx, 1, 2, "require at least switch name and optionally a port name")
 
 	var (
 		switchName string
@@ -129,10 +125,10 @@ func showSwitchPort(ctx *cli.Context) error {
 }
 
 func addSwitchPort(ctx *cli.Context) error {
-	checkArgs(ctx, 3, 5, "require a switch name, a port name, an IP and optionally a MAC, a peer port")
+	checkArgsThenConnect(ctx, 3, 5, "require a switch name, a port name, an IP and optionally a MAC, a peer port")
 
 	switchName := ctx.Args().Get(0)
-	portName := ctx.Args().Get(1)
+	portName := validateAndTrimSpace(ctx.Args().Get(1))
 	ip := ctx.Args().Get(2)
 	mac := ctx.Args().Get(3)
 	peer := ctx.Args().Get(4)
@@ -167,13 +163,13 @@ func addSwitchPort(ctx *cli.Context) error {
 		fail(err)
 	}
 
-	succeedf("switch %s port %s created", switchName, portName)
+	fmt.Printf("switch %s port %s created\n", switchName, portName)
 
 	return nil
 }
 
 func delSwitchPort(ctx *cli.Context) error {
-	checkArgs(ctx, 2, 2, "require switch name and a port name")
+	checkArgsThenConnect(ctx, 2, 2, "require switch name and a port name")
 
 	switchName := ctx.Args().Get(0)
 	portName := ctx.Args().Get(1)
@@ -193,7 +189,7 @@ func delSwitchPort(ctx *cli.Context) error {
 		fail(err)
 	}
 
-	succeedf("switch %s port %s deleted", switchName, portName)
+	fmt.Printf("switch %s port %s deleted\n", switchName, portName)
 
 	return nil
 }

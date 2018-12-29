@@ -13,30 +13,26 @@ import (
 )
 
 func addRouter(ctx *cli.Context) error {
-	checkArgs(ctx, 1, 2, "require a name,  an optional chassis")
+	checkArgsThenConnect(ctx, 1, 2, "require a name,  an optional chassis")
 
-	name := ctx.Args().Get(0)
+	name := validateAndTrimSpace(ctx.Args().Get(0))
+
 	chassis := ctx.Args().Get(1)
 
-	r, err := controller.CreateRouter(name)
+	r := logicaldev.NewRouter(name, chassis)
+
+	err := controller.Save(r)
 	if err != nil {
 		fail(err)
 	}
 
-	r.Chassis = chassis
-
-	err = controller.Save(r)
-	if err != nil {
-		fail(err)
-	}
-
-	succeedf("router %s created", name)
+	fmt.Printf("router %s created\n", name)
 
 	return nil
 }
 
 func showRouter(ctx *cli.Context) error {
-	checkArgs(ctx, 0, 1, "require at most one name")
+	checkArgsThenConnect(ctx, 0, 1, "require at most one name")
 
 	var (
 		routers []*logicaldev.Router
@@ -64,7 +60,7 @@ func showRouter(ctx *cli.Context) error {
 }
 
 func delRouter(ctx *cli.Context) error {
-	checkArgs(ctx, 1, 1, "require a name")
+	checkArgsThenConnect(ctx, 1, 1, "require a name")
 
 	name := ctx.Args().Get(0)
 	router, err := controller.GetRouter(name)
@@ -100,12 +96,12 @@ func delRouter(ctx *cli.Context) error {
 		}
 	}
 
-	succeedf("%s deleted", name)
+	fmt.Printf("%s deleted\n", name)
 	return nil
 }
 
 func showStaticRoute(ctx *cli.Context) error {
-	checkArgs(ctx, 1, 2, "require a router name and a static route name")
+	checkArgsThenConnect(ctx, 1, 2, "require a router name and a static route name")
 
 	var (
 		routerName string
@@ -141,10 +137,10 @@ func showStaticRoute(ctx *cli.Context) error {
 }
 
 func addStaticRoute(ctx *cli.Context) error {
-	checkArgs(ctx, 5, 5, "require router name, static route name, CIDR, next_hop and outport")
+	checkArgsThenConnect(ctx, 5, 5, "require router name, static route name, CIDR, next_hop and outport")
 
 	routerName := ctx.Args().Get(0)
-	rName := ctx.Args().Get(1)
+	rName := validateAndTrimSpace(ctx.Args().Get(1))
 	cidrStr := ctx.Args().Get(2)
 	nextHop := ctx.Args().Get(3)
 	outport := ctx.Args().Get(4)
@@ -177,13 +173,13 @@ func addStaticRoute(ctx *cli.Context) error {
 		fail(err)
 	}
 
-	succeedf("router %s static router %s created", routerName, rName)
+	fmt.Printf("router %s static router %s created\n", routerName, rName)
 
 	return nil
 }
 
 func delStaticRoute(ctx *cli.Context) error {
-	checkArgs(ctx, 2, 2, "require router name and a static route name")
+	checkArgsThenConnect(ctx, 2, 2, "require router name and a static route name")
 
 	routerName := ctx.Args().Get(0)
 	rName := ctx.Args().Get(1)
@@ -203,13 +199,13 @@ func delStaticRoute(ctx *cli.Context) error {
 		fail(err)
 	}
 
-	succeedf("router %s static router %s deleted", routerName, rName)
+	fmt.Printf("router %s static router %s deleted\n", routerName, rName)
 
 	return nil
 }
 
 func showRouterPort(ctx *cli.Context) error {
-	checkArgs(ctx, 1, 2, "require at least router name and optionally a port name")
+	checkArgsThenConnect(ctx, 1, 2, "require at least router name and optionally a port name")
 
 	var (
 		routerName string
@@ -245,10 +241,10 @@ func showRouterPort(ctx *cli.Context) error {
 }
 
 func addRouterPort(ctx *cli.Context) error {
-	checkArgs(ctx, 3, 5, "require a router name, a port name, an CIDR and optionally a MAC, a peer port")
+	checkArgsThenConnect(ctx, 3, 5, "require a router name, a port name, an CIDR and optionally a MAC, a peer port")
 
 	routerName := ctx.Args().Get(0)
-	portName := ctx.Args().Get(1)
+	portName := validateAndTrimSpace(ctx.Args().Get(1))
 	cidr := ctx.Args().Get(2)
 	mac := ctx.Args().Get(3)
 	peer := ctx.Args().Get(4)
@@ -282,13 +278,13 @@ func addRouterPort(ctx *cli.Context) error {
 		fail(err)
 	}
 
-	succeedf("router %s port %s created", routerName, portName)
+	fmt.Printf("router %s port %s created\n", routerName, portName)
 
 	return nil
 }
 
 func delRouterPort(ctx *cli.Context) error {
-	checkArgs(ctx, 2, 2, "require router name and a port name")
+	checkArgsThenConnect(ctx, 2, 2, "require router name and a port name")
 
 	routerName := ctx.Args().Get(0)
 	portName := ctx.Args().Get(1)
@@ -308,13 +304,13 @@ func delRouterPort(ctx *cli.Context) error {
 		fail(err)
 	}
 
-	succeedf("router %s port %s deleted", routerName, portName)
+	fmt.Printf("router %s port %s deleted\n", routerName, portName)
 
 	return nil
 }
 
 func linkSwitch(ctx *cli.Context) error {
-	checkArgs(ctx, 3, 3, "require a router, a switch name and a CIDR string of: 10.0.0.1/24")
+	checkArgsThenConnect(ctx, 3, 3, "require a router, a switch name and a CIDR string of: 10.0.0.1/24")
 
 	// perform some early checking, avoid reading db if any error
 	cidr, mac := ctx.Args().Get(2), ctx.Args().Get(3)
@@ -370,10 +366,10 @@ func linkSwitch(ctx *cli.Context) error {
 }
 
 func addNAT(ctx *cli.Context) error {
-	checkArgs(ctx, 5, 5, "require router, NAT name, CIDR TRANSLATE_TYPE and TRANSLATE_IP")
+	checkArgsThenConnect(ctx, 5, 5, "require router, NAT name, CIDR, TRANSLATE_TYPE and TRANSLATE_IP")
 
 	routerName := ctx.Args().Get(0)
-	natName := ctx.Args().Get(1)
+	natName := validateAndTrimSpace(ctx.Args().Get(1))
 	cidr := ctx.Args().Get(2)
 	xlateType := strings.ToLower(ctx.Args().Get(3))
 	xlateIP := strings.ToLower(ctx.Args().Get(4))
@@ -408,13 +404,13 @@ func addNAT(ctx *cli.Context) error {
 		fail(err)
 	}
 
-	succeedf("router %s NAT %s created", routerName, natName)
+	fmt.Printf("router %s NAT %s created\n", routerName, natName)
 
 	return nil
 }
 
 func delNAT(ctx *cli.Context) error {
-	checkArgs(ctx, 2, 2, "require router, NAT name")
+	checkArgsThenConnect(ctx, 2, 2, "require router, NAT name")
 
 	routerName := ctx.Args().Get(0)
 	natName := ctx.Args().Get(1)
@@ -434,13 +430,13 @@ func delNAT(ctx *cli.Context) error {
 		fail(err)
 	}
 
-	succeedf("router %s NAT %s deleted", routerName, natName)
+	fmt.Printf("router %s NAT %s deleted\n", routerName, natName)
 
 	return nil
 }
 
 func showNAT(ctx *cli.Context) error {
-	checkArgs(ctx, 1, 2, "require router and optionally NAT name")
+	checkArgsThenConnect(ctx, 1, 2, "require router and optionally NAT name")
 
 	var (
 		routerName string
