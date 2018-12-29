@@ -7,7 +7,7 @@ go:
     - "1.11.x"
 
 before_install:
-    - sudo apt-get install autoconf automake libtool libssl-dev build-essential fakeroot dh-make dh-autoreconf
+    - sudo apt-get install autoconf automake libtool libssl-dev build-essential fakeroot dh-make dh-autoreconf libunbound-dev -y
     - wget http://openvswitch.org/releases/openvswitch-2.10.1.tar.gz
     - tar -xf openvswitch-2.10.1.tar.gz
     - cd openvswitch-2.10.1/
