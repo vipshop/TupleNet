@@ -8,7 +8,10 @@ import struct
 import socket
 from optparse import OptionParser
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ppparent_dir = os.path.dirname(os.path.dirname(parent_dir))
+py_third_dir = os.path.join(ppparent_dir, 'py_third')
 sys.path.append(parent_dir)
+sys.path.append(py_third_dir)
 from lcp import link_master as lm
 from lcp.flow_common import table_note_dict
 from lcp import flow_common
