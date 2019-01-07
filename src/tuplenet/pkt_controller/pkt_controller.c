@@ -554,7 +554,7 @@ init_log(char *filename)
     char tuplenet_logpath[MAX_STR_BUF_LEN];
     const char *tuplenet_logdir = getenv("TUPLENET_LOGDIR");
     if (tuplenet_logdir == NULL || strlen(tuplenet_logdir) == 0) {
-        // no need to output to a file
+        // no need to output to a file, output log to syslog and console
         vlog_set_levels(NULL, VLF_ANY_DESTINATION, VLL_DBG);
         VLOG_INFO("set no log file");
         return TP_STATUS_OK;
@@ -567,7 +567,6 @@ init_log(char *filename)
         return TP_STATUS_FAIL;
     }
 
-    vlog_set_levels(NULL, VLF_ANY_DESTINATION, VLL_DBG);
     ret = vlog_set_log_file(tuplenet_logpath);
     if (ret != 0) {
         VLOG_ERR("cannot config log file");
@@ -579,6 +578,10 @@ init_log(char *filename)
         return TP_STATUS_FAIL;
     }
     VLOG_INFO("log file is %s", tuplenet_logpath);
+
+    vlog_set_levels(NULL, VLF_FILE, VLL_DBG);
+    vlog_set_levels(NULL, VLF_SYSLOG, VLL_OFF);  // do not output to syslog
+    vlog_set_levels(NULL, VLF_CONSOLE, VLL_OFF); // do not output to console
     return TP_STATUS_OK;
 }
 
