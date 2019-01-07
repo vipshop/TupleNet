@@ -103,16 +103,15 @@ install_arp()
 
 inject_trace_packet()
 {
-    local sim_id=$1
-    local port=$2
-    if [ $# == 3 ]; then
-        local pkt=$3
+    local port=$1
+    if [ $# == 2 ]; then
+        local pkt=$2
         $PYTHON ../tuplenet/tools/pkt-trace.py --endpoints $etcd_client_specs -j $port -p $tuplenet_prefix -d $pkt
     else
-        local src_mac=$3
-        local src_ip=$4
-        local dst_mac=$5
-        local dst_ip=$6
+        local src_mac=$2
+        local src_ip=$3
+        local dst_mac=$4
+        local dst_ip=$5
         $PYTHON ../tuplenet/tools/pkt-trace.py --endpoints $etcd_client_specs -j $port -p $tuplenet_prefix \
                 --src_mac $src_mac --src_ip $src_ip --dst_mac $dst_mac --dst_ip $dst_ip
     fi

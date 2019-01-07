@@ -72,7 +72,7 @@ spa=`ip_to_hex 10 10 1 2`
 tpa=`ip_to_hex 10 10 1 9`
 # build arp request
 packet=ffffffffffff${sha}08060001080006040001${sha}${spa}ffffffffffff${tpa}
-real_path=`inject_trace_packet hv1 lsp-portA $packet`
+real_path=`inject_trace_packet lsp-portA $packet`
 wait_for_packet # wait for packet
 # we don't update expect_pkt, because we won't expect receiving arp back
 verify_pkt $expect_pkt $real_pkt || exit_test
@@ -95,7 +95,7 @@ spa=`ip_to_hex 10 10 1 2`
 tpa=`ip_to_hex 10 10 1 3`
 # build arp request
 packet=ffffffffffff${sha}08060001080006040001${sha}${spa}ffffffffffff${tpa}
-real_path=`inject_trace_packet hv1 lsp-portA $packet`
+real_path=`inject_trace_packet lsp-portA $packet`
 wait_for_packet # wait for packet
 # build arp feedback
 reply_ha=000006080703
@@ -120,7 +120,7 @@ verify_trace "$expect_path" "$real_path" || exit_test
 
 
 # send icmp to edge1 from hv1
-real_path=`inject_trace_packet hv1 lsp-portA 00:00:06:08:07:01 10.10.1.2 00:00:06:08:06:01 172.20.11.11`
+real_path=`inject_trace_packet lsp-portA 00:00:06:08:07:01 10.10.1.2 00:00:06:08:06:01 172.20.11.11`
 ip_src=`ip_to_hex 10 10 1 2`
 ip_dst=`ip_to_hex 172 20 11 11`
 ttl=fd
@@ -163,7 +163,7 @@ type:LS,pipeline:LS-A,from:LS-A_to_LR-A,to:lsp-portA,stage:TABLE_LSP_TRACE_EGRES
 verify_trace "$expect_path" "$real_path" || exit_test
 
 # send icmp to a unknow address from hv1
-real_path=`inject_trace_packet hv1 lsp-portA 00:00:06:08:07:01 10.10.1.2 00:00:06:08:06:01 172.20.11.66`
+real_path=`inject_trace_packet lsp-portA 00:00:06:08:07:01 10.10.1.2 00:00:06:08:06:01 172.20.11.66`
 real_pkt=`get_tx_last_pkt hv1 lsp-portA`
 # we don't update expect_pkt, because we won't expect receiving icmp back
 verify_pkt $expect_pkt $real_pkt || exit_test
@@ -185,7 +185,7 @@ type:LR,pipeline:edge2,from:edge2_to_m2,to:edge2_to_outside2,stage:TABLE_LRP_TRA
 type:LR,pipeline:edge2,from:edge2_to_m2,to:edge2_to_outside2,stage:TABLE_DROP_PACKET,chassis:hv3"
 verify_trace "$expect_path" "$real_path" || exit_test
 
-real_path=`inject_trace_packet hv1 lsp-portA 00:00:06:08:07:01 10.10.1.2 00:00:06:08:06:01 100.10.10.111`
+real_path=`inject_trace_packet lsp-portA 00:00:06:08:07:01 10.10.1.2 00:00:06:08:06:01 100.10.10.111`
 real_pkt=`get_tx_last_pkt hv1 lsp-portA`
 # we don't update expect_pkt, because we won't expect receiving icmp back
 verify_pkt $expect_pkt $real_pkt || exit_test
@@ -208,6 +208,7 @@ else
 fi
 
 expect_path=`echo -e "${expect_path}${last_path}"`
-
 verify_trace "$expect_path" "$real_path" || exit_test
+
+
 pass_test

@@ -7,6 +7,9 @@ import time
 import struct
 import socket
 from optparse import OptionParser
+import ConfigParser
+from multiprocessing.pool import ThreadPool
+
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ppparent_dir = os.path.dirname(os.path.dirname(parent_dir))
 py_third_dir = os.path.join(ppparent_dir, 'py_third')
@@ -17,6 +20,8 @@ from lcp.flow_common import table_note_dict
 from lcp import flow_common
 
 
+BASIC_SEC_NAME = 'basic'
+THREAD_POOL_MAX_N = 100
 logger = None
 TUPLENET_DIR = ''
 UNKNOW_SYMBOL = "<UNKNOW>"
@@ -107,13 +112,21 @@ def find_chassis_by_port(lport):
 def etcd_config_pkt_trace(lport, packet):
     chassis_id = find_chassis_by_port(lport)
     if chassis_id is None:
-        errprint("cannot found logical port %s pin on a chassis" % lport)
-        return
-    cmd_id = int(time.time() * 100) & 0xffff
+        raise Exception("cannot found logical port %s pin on a chassis" % lport)
+
+    if etcd_config_pkt_trace.cmd_id == 0:
+        etcd_config_pkt_trace.cmd_id = int(time.time() * 100) & 0xffff
+    else:
+        # increase the cmd_id one by one to distinguish the command
+        # NOTE the cmd_id may roll back from 0xffff to 0x0
+        etcd_config_pkt_trace.cmd_id = \
+                    (etcd_config_pkt_trace.cmd_id + 1) & 0xffff
+    cmd_id = etcd_config_pkt_trace.cmd_id
     key = 'push/' + chassis_id + '/cmd/' + str(cmd_id)
     value = "cmd=pkt_trace,packet={},port={}".format(packet, lport)
     wmaster.lease_communicate(key, value, 10)
     return cmd_id
+etcd_config_pkt_trace.cmd_id = 0 # init the static variable
 
 def etcd_read_cmd_result(cmd_id):
     ret_data = wmaster.get_prefix(TUPLENET_DIR +
@@ -138,7 +151,7 @@ def etcd_read_cmd_result(cmd_id):
                            "tun_src":tun_src,
                            "chassis_id":chassis_id})
 
-    #TODO
+    #NOTE
     # we have to replace current datapath with previous datapath,
     # before entering TABLE_LRP_TRACE_EGRESS_OUT, the datapath had been
     # change into next pipeline datapath id
@@ -202,17 +215,19 @@ def parse_trace_path(trace_path):
     return table_id, datapath_id, src_port_id, dst_port_id, tun_src
 
 def run_pkt_trace(lport, packet):
-    cmd_id = etcd_config_pkt_trace(lport, packet)
-    if cmd_id is None:
-        return
+    try:
+        cmd_id = etcd_config_pkt_trace(lport, packet)
+    except Exception as err:
+        return ['%s'%err]
 
     time.sleep(3)
     trace_path = etcd_read_cmd_result(cmd_id)
+    traces = []
     with entity_lock:
         for trace in trace_path:
             datapath = find_datapath_by_id(trace["datapath_id"])
             if datapath is None:
-                errprint("<ERROR>")
+                traces.append("<ERROR>")
                 continue
             src_port_name = find_port_by_id(datapath, trace["src_port_id"])
             dst_port_name = find_port_by_id(datapath, trace["dst_port_id"])
@@ -221,7 +236,21 @@ def run_pkt_trace(lport, packet):
                             datapath.type, datapath.name,
                             src_port_name, dst_port_name,
                             stage, trace["chassis_id"])
-            print(trace)
+            traces.append(trace)
+    if len(traces) == 0:
+        return ['error no traces']
+    return traces
+
+def run_pkt_trace_async(inject_info_list):
+    pool = ThreadPool(processes = THREAD_POOL_MAX_N)
+    async_result_list = []
+    for inject_port, packet in inject_info_list:
+        async_result_list.append(pool.apply_async(run_pkt_trace,
+                                                  (inject_port, packet)))
+    result = []
+    for async_result in async_result_list:
+        result.append(async_result.get())
+    return result
 
 def cal_checksum(header):
     header = struct.unpack("!10H", header)
@@ -287,6 +316,34 @@ def construct_icmp(src_mac, dst_mac, src_ip, dst_ip):
     return icmp_str
 
 
+def config_sanity_check(config):
+    etcd_endpoints = lm.sanity_etcdhost(config.get(BASIC_SEC_NAME, 'endpoints'))
+    prefix = config.get(BASIC_SEC_NAME, 'prefix')
+    if not prefix.endswith('/'):
+        raise Exception('prefix should be end with \'/\'')
+
+    inject_info_list = []
+    for section in config.sections():
+        if section == BASIC_SEC_NAME:
+            continue
+        try:
+            inject_port = config.get(section, 'port')
+            try:
+                header = config.get(section, 'header')
+            except ConfigParser.NoOptionError:
+                src_mac = config.get(section, 'src_mac')
+                dst_mac = config.get(section, 'dst_mac')
+                src_ip = config.get(section, 'src_ip')
+                dst_ip = config.get(section, 'dst_ip')
+                packet = construct_icmp(src_mac, dst_mac, src_ip, dst_ip)
+            else:
+                packet = header
+            inject_info_list.append((inject_port, packet))
+        except ConfigParser.NoSectionError:
+            continue
+
+    return etcd_endpoints, prefix, inject_info_list
+
 if __name__ == "__main__":
     usage = """usage: python %prog [options]
             --endpoints       the etcd cluster
@@ -296,7 +353,27 @@ if __name__ == "__main__":
             --dst_mac         destination macaddress of packet
             --src_ip          source ip address of packet
             --dst_ip          destination ip address of packet
-            -d, --header      packet header and payload"""
+            -d, --header      packet header and payload
+            the config file like:
+
+            [basic]
+            endpoints=127.0.0.1:2379
+            prefix=/tuplenet/
+
+            [inject0]
+            inject_port=lsp-portA
+            src_mac=00:00:06:08:06:01
+            src_ip=10.193.40.10
+            dst_ip=10.193.40.1
+            dst_mac=00:00:06:08:06:09
+
+            [inject1]
+            inject_port=lsp-portA
+            src_mac=00:00:06:08:06:01
+            src_ip=10.193.40.10
+            dst_ip=10.193.40.7
+            dst_mac=00:00:06:08:06:10
+            """
     parser = OptionParser(usage)
     parser.add_option("-j", "--port", dest = "inject_port",
                       action = "store", type = "string",
@@ -321,33 +398,42 @@ if __name__ == "__main__":
                       action = "store", type = "string",
                       default = "",
                       help = "packet header and payload, it should be hex")
-    parser.add_option("--endpoints", "--endpoints", dest = "endpoints",
+    parser.add_option("--endpoints", dest = "endpoints",
                       action = "store", type = "string",
                       default = "localhost:2379",
                       help = " a comma-delimited list of machine addresses in the cluster")
+    parser.add_option("-c", "--config", dest = "config_file",
+                      action = "store", type = "string",
+                      default = "",
+                      help = "a file contains inject port, src_mac...")
 
     (options, args) = parser.parse_args()
-    if options.inject_port == "":
-        errprint('invalid inject port, port:%s' % options.packet)
-        sys.exit(-1)
-    if not options.path_prefix.endswith('/'):
-        errprint('prefix should be end with \'/\'')
-        sys.exit(-1)
-
-
-    TUPLENET_DIR = options.path_prefix
-    etcd_endpoints = lm.sanity_etcdhost(options.endpoints)
 
     init_logger()
-    sync_etcd_data(etcd_endpoints)
-    if options.packet != "":
-        run_pkt_trace(options.inject_port, options.packet)
+
+    config = ConfigParser.RawConfigParser()
+    if not options.config_file == "":
+        config.read(options.config_file)
     else:
-        if options.src_mac == "" or options.dst_mac == "" or \
-           options.src_ip == "" or options.dst_ip == "":
-            errprint('you have specify the inject packet data or header infor')
-            sys.exit(-1)
-        else:
-            packet = construct_icmp(options.src_mac, options.dst_mac,
-                                    options.src_ip, options.dst_ip)
-            run_pkt_trace(options.inject_port, packet)
+        config.add_section(BASIC_SEC_NAME)
+        config.set(BASIC_SEC_NAME, 'endpoints', options.endpoints)
+        config.set(BASIC_SEC_NAME, 'prefix', options.path_prefix)
+
+        config.add_section('inject')
+        config.set('inject', 'port', options.inject_port)
+        config.set('inject', 'src_mac', options.src_mac)
+        config.set('inject', 'src_ip', options.src_ip)
+        config.set('inject', 'dst_mac', options.dst_mac)
+        config.set('inject', 'dst_ip', options.dst_ip)
+        if options.packet != "":
+            config.set('inject', 'header', options.packet)
+
+    etcd_endpoints, path_prefix, inject_info_list = config_sanity_check(config)
+    TUPLENET_DIR = path_prefix
+    sync_etcd_data(etcd_endpoints)
+    result = run_pkt_trace_async(inject_info_list)
+    for i, traces in enumerate(result):
+        if i:
+            print() # print a blank line to split tracepath segment
+        print('\n'.join(traces[:]))
+
