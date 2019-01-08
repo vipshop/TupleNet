@@ -218,11 +218,11 @@ def init_logger(log_dir, log_level = logging.DEBUG):
                                              backupCount = 5)
         rotate_handler.setFormatter(formatter)
         logger.addHandler(rotate_handler)
-
-    console = logging.StreamHandler();
-    console_formater = logging.Formatter(format_type, datefmt)
-    console.setFormatter(console_formater)
-    logger.addHandler(console)
+    else:
+        console = logging.StreamHandler();
+        console_formater = logging.Formatter(format_type, datefmt)
+        console.setFormatter(console_formater)
+        logger.addHandler(console)
 
 
 def main():
