@@ -8,18 +8,6 @@ extra = {'accept_diff': False}
 def get_extra():
     return extra
 
-init_trigger = 1
-def disable_init_trigger():
-    global init_trigger
-    init_trigger = 0
-
-
-pyDatalog.create_terms('get_init_trigger') # we have to declare it in every
-                                           # file if we consume it
-# we do not care x, just a simple function which feed to pydatalog
-def get_init_trigger(x):
-    return init_trigger
-
 def acquire_outside_env():
     extra['options'] = {}
     # enable ONDEMAND by default

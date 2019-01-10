@@ -3,13 +3,11 @@ import action
 import match
 from reg import *
 from logicalview import *
-from run_env import get_init_trigger
 from flow_common import TABLE_LSP_EGRESS_FIRST, TABLE_LRP_INGRESS_IP_ROUTE, \
                         TABLE_EMBED2_METADATA, TABLE_DROP_PACKET, TABLE_OUTPUT_PKT
 pyDatalog.create_terms('Table, Priority, Match, Action')
 pyDatalog.create_terms('Action1, Action2, Action3, Action4, Action5')
 pyDatalog.create_terms('Match1, Match2, Match3, Match4, Match5')
-pyDatalog.create_terms('get_init_trigger')
 pyDatalog.create_terms('embed_metadata, extract_metadata, pipeline_forward')
 pyDatalog.create_terms('redirect_other_chassis')
 pyDatalog.create_terms('_gateway_state_sum, gateway_ofport')
@@ -76,16 +74,14 @@ redirect_other_chassis(Priority, Match, Action, State) <= (
     (Action == Action1 + Action2 + Action3 + Action4)
     )
 
-redirect_other_chassis(Priority, Match, Action, State) <= (
+redirect_other_chassis(Priority, Match, Action) <= (
     (Priority == 0) &
-    (State == get_init_trigger(Priority)) & (State != 0) &
     match.match_none(Match) &
     action.resubmit_table(TABLE_DROP_PACKET, Action)
     )
 
-embed_metadata(Priority, Match, Action, State) <= (
+embed_metadata(Priority, Match, Action) <= (
     (Priority == 0) &
-    (State == get_init_trigger(Priority)) & (State != 0) &
     match.match_none(Match) &
     action.move(NXM_Reg(REG_DP_IDX, 0, 23),
                 NXM_Reg(TUN_ID_IDX, 0, 23), Action1) &
@@ -98,9 +94,8 @@ embed_metadata(Priority, Match, Action, State) <= (
     (Action == Action1 + Action2 + Action3 + Action4)
     )
 
-extract_metadata(Priority, Match, Action, State) <= (
+extract_metadata(Priority, Match, Action) <= (
     (Priority == 0) &
-    (State == get_init_trigger(Priority)) & (State != 0) &
     match.match_none(Match) &
     action.move(NXM_Reg(TUN_ID_IDX, 0, 23),
                 NXM_Reg(REG_DP_IDX, 0, 23), Action1) &
@@ -113,9 +108,8 @@ extract_metadata(Priority, Match, Action, State) <= (
     (Action == Action1 + Action2 + Action3 + Action4)
     )
 
-pipeline_forward(Priority, Match, Action, State) <= (
+pipeline_forward(Priority, Match, Action) <= (
     (Priority == 1) &
-    (State == get_init_trigger(Priority)) & (State != 0) &
     match.ip_proto(Match1) &
     # a ip packet with 00 macaddress means it was a redirect packet which
     # send out by other host, deliver this packet to LR to help redirect
@@ -128,9 +122,8 @@ pipeline_forward(Priority, Match, Action, State) <= (
     )
 
 # it is a regular packet, foward to lsp egress table immediately
-pipeline_forward(Priority, Match, Action, State) <= (
+pipeline_forward(Priority, Match, Action) <= (
     (Priority == 0) &
-    (State == get_init_trigger(Priority)) & (State != 0) &
     match.match_none(Match) &
     action.resubmit_table(TABLE_LSP_EGRESS_FIRST, Action)
     )

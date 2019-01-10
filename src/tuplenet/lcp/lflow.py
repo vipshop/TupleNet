@@ -11,7 +11,6 @@ import match
 from reg import *
 from logicalview import *
 from flow_common import *
-from run_env import get_init_trigger
 
 pyDatalog.create_terms('Table, Priority, Match, Action, LS')
 pyDatalog.create_terms('Match1, Match2, Match3')
@@ -24,7 +23,7 @@ pyDatalog.create_terms('build_flows_lsp')
 pyDatalog.create_terms('build_flows_lrp')
 pyDatalog.create_terms('build_flows_drop')
 pyDatalog.create_terms('build_flows')
-pyDatalog.create_terms('get_init_trigger')
+pyDatalog.create_terms('build_const_flows')
 
 def init_build_flows_clause(options):
     action.init_action_clause()
@@ -48,8 +47,22 @@ def init_build_flows_clause(options):
     build_flows(Table, Priority, Match, Action, State) <= (
             build_flows_mid(Table, Priority, Match, Action, State))
 
-    build_flows(Table, Priority, Match, Action, State) <= (
-            build_flows_drop(Table, Priority, Match, Action, State))
+
+# build const flows which were executed only once
+    build_const_flows(Table, Priority, Match, Action) <= (
+            build_flows_drop(Table, Priority, Match, Action))
+
+    build_const_flows(Table, Priority, Match, Action) <= (
+            build_flows_phy(Table, Priority, Match, Action))
+
+    build_const_flows(Table, Priority, Match, Action) <= (
+            build_flows_lsp(Table, Priority, Match, Action))
+
+    build_const_flows(Table, Priority, Match, Action) <= (
+            build_flows_lrp(Table, Priority, Match, Action))
+
+    build_const_flows(Table, Priority, Match, Action) <= (
+            build_flows_mid(Table, Priority, Match, Action))
 
 
 # build physical flows
@@ -71,20 +84,19 @@ def init_build_flows_clause(options):
                 (Table == TABLE_ARP_FEEDBACK_CONSTRUCT)
                 )
 
-    build_flows_phy(Table, Priority, Match, Action, State) <= (
-                physical_flow.output_pkt_by_reg(Priority, Match, Action1, State) &
+    build_flows_phy(Table, Priority, Match, Action) <= (
+                physical_flow.output_pkt_by_reg(Priority, Match, Action1) &
                 action.note(flows_note2idx('output_pkt'), Action2) &
                 (Action == Action1 + Action2) &
                 (Table == TABLE_OUTPUT_PKT)
                 )
 
-    build_flows_phy(Table, Priority, Match, Action, State) <= (
+    build_flows_phy(Table, Priority, Match, Action) <= (
                 pkt_trace.trace_pipeline_module(Match1, Action1) &
                 # NOTE: refresh TUN_METADATA0_IDX, may output to remote chassis
                 action.move(NXM_Reg(REG_FLAG_IDX, 0, 31),
                             NXM_Reg(TUN_METADATA0_IDX, 32, 63), Action2) &
-                physical_flow.output_pkt_by_reg(Priority1, Match2,
-                                                Action3, State) &
+                physical_flow.output_pkt_by_reg(Priority1, Match2, Action3) &
                 (Priority == Priority1 + 10) &
                 action.note(flows_note2idx('pkt_trace_output_pkt'), Action4) &
                 (Match == Match1 + Match2) &
@@ -93,22 +105,22 @@ def init_build_flows_clause(options):
                 )
 
 # build middle table flows
-    build_flows_mid(Table, Priority, Match, Action, State) <= (
-                mid.embed_metadata(Priority, Match, Action1, State) &
+    build_flows_mid(Table, Priority, Match, Action) <= (
+                mid.embed_metadata(Priority, Match, Action1) &
                 action.note(flows_note2idx('embed_metadata'), Action2) &
                 (Action == Action1 + Action2) &
                 (Table == TABLE_EMBED2_METADATA)
                 )
 
-    build_flows_mid(Table, Priority, Match, Action, State) <= (
-                mid.extract_metadata(Priority, Match, Action1, State) &
+    build_flows_mid(Table, Priority, Match, Action) <= (
+                mid.extract_metadata(Priority, Match, Action1) &
                 action.note(flows_note2idx('extract_metadata'), Action2) &
                 (Action == Action1 + Action2) &
                 (Table == TABLE_EXTRACT_METADATA)
                 )
 
-    build_flows_mid(Table, Priority, Match, Action, State) <= (
-                mid.pipeline_forward(Priority, Match, Action1, State) &
+    build_flows_mid(Table, Priority, Match, Action) <= (
+                mid.pipeline_forward(Priority, Match, Action1) &
                 action.note(flows_note2idx('pipeline_forward'), Action2) &
                 (Action == Action1 + Action2) &
                 (Table == TABLE_PIPELINE_FORWARD)
@@ -116,7 +128,15 @@ def init_build_flows_clause(options):
 
     build_flows_mid(Table, Priority, Match, Action, State) <= (
                 mid.redirect_other_chassis(Priority, Match, Action1, State) &
-                action.note(flows_note2idx('pipeline_forward'), Action2) &
+                action.note(flows_note2idx('redirect_other_chassis'), Action2) &
+                (Action == Action1 + Action2) &
+                (Table == TABLE_REDIRECT_CHASSIS)
+                )
+
+    # const flow
+    build_flows_mid(Table, Priority, Match, Action) <= (
+                mid.redirect_other_chassis(Priority, Match, Action1) &
+                action.note(flows_note2idx('redirect_other_chassis'), Action2) &
                 (Action == Action1 + Action2) &
                 (Table == TABLE_REDIRECT_CHASSIS)
                 )
@@ -195,11 +215,11 @@ def init_build_flows_clause(options):
                 (Match == Match1 + Match2)
                 )
 
-    # build trace flow for in first stage of lsp ingress
-    build_flows_lsp(Table, Priority, Match, Action, State) <= (
+    # build const trace flow for in first stage of lsp ingress
+    build_flows_lsp(Table, Priority, Match, Action) <= (
                 (Table == TABLE_LSP_TRACE_INGRESS_IN) &
                 action.load(0, NXM_Reg(REG_DST_IDX), Action1) &
-                pkt_trace.trace_pipeline_start(Priority, Match, Action2, State) &
+                pkt_trace.trace_pipeline_start(Priority, Match, Action2) &
                 action.note(flows_note2idx('pkt_trace_lsp_ingress_in'), Action3) &
                 (Action == Action1 + Action2 + Action3)
                 )
@@ -220,10 +240,10 @@ def init_build_flows_clause(options):
                 (Action == Action1 + Action2 + Action3)
                 )
 
-    # build trace flow for in first stage of lsp egress
-    build_flows_lsp(Table, Priority, Match, Action, State) <= (
+    # build const trace flow in first stage of lsp egress
+    build_flows_lsp(Table, Priority, Match, Action) <= (
                 (Table == TABLE_LSP_TRACE_EGRESS_IN) &
-                pkt_trace.trace_pipeline_start(Priority, Match, Action1, State) &
+                pkt_trace.trace_pipeline_start(Priority, Match, Action1) &
                 action.note(flows_note2idx('pkt_trace_lsp_egress_in'), Action2) &
                 (Action == Action1 + Action2)
                 )
@@ -392,52 +412,50 @@ def init_build_flows_clause(options):
                 (Match == Match1 + Match2)
                 )
 
-    # build trace flow for in first stage of lrp ingress
-    build_flows_lrp(Table, Priority, Match, Action, State) <= (
+    # build const trace flow in first stage of lrp ingress
+    build_flows_lrp(Table, Priority, Match, Action) <= (
                 (Table == TABLE_LRP_TRACE_INGRESS_IN) &
                 action.load(0, NXM_Reg(REG_DST_IDX), Action1) &
-                pkt_trace.trace_pipeline_start(Priority, Match, Action2, State) &
+                pkt_trace.trace_pipeline_start(Priority, Match, Action2) &
                 action.note(flows_note2idx('pkt_trace_lrp_ingress_in'), Action3) &
                 (Action == Action1 + Action2 + Action3)
                 )
 
-    # build trace flow for in last stage of lrp ingress
-    build_flows_lrp(Table, Priority, Match, Action, State) <= (
+    # build const trace flow in last stage of lrp ingress
+    build_flows_lrp(Table, Priority, Match, Action) <= (
                 (Table == TABLE_LRP_TRACE_INGRESS_OUT) &
-                pkt_trace.trace_pipeline_end(Priority, Match, Action1, State) &
+                pkt_trace.trace_pipeline_end(Priority, Match, Action1) &
                 action.resubmit_table(TABLE_LRP_EGRESS_FIRST, Action2) &
                 action.note(flows_note2idx('pkt_trace_lrp_ingress_out'), Action3) &
                 (Action == Action1 + Action2 + Action3)
                 )
 
-    # build trace flow for in first stage of lrp egress
-    build_flows_lrp(Table, Priority, Match, Action, State) <= (
+    # build const trace flow in first stage of lrp egress
+    build_flows_lrp(Table, Priority, Match, Action) <= (
                 (Table == TABLE_LRP_TRACE_EGRESS_IN) &
-                pkt_trace.trace_pipeline_start(Priority, Match, Action1, State) &
+                pkt_trace.trace_pipeline_start(Priority, Match, Action1) &
                 action.note(flows_note2idx('pkt_trace_lrp_egress_in'), Action2) &
                 (Action == Action1 + Action2)
                 )
 
-    # build trace flow for in last stage of lrp egress
-    build_flows_lrp(Table, Priority, Match, Action, State) <= (
+    # build const trace flow in last stage of lrp egress
+    build_flows_lrp(Table, Priority, Match, Action) <= (
                 (Table == TABLE_LRP_TRACE_EGRESS_OUT) &
-                pkt_trace.trace_pipeline_end(Priority, Match, Action1, State) &
+                pkt_trace.trace_pipeline_end(Priority, Match, Action1) &
                 action.resubmit_table(TABLE_LSP_INGRESS_FIRST, Action2) &
                 action.note(flows_note2idx('pkt_trace_lrp_egress_out'), Action3) &
                 (Action == Action1 + Action2 + Action3)
                 )
 
-#--------------------- drop table--------------------------------
-    build_flows_drop(Table, Priority, Match, Action, State) <= (
+#---------------------const drop table--------------------------------
+    build_flows_drop(Table, Priority, Match, Action) <= (
                 (Priority == 0) &
-                (State == get_init_trigger(Priority)) & (State!=0) &
                 (Table == TABLE_DROP_PACKET) &
                 match.match_none(Match) &
                 action.drop(Action)
                 )
-    build_flows_drop(Table, Priority, Match, Action, State) <= (
+    build_flows_drop(Table, Priority, Match, Action) <= (
                 (Priority == 1) &
-                (State == get_init_trigger(Priority)) & (State!=0) &
                 (Table == TABLE_DROP_PACKET) &
                 # we do not add drop action, because drop action
                 # must not be accompanied by any other action or instruction
