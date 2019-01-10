@@ -142,14 +142,15 @@ def etcd_read_cmd_result(cmd_id):
 
     trace_path = []
     for chassis_id,path,_ in trace_info:
-        table_id, datapath_id, src_port_id, dst_port_id, tun_src = \
+        table_id, datapath_id, src_port_id, dst_port_id, tun_src, iface_id = \
                                             parse_trace_path(path)
         trace_path.append({"table_id":table_id,
                            "datapath_id":datapath_id,
                            "src_port_id":src_port_id,
                            "dst_port_id":dst_port_id,
                            "tun_src":tun_src,
-                           "chassis_id":chassis_id})
+                           "chassis_id":chassis_id,
+                           "output_iface_id":iface_id})
 
     #NOTE
     # we have to replace current datapath with previous datapath,
@@ -212,7 +213,9 @@ def parse_trace_path(trace_path):
             ip_int = int(pval)
             tun_src = socket.inet_ntoa(struct.pack('I',socket.htonl(ip_int)))
             continue
-    return table_id, datapath_id, src_port_id, dst_port_id, tun_src
+        if pname == 'output_iface_id':
+            iface_id = pval
+    return table_id, datapath_id, src_port_id, dst_port_id, tun_src, iface_id
 
 def run_pkt_trace(lport, packet):
     try:
@@ -232,10 +235,11 @@ def run_pkt_trace(lport, packet):
             src_port_name = find_port_by_id(datapath, trace["src_port_id"])
             dst_port_name = find_port_by_id(datapath, trace["dst_port_id"])
             stage = table_note_dict[int(trace["table_id"])]
-            trace = "type:{},pipeline:{},from:{},to:{},stage:{},chassis:{}".format(
+            trace = "type:{},pipeline:{},from:{},to:{},stage:{},chassis:{},output_iface_id:{}".format(
                             datapath.type, datapath.name,
                             src_port_name, dst_port_name,
-                            stage, trace["chassis_id"])
+                            stage, trace["chassis_id"],
+                            trace['output_iface_id'])
             traces.append(trace)
     if len(traces) == 0:
         return ['error no traces']

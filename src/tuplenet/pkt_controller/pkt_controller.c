@@ -53,6 +53,7 @@ typedef int tp_status;
 
 #define REG_SRC_IDX 0
 #define REG_DST_IDX 1
+#define REG_OUTPORT_IDX 4
 #define REG_FLAG_IDX 10
 
 #define OPCODE_ARP_STR "arp"
@@ -438,6 +439,7 @@ process_trace(struct ofputil_packet_in *pin,
     uint8_t table_id = ah->pad[3];
     uint32_t src_port_id = pin->flow_metadata.flow.regs[REG_SRC_IDX];
     uint32_t dst_port_id = pin->flow_metadata.flow.regs[REG_DST_IDX];
+    uint32_t reg_ofport = pin->flow_metadata.flow.regs[REG_OUTPORT_IDX];
     uint32_t flag = pin->flow_metadata.flow.regs[REG_FLAG_IDX];
     uint32_t datapath_id = ntohll(pin->flow_metadata.flow.metadata);
     VLOG_DBG_RL(&rl, "receive tracing packet, datapath_id=%u", datapath_id);
@@ -447,11 +449,12 @@ process_trace(struct ofputil_packet_in *pin,
     (*seq_n)++;
     char tp_buf[128];
     status = write_tp_fifo(tp_buf, sizeof(tp_buf),
-                           "%s,%u,%u,%u,%u,%u,%u,%u;",
+                           "%s,%u,%u,%u,%u,%u,%u,%u,%u;",
                            OPCODE_TRACE_STR,
                            table_id, datapath_id,
                            flag, src_port_id, dst_port_id,
-                           ntohl(pin->flow_metadata.flow.tunnel.ip_src), *seq_n);
+                           ntohl(pin->flow_metadata.flow.tunnel.ip_src),
+                           *seq_n, reg_ofport);
     if (status != TP_STATUS_OK) {
         VLOG_WARN("failed to upload trace info to tuplenet");
     }

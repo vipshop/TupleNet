@@ -78,13 +78,14 @@ wait_for_packet # wait for packet
 verify_pkt $expect_pkt $real_pkt || exit_test
 # ondemand & redirect feature will direct traffic to other chassis
 if [[ -z "$ONDEMAND" || "$ONDEMAND" == 1 ]]; then
-    expect_path="type:LS,pipeline:LS-A,from:lsp-portA,to:<UNKNOW>,stage:TABLE_LSP_TRACE_INGRESS_IN,chassis:hv1
-type:LS,pipeline:LS-A,from:lsp-portA,to:<UNKNOW>,stage:TABLE_LSP_TRACE_INGRESS_OUT,chassis:hv1
-type:LS,pipeline:LS-A,from:lsp-portA,to:<UNKNOW>,stage:TABLE_LSP_TRACE_EGRESS_IN,chassis:hv3
-type:LS,pipeline:LS-A,from:lsp-portA,to:<UNKNOW>,stage:TABLE_DROP_PACKET,chassis:hv3"
+    expect_path="type:LS,pipeline:LS-A,from:lsp-portA,to:<UNKNOW>,stage:TABLE_LSP_TRACE_INGRESS_IN,chassis:hv1,output_iface_id:<UNK_PORT>
+type:LS,pipeline:LS-A,from:lsp-portA,to:<UNKNOW>,stage:TABLE_LSP_TRACE_INGRESS_OUT,chassis:hv1,output_iface_id:<INVALID_PORT>
+type:LS,pipeline:LS-A,from:lsp-portA,to:<UNKNOW>,stage:TABLE_OUTPUT_PKT,chassis:hv1,output_iface_id:hv3
+type:LS,pipeline:LS-A,from:lsp-portA,to:<UNKNOW>,stage:TABLE_LSP_TRACE_EGRESS_IN,chassis:hv3,output_iface_id:<UNK_PORT>
+type:LS,pipeline:LS-A,from:lsp-portA,to:<UNKNOW>,stage:TABLE_DROP_PACKET,chassis:hv3,output_iface_id:<UNK_PORT>"
 else
-    expect_path="type:LS,pipeline:LS-A,from:lsp-portA,to:<UNKNOW>,stage:TABLE_LSP_TRACE_INGRESS_IN,chassis:hv1
-type:LS,pipeline:LS-A,from:lsp-portA,to:<UNKNOW>,stage:TABLE_DROP_PACKET,chassis:hv1"
+    expect_path="type:LS,pipeline:LS-A,from:lsp-portA,to:<UNKNOW>,stage:TABLE_LSP_TRACE_INGRESS_IN,chassis:hv1,output_iface_id:<UNK_PORT>
+type:LS,pipeline:LS-A,from:lsp-portA,to:<UNKNOW>,stage:TABLE_DROP_PACKET,chassis:hv1,output_iface_id:<UNK_PORT>"
 fi
 verify_trace "$expect_path" "$real_path" || exit_test
 
@@ -104,17 +105,21 @@ real_pkt=`get_tx_last_pkt hv1 lsp-portA`
 verify_pkt $expect_pkt $real_pkt || exit_test
 # ondemand & redirect feature will direct traffic to other chassis
 if [[ -z "$ONDEMAND" || "$ONDEMAND" == 1 ]]; then
-    expect_path="type:LS,pipeline:LS-A,from:lsp-portA,to:<UNKNOW>,stage:TABLE_LSP_TRACE_INGRESS_IN,chassis:hv1
-type:LS,pipeline:LS-A,from:lsp-portA,to:<UNKNOW>,stage:TABLE_LSP_TRACE_INGRESS_OUT,chassis:hv1
-type:LS,pipeline:LS-A,from:lsp-portA,to:<UNKNOW>,stage:TABLE_LSP_TRACE_EGRESS_IN,chassis:hv3
-type:LS,pipeline:LS-A,from:lsp-portA,to:lsp-portA,stage:TABLE_LSP_TRACE_INGRESS_OUT,chassis:hv3
-type:LS,pipeline:LS-A,from:lsp-portA,to:lsp-portA,stage:TABLE_LSP_TRACE_EGRESS_IN,chassis:hv1
-type:LS,pipeline:LS-A,from:lsp-portA,to:lsp-portA,stage:TABLE_LSP_TRACE_EGRESS_OUT,chassis:hv1"
+    expect_path="type:LS,pipeline:LS-A,from:lsp-portA,to:<UNKNOW>,stage:TABLE_LSP_TRACE_INGRESS_IN,chassis:hv1,output_iface_id:<UNK_PORT>
+type:LS,pipeline:LS-A,from:lsp-portA,to:<UNKNOW>,stage:TABLE_LSP_TRACE_INGRESS_OUT,chassis:hv1,output_iface_id:<INVALID_PORT>
+type:LS,pipeline:LS-A,from:lsp-portA,to:<UNKNOW>,stage:TABLE_OUTPUT_PKT,chassis:hv1,output_iface_id:hv3
+type:LS,pipeline:LS-A,from:lsp-portA,to:<UNKNOW>,stage:TABLE_LSP_TRACE_EGRESS_IN,chassis:hv3,output_iface_id:<UNK_PORT>
+type:LS,pipeline:LS-A,from:lsp-portA,to:lsp-portA,stage:TABLE_LSP_TRACE_INGRESS_OUT,chassis:hv3,output_iface_id:hv1
+type:LS,pipeline:LS-A,from:lsp-portA,to:lsp-portA,stage:TABLE_OUTPUT_PKT,chassis:hv3,output_iface_id:hv1
+type:LS,pipeline:LS-A,from:lsp-portA,to:lsp-portA,stage:TABLE_LSP_TRACE_EGRESS_IN,chassis:hv1,output_iface_id:<UNK_PORT>
+type:LS,pipeline:LS-A,from:lsp-portA,to:lsp-portA,stage:TABLE_LSP_TRACE_EGRESS_OUT,chassis:hv1,output_iface_id:<UNK_PORT>
+type:LS,pipeline:LS-A,from:lsp-portA,to:lsp-portA,stage:TABLE_OUTPUT_PKT,chassis:hv1,output_iface_id:<UNK_PORT>"
 else
-    expect_path="type:LS,pipeline:LS-A,from:lsp-portA,to:<UNKNOW>,stage:TABLE_LSP_TRACE_INGRESS_IN,chassis:hv1
-type:LS,pipeline:LS-A,from:lsp-portA,to:lsp-portA,stage:TABLE_LSP_TRACE_INGRESS_OUT,chassis:hv1
-type:LS,pipeline:LS-A,from:lsp-portA,to:lsp-portA,stage:TABLE_LSP_TRACE_EGRESS_IN,chassis:hv1
-type:LS,pipeline:LS-A,from:lsp-portA,to:lsp-portA,stage:TABLE_LSP_TRACE_EGRESS_OUT,chassis:hv1"
+    expect_path="type:LS,pipeline:LS-A,from:lsp-portA,to:<UNKNOW>,stage:TABLE_LSP_TRACE_INGRESS_IN,chassis:hv1,output_iface_id:<UNK_PORT>
+type:LS,pipeline:LS-A,from:lsp-portA,to:lsp-portA,stage:TABLE_LSP_TRACE_INGRESS_OUT,chassis:hv1,output_iface_id:<UNK_PORT>
+type:LS,pipeline:LS-A,from:lsp-portA,to:lsp-portA,stage:TABLE_LSP_TRACE_EGRESS_IN,chassis:hv1,output_iface_id:<UNK_PORT>
+type:LS,pipeline:LS-A,from:lsp-portA,to:lsp-portA,stage:TABLE_LSP_TRACE_EGRESS_OUT,chassis:hv1,output_iface_id:<UNK_PORT>
+type:LS,pipeline:LS-A,from:lsp-portA,to:lsp-portA,stage:TABLE_OUTPUT_PKT,chassis:hv1,output_iface_id:<UNK_PORT>"
 fi
 verify_trace "$expect_path" "$real_path" || exit_test
 
@@ -131,34 +136,37 @@ wait_for_packet # wait for packet
 wait_for_packet # wait for packet
 verify_pkt $expect_pkt $real_pkt || exit_test
 
-expect_path="type:LS,pipeline:LS-A,from:lsp-portA,to:<UNKNOW>,stage:TABLE_LSP_TRACE_INGRESS_IN,chassis:hv1
-type:LS,pipeline:LS-A,from:lsp-portA,to:LS-A_to_LR-A,stage:TABLE_LSP_TRACE_INGRESS_OUT,chassis:hv1
-type:LS,pipeline:LS-A,from:lsp-portA,to:LS-A_to_LR-A,stage:TABLE_LSP_TRACE_EGRESS_IN,chassis:hv1
-type:LS,pipeline:LS-A,from:lsp-portA,to:LS-A_to_LR-A,stage:TABLE_LSP_TRACE_EGRESS_OUT,chassis:hv1
-type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:<UNKNOW>,stage:TABLE_LRP_TRACE_INGRESS_IN,chassis:hv1
-type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:LR-A_to_m1,stage:TABLE_LRP_TRACE_INGRESS_OUT,chassis:hv1
-type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:LR-A_to_m1,stage:TABLE_LRP_TRACE_EGRESS_IN,chassis:hv1
-type:LR,pipeline:LR-A,from:LR-A_to_m1,to:LR-A_to_m1,stage:TABLE_LRP_TRACE_EGRESS_OUT,chassis:hv1
-type:LS,pipeline:m1,from:m1_to_LR-A,to:<UNKNOW>,stage:TABLE_LSP_TRACE_INGRESS_IN,chassis:hv1
-type:LS,pipeline:m1,from:m1_to_LR-A,to:m1_to_edge1,stage:TABLE_LSP_TRACE_INGRESS_OUT,chassis:hv1
-type:LS,pipeline:m1,from:m1_to_LR-A,to:m1_to_edge1,stage:TABLE_LSP_TRACE_EGRESS_IN,chassis:hv2
-type:LS,pipeline:m1,from:m1_to_LR-A,to:m1_to_edge1,stage:TABLE_LSP_TRACE_EGRESS_OUT,chassis:hv2
-type:LR,pipeline:edge1,from:edge1_to_m1,to:<UNKNOW>,stage:TABLE_LRP_TRACE_INGRESS_IN,chassis:hv2
-type:LR,pipeline:edge1,from:edge1_to_m1,to:edge1_to_m1,stage:TABLE_LRP_TRACE_INGRESS_OUT,chassis:hv2
-type:LR,pipeline:edge1,from:edge1_to_m1,to:edge1_to_m1,stage:TABLE_LRP_TRACE_EGRESS_IN,chassis:hv2
-type:LR,pipeline:edge1,from:edge1_to_m1,to:edge1_to_m1,stage:TABLE_LRP_TRACE_EGRESS_OUT,chassis:hv2
-type:LS,pipeline:m1,from:m1_to_edge1,to:<UNKNOW>,stage:TABLE_LSP_TRACE_INGRESS_IN,chassis:hv2
-type:LS,pipeline:m1,from:m1_to_edge1,to:m1_to_LR-A,stage:TABLE_LSP_TRACE_INGRESS_OUT,chassis:hv2
-type:LS,pipeline:m1,from:m1_to_edge1,to:m1_to_LR-A,stage:TABLE_LSP_TRACE_EGRESS_IN,chassis:hv2
-type:LS,pipeline:m1,from:m1_to_edge1,to:m1_to_LR-A,stage:TABLE_LSP_TRACE_EGRESS_OUT,chassis:hv2
-type:LR,pipeline:LR-A,from:LR-A_to_m1,to:<UNKNOW>,stage:TABLE_LRP_TRACE_INGRESS_IN,chassis:hv2
-type:LR,pipeline:LR-A,from:LR-A_to_m1,to:LR-A_to_LS-A,stage:TABLE_LRP_TRACE_INGRESS_OUT,chassis:hv2
-type:LR,pipeline:LR-A,from:LR-A_to_m1,to:LR-A_to_LS-A,stage:TABLE_LRP_TRACE_EGRESS_IN,chassis:hv2
-type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:LR-A_to_LS-A,stage:TABLE_LRP_TRACE_EGRESS_OUT,chassis:hv2
-type:LS,pipeline:LS-A,from:LS-A_to_LR-A,to:<UNKNOW>,stage:TABLE_LSP_TRACE_INGRESS_IN,chassis:hv2
-type:LS,pipeline:LS-A,from:LS-A_to_LR-A,to:lsp-portA,stage:TABLE_LSP_TRACE_INGRESS_OUT,chassis:hv2
-type:LS,pipeline:LS-A,from:LS-A_to_LR-A,to:lsp-portA,stage:TABLE_LSP_TRACE_EGRESS_IN,chassis:hv1
-type:LS,pipeline:LS-A,from:LS-A_to_LR-A,to:lsp-portA,stage:TABLE_LSP_TRACE_EGRESS_OUT,chassis:hv1"
+expect_path="type:LS,pipeline:LS-A,from:lsp-portA,to:<UNKNOW>,stage:TABLE_LSP_TRACE_INGRESS_IN,chassis:hv1,output_iface_id:<UNK_PORT>
+type:LS,pipeline:LS-A,from:lsp-portA,to:LS-A_to_LR-A,stage:TABLE_LSP_TRACE_INGRESS_OUT,chassis:hv1,output_iface_id:<UNK_PORT>
+type:LS,pipeline:LS-A,from:lsp-portA,to:LS-A_to_LR-A,stage:TABLE_LSP_TRACE_EGRESS_IN,chassis:hv1,output_iface_id:<UNK_PORT>
+type:LS,pipeline:LS-A,from:lsp-portA,to:LS-A_to_LR-A,stage:TABLE_LSP_TRACE_EGRESS_OUT,chassis:hv1,output_iface_id:<UNK_PORT>
+type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:<UNKNOW>,stage:TABLE_LRP_TRACE_INGRESS_IN,chassis:hv1,output_iface_id:<UNK_PORT>
+type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:LR-A_to_m1,stage:TABLE_LRP_TRACE_INGRESS_OUT,chassis:hv1,output_iface_id:hv2
+type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:LR-A_to_m1,stage:TABLE_LRP_TRACE_EGRESS_IN,chassis:hv1,output_iface_id:hv2
+type:LR,pipeline:LR-A,from:LR-A_to_m1,to:LR-A_to_m1,stage:TABLE_LRP_TRACE_EGRESS_OUT,chassis:hv1,output_iface_id:hv2
+type:LS,pipeline:m1,from:m1_to_LR-A,to:<UNKNOW>,stage:TABLE_LSP_TRACE_INGRESS_IN,chassis:hv1,output_iface_id:hv2
+type:LS,pipeline:m1,from:m1_to_LR-A,to:m1_to_edge1,stage:TABLE_LSP_TRACE_INGRESS_OUT,chassis:hv1,output_iface_id:hv2
+type:LS,pipeline:m1,from:m1_to_LR-A,to:m1_to_edge1,stage:TABLE_OUTPUT_PKT,chassis:hv1,output_iface_id:hv2
+type:LS,pipeline:m1,from:m1_to_LR-A,to:m1_to_edge1,stage:TABLE_LSP_TRACE_EGRESS_IN,chassis:hv2,output_iface_id:<UNK_PORT>
+type:LS,pipeline:m1,from:m1_to_LR-A,to:m1_to_edge1,stage:TABLE_LSP_TRACE_EGRESS_OUT,chassis:hv2,output_iface_id:<UNK_PORT>
+type:LR,pipeline:edge1,from:edge1_to_m1,to:<UNKNOW>,stage:TABLE_LRP_TRACE_INGRESS_IN,chassis:hv2,output_iface_id:<UNK_PORT>
+type:LR,pipeline:edge1,from:edge1_to_m1,to:edge1_to_m1,stage:TABLE_LRP_TRACE_INGRESS_OUT,chassis:hv2,output_iface_id:<UNK_PORT>
+type:LR,pipeline:edge1,from:edge1_to_m1,to:edge1_to_m1,stage:TABLE_LRP_TRACE_EGRESS_IN,chassis:hv2,output_iface_id:<UNK_PORT>
+type:LR,pipeline:edge1,from:edge1_to_m1,to:edge1_to_m1,stage:TABLE_LRP_TRACE_EGRESS_OUT,chassis:hv2,output_iface_id:<UNK_PORT>
+type:LS,pipeline:m1,from:m1_to_edge1,to:<UNKNOW>,stage:TABLE_LSP_TRACE_INGRESS_IN,chassis:hv2,output_iface_id:<UNK_PORT>
+type:LS,pipeline:m1,from:m1_to_edge1,to:m1_to_LR-A,stage:TABLE_LSP_TRACE_INGRESS_OUT,chassis:hv2,output_iface_id:<UNK_PORT>
+type:LS,pipeline:m1,from:m1_to_edge1,to:m1_to_LR-A,stage:TABLE_LSP_TRACE_EGRESS_IN,chassis:hv2,output_iface_id:<UNK_PORT>
+type:LS,pipeline:m1,from:m1_to_edge1,to:m1_to_LR-A,stage:TABLE_LSP_TRACE_EGRESS_OUT,chassis:hv2,output_iface_id:<UNK_PORT>
+type:LR,pipeline:LR-A,from:LR-A_to_m1,to:<UNKNOW>,stage:TABLE_LRP_TRACE_INGRESS_IN,chassis:hv2,output_iface_id:<UNK_PORT>
+type:LR,pipeline:LR-A,from:LR-A_to_m1,to:LR-A_to_LS-A,stage:TABLE_LRP_TRACE_INGRESS_OUT,chassis:hv2,output_iface_id:<UNK_PORT>
+type:LR,pipeline:LR-A,from:LR-A_to_m1,to:LR-A_to_LS-A,stage:TABLE_LRP_TRACE_EGRESS_IN,chassis:hv2,output_iface_id:<UNK_PORT>
+type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:LR-A_to_LS-A,stage:TABLE_LRP_TRACE_EGRESS_OUT,chassis:hv2,output_iface_id:<UNK_PORT>
+type:LS,pipeline:LS-A,from:LS-A_to_LR-A,to:<UNKNOW>,stage:TABLE_LSP_TRACE_INGRESS_IN,chassis:hv2,output_iface_id:<UNK_PORT>
+type:LS,pipeline:LS-A,from:LS-A_to_LR-A,to:lsp-portA,stage:TABLE_LSP_TRACE_INGRESS_OUT,chassis:hv2,output_iface_id:hv1
+type:LS,pipeline:LS-A,from:LS-A_to_LR-A,to:lsp-portA,stage:TABLE_OUTPUT_PKT,chassis:hv2,output_iface_id:hv1
+type:LS,pipeline:LS-A,from:LS-A_to_LR-A,to:lsp-portA,stage:TABLE_LSP_TRACE_EGRESS_IN,chassis:hv1,output_iface_id:<UNK_PORT>
+type:LS,pipeline:LS-A,from:LS-A_to_LR-A,to:lsp-portA,stage:TABLE_LSP_TRACE_EGRESS_OUT,chassis:hv1,output_iface_id:<UNK_PORT>
+type:LS,pipeline:LS-A,from:LS-A_to_LR-A,to:lsp-portA,stage:TABLE_OUTPUT_PKT,chassis:hv1,output_iface_id:<UNK_PORT>"
 
 verify_trace "$expect_path" "$real_path" || exit_test
 
@@ -167,44 +175,46 @@ real_path=`inject_trace_packet lsp-portA 00:00:06:08:07:01 10.10.1.2 00:00:06:08
 real_pkt=`get_tx_last_pkt hv1 lsp-portA`
 # we don't update expect_pkt, because we won't expect receiving icmp back
 verify_pkt $expect_pkt $real_pkt || exit_test
-expect_path="type:LS,pipeline:LS-A,from:lsp-portA,to:<UNKNOW>,stage:TABLE_LSP_TRACE_INGRESS_IN,chassis:hv1
-type:LS,pipeline:LS-A,from:lsp-portA,to:LS-A_to_LR-A,stage:TABLE_LSP_TRACE_INGRESS_OUT,chassis:hv1
-type:LS,pipeline:LS-A,from:lsp-portA,to:LS-A_to_LR-A,stage:TABLE_LSP_TRACE_EGRESS_IN,chassis:hv1
-type:LS,pipeline:LS-A,from:lsp-portA,to:LS-A_to_LR-A,stage:TABLE_LSP_TRACE_EGRESS_OUT,chassis:hv1
-type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:<UNKNOW>,stage:TABLE_LRP_TRACE_INGRESS_IN,chassis:hv1
-type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:LR-A_to_m2,stage:TABLE_LRP_TRACE_INGRESS_OUT,chassis:hv1
-type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:LR-A_to_m2,stage:TABLE_LRP_TRACE_EGRESS_IN,chassis:hv1
-type:LR,pipeline:LR-A,from:LR-A_to_m2,to:LR-A_to_m2,stage:TABLE_LRP_TRACE_EGRESS_OUT,chassis:hv1
-type:LS,pipeline:m2,from:m2_to_LR-A,to:<UNKNOW>,stage:TABLE_LSP_TRACE_INGRESS_IN,chassis:hv1
-type:LS,pipeline:m2,from:m2_to_LR-A,to:m2_to_edge2,stage:TABLE_LSP_TRACE_INGRESS_OUT,chassis:hv1
-type:LS,pipeline:m2,from:m2_to_LR-A,to:m2_to_edge2,stage:TABLE_LSP_TRACE_EGRESS_IN,chassis:hv3
-type:LS,pipeline:m2,from:m2_to_LR-A,to:m2_to_edge2,stage:TABLE_LSP_TRACE_EGRESS_OUT,chassis:hv3
-type:LR,pipeline:edge2,from:edge2_to_m2,to:<UNKNOW>,stage:TABLE_LRP_TRACE_INGRESS_IN,chassis:hv3
-type:LR,pipeline:edge2,from:edge2_to_m2,to:edge2_to_outside2,stage:TABLE_LRP_TRACE_INGRESS_OUT,chassis:hv3
-type:LR,pipeline:edge2,from:edge2_to_m2,to:edge2_to_outside2,stage:TABLE_LRP_TRACE_EGRESS_IN,chassis:hv3
-type:LR,pipeline:edge2,from:edge2_to_m2,to:edge2_to_outside2,stage:TABLE_DROP_PACKET,chassis:hv3"
+expect_path="type:LS,pipeline:LS-A,from:lsp-portA,to:<UNKNOW>,stage:TABLE_LSP_TRACE_INGRESS_IN,chassis:hv1,output_iface_id:<UNK_PORT>
+type:LS,pipeline:LS-A,from:lsp-portA,to:LS-A_to_LR-A,stage:TABLE_LSP_TRACE_INGRESS_OUT,chassis:hv1,output_iface_id:<UNK_PORT>
+type:LS,pipeline:LS-A,from:lsp-portA,to:LS-A_to_LR-A,stage:TABLE_LSP_TRACE_EGRESS_IN,chassis:hv1,output_iface_id:<UNK_PORT>
+type:LS,pipeline:LS-A,from:lsp-portA,to:LS-A_to_LR-A,stage:TABLE_LSP_TRACE_EGRESS_OUT,chassis:hv1,output_iface_id:<UNK_PORT>
+type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:<UNKNOW>,stage:TABLE_LRP_TRACE_INGRESS_IN,chassis:hv1,output_iface_id:<UNK_PORT>
+type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:LR-A_to_m2,stage:TABLE_LRP_TRACE_INGRESS_OUT,chassis:hv1,output_iface_id:hv3
+type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:LR-A_to_m2,stage:TABLE_LRP_TRACE_EGRESS_IN,chassis:hv1,output_iface_id:hv3
+type:LR,pipeline:LR-A,from:LR-A_to_m2,to:LR-A_to_m2,stage:TABLE_LRP_TRACE_EGRESS_OUT,chassis:hv1,output_iface_id:hv3
+type:LS,pipeline:m2,from:m2_to_LR-A,to:<UNKNOW>,stage:TABLE_LSP_TRACE_INGRESS_IN,chassis:hv1,output_iface_id:hv3
+type:LS,pipeline:m2,from:m2_to_LR-A,to:m2_to_edge2,stage:TABLE_LSP_TRACE_INGRESS_OUT,chassis:hv1,output_iface_id:hv3
+type:LS,pipeline:m2,from:m2_to_LR-A,to:m2_to_edge2,stage:TABLE_OUTPUT_PKT,chassis:hv1,output_iface_id:hv3
+type:LS,pipeline:m2,from:m2_to_LR-A,to:m2_to_edge2,stage:TABLE_LSP_TRACE_EGRESS_IN,chassis:hv3,output_iface_id:<UNK_PORT>
+type:LS,pipeline:m2,from:m2_to_LR-A,to:m2_to_edge2,stage:TABLE_LSP_TRACE_EGRESS_OUT,chassis:hv3,output_iface_id:<UNK_PORT>
+type:LR,pipeline:edge2,from:edge2_to_m2,to:<UNKNOW>,stage:TABLE_LRP_TRACE_INGRESS_IN,chassis:hv3,output_iface_id:<UNK_PORT>
+type:LR,pipeline:edge2,from:edge2_to_m2,to:edge2_to_outside2,stage:TABLE_LRP_TRACE_INGRESS_OUT,chassis:hv3,output_iface_id:<UNK_PORT>
+type:LR,pipeline:edge2,from:edge2_to_m2,to:edge2_to_outside2,stage:TABLE_LRP_TRACE_EGRESS_IN,chassis:hv3,output_iface_id:<UNK_PORT>
+type:LR,pipeline:edge2,from:edge2_to_m2,to:edge2_to_outside2,stage:TABLE_DROP_PACKET,chassis:hv3,output_iface_id:<UNK_PORT>"
 verify_trace "$expect_path" "$real_path" || exit_test
 
 real_path=`inject_trace_packet lsp-portA 00:00:06:08:07:01 10.10.1.2 00:00:06:08:06:01 100.10.10.111`
 real_pkt=`get_tx_last_pkt hv1 lsp-portA`
 # we don't update expect_pkt, because we won't expect receiving icmp back
 verify_pkt $expect_pkt $real_pkt || exit_test
-expect_path="type:LS,pipeline:LS-A,from:lsp-portA,to:<UNKNOW>,stage:TABLE_LSP_TRACE_INGRESS_IN,chassis:hv1
-type:LS,pipeline:LS-A,from:lsp-portA,to:LS-A_to_LR-A,stage:TABLE_LSP_TRACE_INGRESS_OUT,chassis:hv1
-type:LS,pipeline:LS-A,from:lsp-portA,to:LS-A_to_LR-A,stage:TABLE_LSP_TRACE_EGRESS_IN,chassis:hv1
-type:LS,pipeline:LS-A,from:lsp-portA,to:LS-A_to_LR-A,stage:TABLE_LSP_TRACE_EGRESS_OUT,chassis:hv1
-type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:<UNKNOW>,stage:TABLE_LRP_TRACE_INGRESS_IN,chassis:hv1
-type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:LR-A_to_m2,stage:TABLE_LRP_TRACE_INGRESS_OUT,chassis:hv1
-type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:LR-A_to_m2,stage:TABLE_LRP_TRACE_EGRESS_IN,chassis:hv1\n"
+expect_path="type:LS,pipeline:LS-A,from:lsp-portA,to:<UNKNOW>,stage:TABLE_LSP_TRACE_INGRESS_IN,chassis:hv1,output_iface_id:<UNK_PORT>
+type:LS,pipeline:LS-A,from:lsp-portA,to:LS-A_to_LR-A,stage:TABLE_LSP_TRACE_INGRESS_OUT,chassis:hv1,output_iface_id:<UNK_PORT>
+type:LS,pipeline:LS-A,from:lsp-portA,to:LS-A_to_LR-A,stage:TABLE_LSP_TRACE_EGRESS_IN,chassis:hv1,output_iface_id:<UNK_PORT>
+type:LS,pipeline:LS-A,from:lsp-portA,to:LS-A_to_LR-A,stage:TABLE_LSP_TRACE_EGRESS_OUT,chassis:hv1,output_iface_id:<UNK_PORT>
+type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:<UNKNOW>,stage:TABLE_LRP_TRACE_INGRESS_IN,chassis:hv1,output_iface_id:<UNK_PORT>
+type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:LR-A_to_m2,stage:TABLE_LRP_TRACE_INGRESS_OUT,chassis:hv1,output_iface_id:<UNK_PORT>
+type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:LR-A_to_m2,stage:TABLE_LRP_TRACE_EGRESS_IN,chassis:hv1,output_iface_id:<UNK_PORT>\n"
 
 # ondemand & redirect feature will direct traffic to other chassis, so it would not drop this packet
 # then the last path(TABLE_DROP_PACKET) should be deleted
 if [[ -z "$ONDEMAND" || "$ONDEMAND" == 1 ]]; then
-    last_path="type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:LR-A_to_m2,stage:TABLE_LRP_TRACE_INGRESS_OUT,chassis:hv3
-type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:LR-A_to_m2,stage:TABLE_LRP_TRACE_EGRESS_IN,chassis:hv3
-type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:LR-A_to_m2,stage:TABLE_DROP_PACKET,chassis:hv3"
+    last_path="type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:LR-A_to_m2,stage:TABLE_OUTPUT_PKT,chassis:hv1,output_iface_id:hv3
+type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:LR-A_to_m2,stage:TABLE_LRP_TRACE_INGRESS_OUT,chassis:hv3,output_iface_id:<UNK_PORT>
+type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:LR-A_to_m2,stage:TABLE_LRP_TRACE_EGRESS_IN,chassis:hv3,output_iface_id:<UNK_PORT>
+type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:LR-A_to_m2,stage:TABLE_DROP_PACKET,chassis:hv3,output_iface_id:<UNK_PORT>"
 else
-    last_path="type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:LR-A_to_m2,stage:TABLE_DROP_PACKET,chassis:hv1"
+    last_path="type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:LR-A_to_m2,stage:TABLE_DROP_PACKET,chassis:hv1,output_iface_id:<UNK_PORT>"
 fi
 
 expect_path=`echo -e "${expect_path}${last_path}"`

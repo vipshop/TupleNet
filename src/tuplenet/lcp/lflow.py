@@ -70,6 +70,28 @@ def init_build_flows_clause(options):
                 (Match == Match1 + Match2) &
                 (Table == TABLE_ARP_FEEDBACK_CONSTRUCT)
                 )
+
+    build_flows_phy(Table, Priority, Match, Action, State) <= (
+                physical_flow.output_pkt_by_reg(Priority, Match, Action1, State) &
+                action.note(flows_note2idx('output_pkt'), Action2) &
+                (Action == Action1 + Action2) &
+                (Table == TABLE_OUTPUT_PKT)
+                )
+
+    build_flows_phy(Table, Priority, Match, Action, State) <= (
+                pkt_trace.trace_pipeline_module(Match1, Action1) &
+                # NOTE: refresh TUN_METADATA0_IDX, may output to remote chassis
+                action.move(NXM_Reg(REG_FLAG_IDX, 0, 31),
+                            NXM_Reg(TUN_METADATA0_IDX, 32, 63), Action2) &
+                physical_flow.output_pkt_by_reg(Priority1, Match2,
+                                                Action3, State) &
+                (Priority == Priority1 + 10) &
+                action.note(flows_note2idx('pkt_trace_output_pkt'), Action4) &
+                (Match == Match1 + Match2) &
+                (Action == Action1 + Action2 + Action3 + Action4) &
+                (Table == TABLE_OUTPUT_PKT)
+                )
+
 # build middle table flows
     build_flows_mid(Table, Priority, Match, Action, State) <= (
                 mid.embed_metadata(Priority, Match, Action1, State) &

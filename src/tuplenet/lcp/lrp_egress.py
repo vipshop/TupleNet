@@ -21,6 +21,14 @@ pyDatalog.create_terms('lrp_handle_unknow_dst_pkt')
 pyDatalog.create_terms('opposite_side_changed_lsp')
 pyDatalog.create_terms('opposite_side_has_patch_port')
 
+# NOTE
+# reg0: src_port_id
+# reg1: dst_port_id
+# reg2: dst_ip
+# reg3: next lrp
+# reg4: the output ofport
+# reg10: flag
+
 def init_lrp_egress_clause(options):
 
     # figure out all linked lsp on a LS which has a connection with this LRP

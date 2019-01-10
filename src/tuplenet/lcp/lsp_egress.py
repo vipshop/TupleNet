@@ -13,6 +13,17 @@ pyDatalog.create_terms('UUID_LR_CHASSIS')
 pyDatalog.create_terms('lsp_forward_packet')
 pyDatalog.create_terms('lsp_judge_loopback')
 pyDatalog.create_terms('lsp_pushout_packet')
+
+# NOTE
+# reg0: src_port_id
+# reg1: dst_port_id
+# reg4: the output ofport
+# reg5: interim reg
+# reg6: interim reg, store next LR's id
+# reg7: interim reg, store next LR's port id
+# reg10: flag
+
+
 def init_lsp_egress_clause(way):
 
     lsp_judge_loopback(LS, Priority, Match, Action, State) <= (
@@ -38,7 +49,7 @@ def init_lsp_egress_clause(way):
         local_bond_lsp(LSP, LS, State) & (State != 0) &
         match.reg_dst(LSP[LSP_PORTID], Match) &
         action.load(1, NXM_Reg(REG5_IDX), Action1) &
-        action.load(LSP[LSP_OFPORT], NXM_Reg(REG4_IDX), Action2) &
+        action.load(LSP[LSP_OFPORT], NXM_Reg(REG_OUTPORT_IDX), Action2) &
         action.resubmit_next(Action3) &
         (Action == Action1 + Action2 + Action3)
         )
@@ -97,7 +108,7 @@ def init_lsp_egress_clause(way):
         (Priority == 2) &
         ls_array(LS, UUID_LS, State) & (State != 0) &
         match.reg_5(1, Match) &
-        action.output_reg(NXM_Reg(REG4_IDX), Action)
+        action.resubmit_table(TABLE_OUTPUT_PKT, Action)
         )
 
     lsp_pushout_packet(LS, Priority, Match, Action, State) <= (

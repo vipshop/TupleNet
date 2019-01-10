@@ -18,6 +18,9 @@ etcd_lr_add LR-A
 # create agent which help to redirect traffic
 etcd_lr_add LR-agent hv-agent
 
+# set ONDEMAND=1 here because this testing only support ondemand test
+ONDEMAND=1
+
 # enable ONDEMAND feature
 start_tuplenet_daemon hv1 192.168.100.1
 start_tuplenet_daemon hv2 192.168.100.2
@@ -105,6 +108,9 @@ done &
 
 sleep 2
 
+ovs_setenv hv1
+hv1_flow_n=`get_ovs_flows_num`
+
 i=1
 while [ $i -le $max_port_num ]; do
     mac_hex=`int_to_hex $i`
@@ -131,5 +137,16 @@ while [ $i -le $max_port_num ]; do
     verify_pkt $expect_pkt $real_pkt || exit_test
     i=$((i+1))
 done
+
+wait_for_flows_unchange
+ovs_setenv hv1
+current_hv1_flow_n=`get_ovs_flows_num`
+pmsg "pre flow num:$hv1_flow_n, current flow num:$current_hv1_flow_n"
+if [ $(($current_hv1_flow_n - $max_port_num)) -le "$hv1_flow_n" ]; then
+    pmsg "ovs-flows number did not increase, ondemand not work"
+    exit_test
+fi
+
+
 
 pass_test

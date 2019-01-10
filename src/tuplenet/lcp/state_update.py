@@ -12,7 +12,8 @@ from onexit import on_parent_exit
 from tp_utils import pipe
 from run_env import get_extra
 from tuplesync import update_ovs_side
-from logicalview import LOGICAL_ENTITY_TYPE_LSP, LOGICAL_ENTITY_TYPE_CHASSIS
+from logicalview import LOGICAL_ENTITY_TYPE_LSP, LOGICAL_ENTITY_TYPE_CHASSIS, \
+                        LOGICAL_ENTITY_TYPE_OVSPORT_CHASSIS
 
 MAX_BUF_LEN = 10240
 
@@ -40,23 +41,49 @@ def process_arp(arp_msg_seg):
                 mac_addr, ip_int, ip, datapath)
     update_ovs_arp_ip_mac(mac_addr, ip_int)
 
+def _parse_ofport2iface(ofport):
+    if ofport == 0xffff:
+        return '<INVALID_PORT>'
+    elif ofport == 0:
+        return '<UNK_PORT>'
+
+    def _fn(ovsport_set, ofport):
+        for ovsport in ovsport_set.values():
+            if ovsport.ofport == ofport:
+                return [ovsport]
+        return []
+
+    ovsport_array = entity_zoo.get_entity_by_fn(LOGICAL_ENTITY_TYPE_OVSPORT_CHASSIS,
+                                                _fn, ofport)
+    if len(ovsport_array) == 0:
+        logger.info("cannot found ofport:%s's iface-id", ofport)
+        return '<UNK_PORT>'
+    return ovsport_array[0].iface_id
+
 def process_trace(trace_msg_seg):
-    table_id = trace_msg_seg[1]
-    datapath_id = trace_msg_seg[2]
+    table_id = int(trace_msg_seg[1])
+    datapath_id = int(trace_msg_seg[2])
     cmd_id = int(trace_msg_seg[3]) >> 16
-    src_port_id = trace_msg_seg[4]
-    dst_port_id = trace_msg_seg[5]
+    src_port_id = int(trace_msg_seg[4])
+    dst_port_id = int(trace_msg_seg[5])
     tun_src = int(trace_msg_seg[6])
-    seq_n = trace_msg_seg[7]
-    logger.info('tracing packets, table_id:%s, datapath_id:%s, '
-                'cmd_id:%d, src_port_id:%s, dst_port_id:%s, seq:%s, tun_src:%d',
+    seq_n = int(trace_msg_seg[7])
+    ofport = int(trace_msg_seg[8])
+    logger.info('tracing packets, table_id:%d, datapath_id:%d, '
+                'cmd_id:%d, src_port_id:%d, dst_port_id:%d, '
+                'seq:%d, tun_src:%d, ofport:%d',
                 table_id, datapath_id, cmd_id,
-                src_port_id, dst_port_id, seq_n, tun_src)
+                src_port_id, dst_port_id, seq_n, tun_src, ofport)
     ttl = 30
     chassis_id = get_extra()['system_id']
     key = "cmd_result/{}/{}/{}".format(cmd_id, seq_n, chassis_id)
-    value = "cmd_type=pkt_trace,table_id={},datapath_id={},src_port_id={},dst_port_id={},tun_src={}".format(
-                    table_id, datapath_id, src_port_id, dst_port_id, tun_src)
+
+    iface_id = _parse_ofport2iface(ofport)
+    value = ("cmd_type=pkt_trace,table_id={},datapath_id={},"
+             "src_port_id={},dst_port_id={},tun_src={},output_iface_id={}").format(
+                table_id, datapath_id, src_port_id,
+                dst_port_id, tun_src, iface_id)
+
     wmaster = extra['lm']
     wmaster.lease_communicate(key, value, ttl)
 

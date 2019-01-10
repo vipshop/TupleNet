@@ -8,6 +8,7 @@ pyDatalog.create_terms('datapath')
 pyDatalog.create_terms('in_port')
 pyDatalog.create_terms('reg_src')
 pyDatalog.create_terms('reg_dst')
+pyDatalog.create_terms('reg_outport')
 pyDatalog.create_terms('reg_flag')
 pyDatalog.create_terms('reg_2')
 pyDatalog.create_terms('reg_3')
@@ -58,6 +59,8 @@ def init_match_clause():
     reg_src(X, Y) <= (Y == [(REG_SRC_IDX, X)])
 
     reg_dst(X, Y) <= (Y == [(REG_DST_IDX, X)])
+
+    reg_outport(X, Y) <= (Y == [(REG_OUTPORT_IDX, X)])
 
     reg_flag(X, Y) <= (Y == [(REG_FLAG_IDX, X)])
 
