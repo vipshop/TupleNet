@@ -700,21 +700,30 @@ class LogicalEntityZoo():
                 for entity_key in group.keys():
                     self.move_entity2sink(entity_type, entity_key)
 
-    def touch_entity(self, entity_type, fn, key):
+    def get_entity_by_fn(self, entity_type, fn, key):
         with self.lock:
             try:
                 array = fn(self.entity_set[entity_type], key)
-                if len(array) > 0:
-                    for entity in array:
-                        entity.touch()
-                        logger.info("touch entity %s", entity)
-                else:
-                    logger.info("cannot touch %s's entity by using %s",
-                                entity_type, key)
                 return array
             except Exception as err:
-                logger.exception("error in touching entity, err:%s", err)
+                logger.exception("error in searching entity, err:%s", err)
                 return []
+
+    def touch_entity(self, entity_type, fn, key):
+        with self.lock:
+            array = self.get_entity_by_fn(entity_type, fn, key)
+            if len(array) == 0:
+                logger.info("cannot touch %s's entity by using %s",
+                            entity_type, key)
+                return array
+            for entity in array:
+                try:
+                    entity.touch()
+                except Exception as err:
+                    logger.exception("error in touching entity, err:%s", err)
+                    continue
+                logger.info("touch entity %s", entity)
+            return array
 
     def _touch_gateway_by_LR(self, lr):
         chassis_set = self.entity_set[LOGICAL_ENTITY_TYPE_CHASSIS]

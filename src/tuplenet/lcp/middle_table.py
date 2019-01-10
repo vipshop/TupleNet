@@ -3,8 +3,9 @@ import action
 import match
 from reg import *
 from logicalview import *
-from flow_common import TABLE_LSP_EGRESS_FIRST, TABLE_LRP_INGRESS_IP_ROUTE, TABLE_EMBED2_METADATA, TABLE_DROP_PACKET
 from run_env import get_init_trigger
+from flow_common import TABLE_LSP_EGRESS_FIRST, TABLE_LRP_INGRESS_IP_ROUTE, \
+                        TABLE_EMBED2_METADATA, TABLE_DROP_PACKET, TABLE_OUTPUT_PKT
 pyDatalog.create_terms('Table, Priority, Match, Action')
 pyDatalog.create_terms('Action1, Action2, Action3, Action4, Action5')
 pyDatalog.create_terms('Match1, Match2, Match3, Match4, Match5')
@@ -69,9 +70,9 @@ redirect_other_chassis(Priority, Match, Action, State) <= (
     match.match_none(Match) &
     action.load(1, NXM_Reg(REG_FLAG_IDX, FLAG_REDIRECT_BIT_IDX,
                            FLAG_REDIRECT_BIT_IDX), Action1) &
-    action.bundle_load(NXM_Reg(REG4_IDX), OFPORT, Action2) &
+    action.bundle_load(NXM_Reg(REG_OUTPORT_IDX), OFPORT, Action2) &
     action.resubmit_table(TABLE_EMBED2_METADATA, Action3) &
-    action.output_reg(NXM_Reg(REG4_IDX), Action4) &
+    action.resubmit_table(TABLE_OUTPUT_PKT, Action4) &
     (Action == Action1 + Action2 + Action3 + Action4)
     )
 

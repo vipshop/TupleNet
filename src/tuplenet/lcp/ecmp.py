@@ -88,7 +88,7 @@ def init_ecmp_clause(options):
         match.ip_proto(Match1) &
         match.ip_dst_prefix(X[1], X[2], Match2) &
         (Match == Match1 + Match2) &
-        action.bundle_load(NXM_Reg(REG4_IDX), Y, Action1) &
+        action.bundle_load(NXM_Reg(REG_OUTPORT_IDX), Y, Action1) &
         action.resubmit_next(Action2) &
         (Action == Action1 + Action2)
         )
@@ -102,7 +102,7 @@ def init_ecmp_clause(options):
         match.ip_proto(Match1) &
         match.ip_dst_prefix(X[1], X[2], Match2) &
         (Match == Match1 + Match2) &
-        action.bundle_load(NXM_Reg(REG4_IDX), Y, Action1) &
+        action.bundle_load(NXM_Reg(REG_OUTPORT_IDX), Y, Action1) &
         action.resubmit_next(Action2) &
         (Action == Action1 + Action2)
         )
@@ -118,7 +118,7 @@ def init_ecmp_clause(options):
             lrp_array(Route[LSR_OUTPORT], LRP, UUID_LR, UUID_LSP, State4) &
             (State == State1 + State2 + State3 + State4) & (State != 0) &
             (Priority == Route[LSR_PREFIX] * 3 + 2) &
-            match.reg_4(OFPORT, Match1) &
+            match.reg_outport(OFPORT, Match1) &
             match.ip_proto(Match2) &
             match.ip_dst_prefix(Route[LSR_IP], Route[LSR_PREFIX], Match3) &
             (Match == Match1 + Match2 + Match3) &
@@ -136,7 +136,7 @@ def init_ecmp_clause(options):
         ecmp_static_route_judge(LR, Priority, Match, Action, State) <= (
             lr_array(LR, UUID_LR, State) & (State != 0) &
             (Priority == 1) &
-            match.reg_4(0xffff, Match) &
+            match.reg_outport(0xffff, Match) &
             action.resubmit_table(TABLE_DROP_PACKET, Action)
             )
 

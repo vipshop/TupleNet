@@ -43,6 +43,7 @@ TABLE_LRP_INGRESS_FIRST = TABLE_LRP_TRACE_INGRESS_IN
 TABLE_LRP_EGRESS_FIRST = TABLE_LRP_TRACE_EGRESS_IN
 
 # Independent table
+TABLE_OUTPUT_PKT = 94
 TABLE_REDIRECT_CHASSIS = 95
 TABLE_ARP_FEEDBACK_CONSTRUCT = 96
 TABLE_EMBED2_METADATA = 97
@@ -85,11 +86,13 @@ flows_note_array = ['lsp_lookup_dst_port',
                     'pkt_trace_lrp_egress_in',
                     'pkt_trace_lrp_egress_out',
                     'pkt_trace_drop_packet',
+                    'pkt_trace_output_pkt',
                     'arp_feedback_construct',
                     'embed_metadata',
                     'extract_metadata',
                     'pipeline_forward',
                     'redirect_other_chassis',
+                    'output_pkt',
                    ]
 
 START_IDX = 10
@@ -134,6 +137,7 @@ table_note_dict = {
     TABLE_LRP_EGRESS_HANDLE_UNK_PKT:'TABLE_LRP_EGRESS_HANDLE_UNK_PKT',
     TABLE_LRP_EGRESS_FORWARD_PACKET:'TABLE_LRP_EGRESS_FORWARD_PACKET',
     TABLE_LRP_TRACE_EGRESS_OUT:'TABLE_LRP_TRACE_EGRESS_OUT',
+    TABLE_OUTPUT_PKT:'TABLE_OUTPUT_PKT',
     TABLE_SEARCH_IP_MAC:'TABLE_SEARCH_IP_MAC',
     TABLE_DROP_PACKET:'TABLE_DROP_PACKET',
 }

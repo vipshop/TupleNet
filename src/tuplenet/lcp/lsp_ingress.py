@@ -16,6 +16,14 @@ pyDatalog.create_terms('lsp_arp_controller')
 pyDatalog.create_terms('lsp_arp_response')
 pyDatalog.create_terms('_lsp_remote_lsp_changed')
 
+# NOTE
+# reg0: src_port_id
+# reg1: dst_port_id
+# reg4: the output ofport
+# reg5: interim reg
+# reg10: flag
+
+
 def init_lsp_ingress_clause(options):
 
     # push RARP to controller
@@ -106,7 +114,7 @@ def init_lsp_ingress_clause(options):
             match.eth_dst(LSP[LSP_MAC], Match) &
             action.load(LSP[LSP_PORTID],
                         NXM_Reg(REG_DST_IDX), Action1) &
-            action.bundle_load(NXM_Reg(REG4_IDX),
+            action.bundle_load(NXM_Reg(REG_OUTPORT_IDX),
                                [PHY_CHASSIS[PCH_OFPORT]], Action2) &
             # if we want output this packet in next step, we set 1->reg5
             # in next step flow, no need to clean this reg5, because
@@ -124,7 +132,7 @@ def init_lsp_ingress_clause(options):
             action.load(LSP[LSP_PORTID],
                         NXM_Reg(REG_DST_IDX), Action1) &
             action.load(PHY_CHASSIS[PCH_OFPORT],
-                        NXM_Reg(REG4_IDX), Action2) &
+                        NXM_Reg(REG_OUTPORT_IDX), Action2) &
             # if we want output this packet in next step, we set 1->reg5
             # in next step flow, no need to clean this reg5, because
             # it should output a a port means the end of packet process
@@ -156,7 +164,7 @@ def init_lsp_ingress_clause(options):
             action.upload_unknow_dst(Action1) &
             # resubmit this packet to next stage, gateway host can
             # do delivering if gateway enable redirect feature
-            action.load(0xffff, NXM_Reg(REG4_IDX), Action2) &
+            action.load(0xffff, NXM_Reg(REG_OUTPORT_IDX), Action2) &
             action.load(1, NXM_Reg(REG5_IDX), Action3) &
             action.resubmit_next(Action4) &
             (Action == Action1 + Action2 + Action3 + Action4)
@@ -180,7 +188,7 @@ def init_lsp_ingress_clause(options):
             ls_array(LS, UUID_LS, State) & (State != 0) &
             match.reg_5(1, Match1) &
             match.reg_flag(FLAG_REDIRECT, Match2) &
-            match.reg_4(0xffff, Match3) &
+            match.reg_outport(0xffff, Match3) &
             (Match == Match1 + Match2 + Match3) &
             action.resubmit_table(TABLE_DROP_PACKET, Action)
             )
@@ -191,7 +199,7 @@ def init_lsp_ingress_clause(options):
             (Priority == 3) &
             ls_array(LS, UUID_LS, State) & (State != 0) &
             match.reg_5(1, Match1) &
-            match.reg_4(0xffff, Match2) &
+            match.reg_outport(0xffff, Match2) &
             (Match == Match1 + Match2) &
             action.resubmit_table(TABLE_REDIRECT_CHASSIS, Action)
             )
@@ -202,7 +210,7 @@ def init_lsp_ingress_clause(options):
         ls_array(LS, UUID_LS, State) &  (State != 0) &
         match.reg_5(1, Match) &
         action.resubmit_table(TABLE_EMBED2_METADATA, Action1) &
-        action.output_reg(NXM_Reg(REG4_IDX), Action2) &
+        action.resubmit_table(TABLE_OUTPUT_PKT, Action2) &
         (Action == Action1 + Action2)
         )
 

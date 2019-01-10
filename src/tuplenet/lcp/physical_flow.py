@@ -4,6 +4,7 @@ import match
 from reg import *
 from logicalview import *
 from flow_common import TABLE_PIPELINE_FORWARD, TABLE_EXTRACT_METADATA
+from run_env import get_init_trigger
 
 pyDatalog.create_terms('Table, Priority, Match, Action')
 pyDatalog.create_terms('Action1, Action2, Action3, Action4, Action5')
@@ -11,8 +12,10 @@ pyDatalog.create_terms('Action6, Action7, Action8, Action9')
 pyDatalog.create_terms('Match1, Match2, Match3, Match4, Match5')
 pyDatalog.create_terms('X, Y, Z, UUID_CHASSIS')
 
+pyDatalog.create_terms('get_init_trigger')
 pyDatalog.create_terms('convert_phy_logical')
 pyDatalog.create_terms('arp_feedback_construct')
+pyDatalog.create_terms('output_pkt_by_reg')
 pyDatalog.create_terms('_arp_ip_mac')
 pyDatalog.create_terms('IP, IP_INT, MAC, MAC_INT')
 
@@ -80,5 +83,12 @@ def init_physical_flow_clause(options):
         action.move(NXM_Reg(REG_SRC_IDX), NXM_Reg(REG_DST_IDX), Action9) &
         (Action == Action1 + Action2 + Action3 + Action4 +
                    Action5 + Action6 + Action7 + Action8 + Action9)
+        )
+
+    output_pkt_by_reg(Priority, Match, Action, State) <= (
+        (Priority == 0) &
+        (State == get_init_trigger(Priority)) & (State != 0) &
+        match.match_none(Match) &
+        action.output_reg(NXM_Reg(REG_OUTPORT_IDX), Action)
         )
 

@@ -55,6 +55,8 @@ run_dockerd_and_build_image(){
     add_revert "kill -9 $pid"
     add_revert "rm -rf ${DOCKER_PATH}"
 
+    sleep 2
+
     if [ $(local_docker images --filter=reference="${TAG}:*" | wc -l) == "1" ];then
     mkdir ${test_path}/image
     cp alpine-minirootfs-3.8.1-x86_64.tar.gz ${test_path}/image

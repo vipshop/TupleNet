@@ -26,6 +26,14 @@ pyDatalog.create_terms('lrp_ecmp_judge')
 # so a lrp(ip=10.10.1.1) has same portID=0x0101, and lrp(ip=20.20.1.1)
 # has same portID=0x0101
 
+# NOTE
+# reg0: src_port_id
+# reg1: dst_port_id
+# reg2: dst_ip
+# reg3: next lrp
+# reg4: the output ofport
+# reg10: flag
+
 def init_lrp_ingress_clause(options):
 
     init_ecmp_clause(options)
