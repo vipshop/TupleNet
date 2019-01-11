@@ -237,7 +237,9 @@ def update_logical_view(entity_zoo, extra):
     # insert operation will change entity number, del/update operation
     # will change del entity group number
     if not need_recompute(entity_zoo):
-        logger.info("entity set has no change, wait...")
+        if update_logical_view.cnt % 30 == 0:
+            logger.info("entity set has no change, wait...")
+        update_logical_view.cnt += 1
         return
 
     update_ovs_side(entity_zoo)
@@ -245,3 +247,5 @@ def update_logical_view(entity_zoo, extra):
     # so we should read the change of etcd as soon as possible
     if cnt_upload > 0:
         update_logical_view(entity_zoo, extra)
+
+update_logical_view.cnt = 0
