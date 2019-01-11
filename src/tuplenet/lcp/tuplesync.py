@@ -11,7 +11,7 @@ import match as ovsmatch
 import link_master as lm
 import time
 from pyDatalog import pyDatalog
-from run_env import disable_init_trigger, is_gateway_chassis
+from run_env import is_gateway_chassis
 import tunnel
 
 logger = logging.getLogger(__name__)
@@ -202,6 +202,12 @@ def update_ovs_side(entity_zoo):
         lflow.build_flows(Table, Priority, Match, Action, State)
         lflows = zip(Table.data, Priority.data, Match.data,
                      Action.data, State.data)
+        # must insert const flows in init stage
+        if not had_clean_ovs_flows:
+            lflow.build_const_flows(Table, Priority, Match, Action)
+            static_lflows = zip(Table.data, Priority.data, Match.data,
+                                Action.data, [1]*len(Table.data))
+            lflows += static_lflows
         cost_time = time.time() - start_time
         config_tunnel_bfd()
         rebuild_chassis_tunnel()
@@ -235,9 +241,6 @@ def update_logical_view(entity_zoo, extra):
         return
 
     update_ovs_side(entity_zoo)
-    # set init_trigger==0, then tuplenet would not generate
-    # traceflow/init flows again and again
-    disable_init_trigger()
     # call this function again immediately because tuplenet update the lsp
     # so we should read the change of etcd as soon as possible
     if cnt_upload > 0:

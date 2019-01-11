@@ -195,7 +195,6 @@ def test_rand_entity(entity_set, rand_ls_num, rand_chassis_num, rand_lsp_num):
     table_tuple = Table.data; priority_tuple = Priority.data
     match_tuple = Match.data; action_tuple = Action.data
     entity_zoo.sweep_zoo()
-    run_env.disable_init_trigger()
     logger.info('cost time:%s, total flows number:%d',
                  time.time()-start_time, len(table_tuple))
     for i in xrange(1):

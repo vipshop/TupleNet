@@ -1,11 +1,9 @@
 from pyDatalog import pyDatalog
 from logicalview import *
-from run_env import get_init_trigger
 
 pyDatalog.create_terms('X, Y, Z, IP')
 pyDatalog.create_terms('latest_chassis, tunnel_port_oper, tunnel_port')
 pyDatalog.create_terms('tunnel_port_delete_exist, cur_chassis_list')
-pyDatalog.create_terms('get_init_trigger')
 
 (latest_chassis[X] == max_(Y, order_by=Z)) <= (
     chassis_array(PHY_CHASSIS, UUID_CHASSIS, State) &
