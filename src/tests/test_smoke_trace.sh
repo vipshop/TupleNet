@@ -63,10 +63,9 @@ packet=`build_icmp_request 000006080703 000006080601 $ip_src $ip_dst $ttl 528d 8
 
 # this packet is for generating flows in ONDEMAND mode
 inject_pkt hv1 lsp-portA "$packet" || exit_test
-wait_for_packet # wait for packet
-wait_for_packet # wait for packet
+sleep 2
 
-real_path=`inject_trace_packet lsp-portA "$packet"`
+real_path=`TRACE_WAIT_TIME=6 inject_trace_packet lsp-portA "$packet"`
 ttl=ea
 expect_pkt=`build_icmp_request 0000060805${mac_hex} 000006080704 $ip_src $ip_dst $ttl 668d 8510`
 real_pkt=`get_tx_last_pkt hv2 lsp-portB`

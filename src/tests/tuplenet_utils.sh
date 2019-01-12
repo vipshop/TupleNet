@@ -103,16 +103,19 @@ install_arp()
 
 inject_trace_packet()
 {
+    if [ -z "$TRACE_WAIT_TIME" ]; then
+        TRACE_WAIT_TIME=3
+    fi
     local port=$1
     if [ $# == 2 ]; then
         local pkt=$2
-        $PYTHON ../tuplenet/tools/pkt-trace.py --endpoints $etcd_client_specs -j $port -p $tuplenet_prefix -d $pkt
+        $PYTHON ../tuplenet/tools/pkt-trace.py --endpoints $etcd_client_specs -j $port -p $tuplenet_prefix -d $pkt --wait_time=$TRACE_WAIT_TIME
     else
         local src_mac=$2
         local src_ip=$3
         local dst_mac=$4
         local dst_ip=$5
         $PYTHON ../tuplenet/tools/pkt-trace.py --endpoints $etcd_client_specs -j $port -p $tuplenet_prefix \
-                --src_mac $src_mac --src_ip $src_ip --dst_mac $dst_mac --dst_ip $dst_ip
+                --src_mac $src_mac --src_ip $src_ip --dst_mac $dst_mac --dst_ip $dst_ip --wait_time=$TRACE_WAIT_TIME
     fi
 }
