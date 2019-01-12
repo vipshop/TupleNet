@@ -22,6 +22,7 @@ from lcp import flow_common
 
 BASIC_SEC_NAME = 'basic'
 THREAD_POOL_MAX_N = 100
+WAIT_TRACE_TIMEOUT = 0
 logger = None
 TUPLENET_DIR = ''
 UNKNOW_SYMBOL = "<UNKNOW>"
@@ -223,7 +224,7 @@ def run_pkt_trace(lport, packet):
     except Exception as err:
         return ['%s'%err]
 
-    time.sleep(3)
+    time.sleep(WAIT_TRACE_TIMEOUT)
     trace_path = etcd_read_cmd_result(cmd_id)
     traces = []
     with entity_lock:
@@ -323,6 +324,7 @@ def construct_icmp(src_mac, dst_mac, src_ip, dst_ip):
 def config_sanity_check(config):
     etcd_endpoints = lm.sanity_etcdhost(config.get(BASIC_SEC_NAME, 'endpoints'))
     prefix = config.get(BASIC_SEC_NAME, 'prefix')
+    wait_time = config.getint(BASIC_SEC_NAME, 'wait_time')
     if not prefix.endswith('/'):
         raise Exception('prefix should be end with \'/\'')
 
@@ -346,7 +348,7 @@ def config_sanity_check(config):
         except ConfigParser.NoSectionError:
             continue
 
-    return etcd_endpoints, prefix, inject_info_list
+    return (etcd_endpoints, prefix, wait_time), inject_info_list
 
 if __name__ == "__main__":
     usage = """usage: python %prog [options]
@@ -358,11 +360,13 @@ if __name__ == "__main__":
             --src_ip          source ip address of packet
             --dst_ip          destination ip address of packet
             -d, --header      packet header and payload
+            --wait_time       the time of waiting results of a tracing
             the config file like:
 
             [basic]
             endpoints=127.0.0.1:2379
             prefix=/tuplenet/
+            wait_time=3
 
             [inject0]
             inject_port=lsp-portA
@@ -406,6 +410,10 @@ if __name__ == "__main__":
                       action = "store", type = "string",
                       default = "localhost:2379",
                       help = " a comma-delimited list of machine addresses in the cluster")
+    parser.add_option("--wait_time", dest = "wait_time",
+                      action = "store", type = "int",
+                      default = 3,
+                      help = "the time of waiting results of a tracing")
     parser.add_option("-c", "--config", dest = "config_file",
                       action = "store", type = "string",
                       default = "",
@@ -422,6 +430,7 @@ if __name__ == "__main__":
         config.add_section(BASIC_SEC_NAME)
         config.set(BASIC_SEC_NAME, 'endpoints', options.endpoints)
         config.set(BASIC_SEC_NAME, 'prefix', options.path_prefix)
+        config.set(BASIC_SEC_NAME, 'wait_time', options.wait_time)
 
         config.add_section('inject')
         config.set('inject', 'port', options.inject_port)
@@ -432,7 +441,8 @@ if __name__ == "__main__":
         if options.packet != "":
             config.set('inject', 'header', options.packet)
 
-    etcd_endpoints, path_prefix, inject_info_list = config_sanity_check(config)
+    basic_config, inject_info_list = config_sanity_check(config)
+    etcd_endpoints, path_prefix, WAIT_TRACE_TIMEOUT = basic_config
     TUPLENET_DIR = path_prefix
     sync_etcd_data(etcd_endpoints)
     result = run_pkt_trace_async(inject_info_list)
