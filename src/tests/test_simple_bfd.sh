@@ -105,4 +105,40 @@ wait_for_packet # wait for packet
 real_pkt=`get_tx_pkt hv1 lsp-portA`  # the received packets has no change, becuase we don't want to get a feed back
 verify_pkt "$expect_pkt" "$real_pkt" || exit_test
 
+# kill a edge tuplenet
+kill_tuplenet_daemon hv2 -TERM
+# restart it again to simulate a upgrade
+ONDEMAND=0 GATEWAY=1 tuplenet_boot hv2 192.168.100.2
+wait_for_flows_unchange
+is_tunnel_bfd_enable hv1 hv2 || exit_test
+is_tunnel_bfd_enable hv1 hv3 || exit_test
+is_tunnel_bfd_enable hv2 hv1 || exit_test
+is_tunnel_bfd_enable hv2 hv3 || exit_test
+is_tunnel_bfd_enable hv3 hv1 || exit_test
+is_tunnel_bfd_enable hv3 hv2 || exit_test
+
+kill_tuplenet_daemon hv3 -TERM
+# restart it again to simulate a upgrade
+ONDEMAND=0 GATEWAY=1 tuplenet_boot hv3 192.168.100.3
+wait_for_flows_unchange
+is_tunnel_bfd_enable hv1 hv2 || exit_test
+is_tunnel_bfd_enable hv1 hv3 || exit_test
+is_tunnel_bfd_enable hv2 hv1 || exit_test
+is_tunnel_bfd_enable hv2 hv3 || exit_test
+is_tunnel_bfd_enable hv3 hv1 || exit_test
+is_tunnel_bfd_enable hv3 hv2 || exit_test
+
+etcd_lsr_del LR-A 0.0.0.0 0 "LR-A_to_m1"
+wait_for_flows_unchange
+is_tunnel_bfd_disable hv1 hv2 || exit_test
+is_tunnel_bfd_enable hv1 hv3 || exit_test
+is_tunnel_bfd_enable hv3 hv1 || exit_test
+is_tunnel_bfd_enable hv3 hv2 || exit_test
+
+etcd_lsr_del LR-A 0.0.0.0 0 "LR-A_to_m2"
+wait_for_flows_unchange
+is_tunnel_bfd_disable hv1 hv2 || exit_test
+is_tunnel_bfd_disable hv1 hv3 || exit_test
+
+
 pass_test

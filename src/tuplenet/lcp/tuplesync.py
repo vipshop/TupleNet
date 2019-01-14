@@ -179,18 +179,33 @@ def config_tunnel_bfd():
     port_names = PORT_NAME.data
     states = State.data
     port_configs = zip(port_names, states)
+
+    # NOTE: remote chassis reboot will update the tick and ecmp_bfd_port
+    # generate two records like:
+    #    port tupleNet-3232261123 --> bfd_to_true
+    #    port tupleNet-3232261123 --> bfd_to_false
+    # tuplenet should handle it by elimiate bfd_to_false if found bfd_to_true
+    # in same port. There is no circumstance that that keep bfd_to_false and
+    # delete bfd_to_true. Our etcd linkmaster can merge add-->delete operation, so
+    # add-->delete is a empty operation
+    _tun_bfd_dict = {}
+    for portname, state in port_configs:
+        if not _tun_bfd_dict.has_key(portname):
+            _tun_bfd_dict[portname] = int(state)
+        else:
+            _tun_bfd_dict[portname] = max(int(state), _tun_bfd_dict[portname])
     #TODO need to consider in different centre-LR has different route, some
     # of them may deliver packet to gateway, but some did not. For same port
     # we may enable bfd by this route, but maybe disable in other routes.
-    for name, state in port_configs:
+    for portname, state in _tun_bfd_dict.items():
         if state > 0:
             state = 'enable=true'
         elif state < 0:
             state = 'enable=false'
         else:
             continue
-        logger.info("config %s bfd to %s", name, state)
-        cm.config_ovsport_bfd(name, state)
+        logger.info("config %s bfd to %s", portname, state)
+        cm.config_ovsport_bfd(portname, state)
 
 def update_ovs_side(entity_zoo):
     global had_clean_ovs_flows
