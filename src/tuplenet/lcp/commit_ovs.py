@@ -8,7 +8,7 @@ import time, random, string
 import logicalview as lgview
 from pyDatalog import pyDatalog
 from onexit import on_parent_exit
-from run_env import is_gateway_chassis
+from run_env import is_gateway_chassis, get_extra
 
 logger = logging.getLogger(__name__)
 flow_lock = threading.Lock()
@@ -166,6 +166,25 @@ def clean_ovs_flows(br = 'br-int'):
         raise OVSToolErr("failed to clean ovs flows")
     else:
         logger.info("clean all flows in %s", br)
+
+def insert_ovs_ipfix(br = 'br-int'):
+    try:
+        ovs_vsctl('clear', 'bridge', br, 'ipfix')
+
+        options = get_extra()['options']
+        if 'IPFIX_CFG' in options:
+            cfg = options['IPFIX_CFG']
+            logger.debug('add ipfix record {}'.format(cfg))
+
+            ovs_vsctl('--', 'set', 'Bridge', br, 'ipfix=@i', '--', '--id=@i', \
+                      'create', 'IPFIX', 'targets=\"{}\"'.format(cfg['collector']), \
+                      'obs_domain_id={}'.format(cfg['domain_id']), \
+                      'obs_point_id={}'.format(cfg['point_id']), \
+                      'sampling={}'.format(cfg['sampling_rate']), \
+                      'other_config:enable-tunnel-sampling=flase')
+    except Exception as e:
+        logger.error('failed to alter ipfix record for %s: %s', br, e)
+        raise OVSToolErr('failed to alter ipfix record: ' + str(e))
 
 def system_id():
     cmd = ['ovsdb-client', '-v', 'transact',

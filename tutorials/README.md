@@ -265,3 +265,8 @@ suppose all docker in tuplenet node were connected to a single [cluster](https:/
                   +-------------------+
 
 ```
+
+# 5. Metrics and monitoring
+
+**5.1 how to enable IPFIX in tuplenet node**
+Append IPFIX_COLLECTOR=IP:port and optional IPFIX_SAMPLING_RATE=x to environment variable. Domain ID will be the uint32 representation of the tuplenet node IP

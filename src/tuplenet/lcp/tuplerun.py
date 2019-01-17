@@ -112,6 +112,7 @@ def init_env(options):
     extra['logic'] = logic
     create_watch_master(options.host, options.path_prefix, system_id)
     cm.build_br_integration()
+    cm.insert_ovs_ipfix()
     cm.set_tunnel_tlv()
 
 def update_chassis(interface_list):

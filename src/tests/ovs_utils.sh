@@ -403,6 +403,7 @@ dump_ovs_info()
         ovs-vsctl list port > "$ovs_base/$sim_id/ovs-vsctl_list_port.txt"
         ovs-ofctl dump-flows br-int > "$ovs_base/$sim_id/ovs-ofctl_dump-flows.txt"
         ovs-ofctl dump-tlv-map br-int > "$ovs_base/$sim_id/ovs-ofctl_dump-tlv.txt"
+        ovs-vsctl list ipfix > "$ovs_base/$sim_id/ovs-vsctl_list_ipfix.txt"
     done
 }
 
