@@ -63,12 +63,12 @@ TupleNet 的所有ovs-flow都是在本地生成，不需要一个额外的contro
 - **Redirect，支持使用其他host帮助转发数据报文 (Redircte: other tuplenet node can help deliver traffic )**
 - **Pkt-tracing，支持发送“染色”探测报文，并分析出所经过的整条链路  (it send out packet which can be traced and print the whole path)**
 - **SNAT，DNAT, floating-ip**
+- **HostSwitch IPFIX**
 
 **很快将会支持的特性 (Feature coming soon)**
 - - [ ]LoadBalance
 - - [ ]ACL
 - - [ ]Mirroring
-- - [ ]IPFIX/Netflow
 
 
 ## TupleNet 概要 (What TupleNet is)
