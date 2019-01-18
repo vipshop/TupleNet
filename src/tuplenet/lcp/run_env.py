@@ -1,5 +1,7 @@
 import os
 import logging
+import socket
+import struct
 from pyDatalog import pyDatalog
 
 logger = logging.getLogger(__name__)
@@ -26,6 +28,32 @@ def acquire_outside_env():
     if os.environ.has_key('GATEWAY') and os.environ['GATEWAY'] == '1':
         extra['options']['GATEWAY'] = 1
         logger.info("enable gateway feature")
+
+    if os.environ.has_key('IPFIX_COLLECTOR'):
+        try:
+            # validate collector ip:port
+            collector = os.environ['IPFIX_COLLECTOR']
+            ip, port = collector.split(":", 1)
+            socket.inet_aton(ip)
+            p = int(port)
+            if p <= 0 or p > 65535:
+                raise Exception("collector port out of range")
+
+            # validate sampling rate
+            sampling_rate = int(os.getenv('IPFIX_SAMPLING_RATE', 64))
+            if sampling_rate <=0 :
+                raise Exception("sampling rate expected to be non-zero")
+
+            # use host ip as domain id
+            host_addr = socket.gethostbyname(socket.gethostname())
+
+            extra['options']['IPFIX_CFG'] = {
+                'collector': collector, "sampling_rate": sampling_rate,
+                'domain_id': struct.unpack("!I", socket.inet_aton(host_addr))[0],
+                'point_id': 0 }
+        except Exception as e:
+            logger.error('invalid ipfix setting {}'.format(e))
+            raise e
 
 def is_gateway_chassis():
     return extra['options'].has_key('GATEWAY')
