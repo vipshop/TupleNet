@@ -4,7 +4,7 @@ import logging
 from pyDatalog import pyDatalog
 import socket, struct
 import threading
-from run_env import get_extra
+from tp_utils.run_env import get_extra
 
 logger = logging.getLogger(__name__)
 

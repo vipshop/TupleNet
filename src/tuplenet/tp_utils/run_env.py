@@ -2,16 +2,21 @@ import os
 import logging
 import socket
 import struct
-from pyDatalog import pyDatalog
 
 logger = logging.getLogger(__name__)
 
-extra = {'accept_diff': False}
+extra = {}
 def get_extra():
+    if len(extra) == 0:
+        acquire_outside_env()
     return extra
 
 def acquire_outside_env():
     extra['options'] = {}
+    if not os.environ.has_key('TUPLENET_RUNDIR'):
+        extra['options']['TUPLENET_RUNDIR'] = '/var/run/tuplenet/'
+    else:
+        extra['options']['TUPLENET_RUNDIR'] = os.path.join(os.environ['TUPLENET_RUNDIR'])
     # enable ONDEMAND by default
     if not os.environ.has_key('ONDEMAND') or \
        (os.environ.has_key('ONDEMAND') and os.environ['ONDEMAND'] == '1'):

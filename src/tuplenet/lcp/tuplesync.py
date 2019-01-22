@@ -1,6 +1,7 @@
 import os
 import sys
 import commit_ovs as cm
+import flow_common as fc
 import pkt_trace
 import logging
 import logicalview as lgview
@@ -11,13 +12,16 @@ import match as ovsmatch
 import link_master as lm
 import time
 from pyDatalog import pyDatalog
-from run_env import is_gateway_chassis
+from tp_utils.run_env import is_gateway_chassis, get_extra
 import tunnel
 
 logger = logging.getLogger(__name__)
 prev_zoo_ver = 0 # it should be 0 which same as entity_zoo's zoo_ver
 had_clean_tunnel_ports = False
 had_clean_ovs_flows = False
+# NOTE: DO NOT revise the filename
+MAC_IP_BIND_FILE = os.path.join(get_extra()['options']['TUPLENET_RUNDIR'],
+                                'mac_ip_bind.data')
 pyDatalog.create_terms('Table, Priority, Match, Action, State')
 pyDatalog.create_terms('PORT_NAME, IP, UUID_CHASSIS')
 
@@ -49,6 +53,39 @@ def revise_lsp_chassis(entity_zoo, system_id):
         lsp_chassis_changed = update_lsp_chassis(entity_set,
                                                  system_id)
         return generate_lsp_kv(lsp_chassis_changed, system_id)
+
+def _gen_arp_ip_flow(mac_addr, ip_int):
+    match = 'table={t},priority=1,ip,reg2={dst},'.format(
+                    t = fc.TABLE_SEARCH_IP_MAC, dst = ip_int)
+    action = 'actions=mod_dl_dst:{}'.format(mac_addr)
+    flow = match + action
+    return flow
+
+def update_ovs_arp_ip_mac(mac_addr, ip_int):
+    flow = _gen_arp_ip_flow(mac_addr, ip_int)
+    cm.commit_flows([flow], [])
+    with open(MAC_IP_BIND_FILE, 'a') as fd:
+        fd.write("{},{}\n".format(mac_addr, ip_int))
+
+def _get_ovs_arp_ip_mac_from_file():
+    flows = []
+    if not os.path.isfile(MAC_IP_BIND_FILE):
+        return flows
+
+    logger.info("update arp mac_ip bind map from file %s", MAC_IP_BIND_FILE)
+    try:
+        with open(MAC_IP_BIND_FILE, 'r+') as fd:
+            for line in fd:
+                mac_addr,ip_int = line.split(',')
+                ip_int = int(ip_int)
+                flow = _gen_arp_ip_flow(mac_addr, ip_int)
+                flows.append(flow)
+            # erase the file contents, otherwise the size of file may increase
+            # too big to reload
+            fd.truncate(0)
+    except:
+        logger.exception("failed to read <mac,ip> pairs")
+    return flows
 
 def convert_tuple2flow(lflows):
     ovs_flows_add = []
@@ -158,16 +195,17 @@ def update_entity(entity_zoo, add_pool, del_pool):
 def update_entity_from_remote(entity_zoo, extra):
     wmaster = extra['lm']
     data_type, add_pool, del_pool = wmaster.read_remote_kvdata()
-    if data_type == True and extra['accept_diff'] == True:
+    if data_type == True and update_entity_from_remote.accept_diff == True:
         logger.warning("received data is not incremental data, link_master may "
                        "hit compact event")
         entity_zoo.move_all_entity2sink([lgview.LOGICAL_ENTITY_TYPE_OVSPORT,
                                          lgview.LOGICAL_ENTITY_TYPE_OVSPORT_CHASSIS])
 
-    extra['accept_diff'] = True
+    update_entity_from_remote.accept_diff = True
     update_entity(entity_zoo, add_pool, del_pool)
     if add_pool is not None and add_pool.has_key('cmd'):
         execute_pushed_cmd(add_pool['cmd'], entity_zoo)
+update_entity_from_remote.accept_diff = False
 
 def config_tunnel_bfd():
     if is_gateway_chassis():
@@ -232,14 +270,15 @@ def update_ovs_side(entity_zoo):
     # on testing mode, it avoids similar flow replacing the others
     if os.environ.has_key('RUNTEST'):
         ovs_flows_add.sort()
-    logger.info('insert flow number:%d, del flow number:%d',
-                len(ovs_flows_add), len(ovs_flows_del))
     logger.info("pydatalog cost %fs in generating flows", cost_time)
     if not had_clean_ovs_flows:
         had_clean_ovs_flows = True
+        ovs_flows_add += _get_ovs_arp_ip_mac_from_file()
         cm.commit_replaceflows(ovs_flows_add)
     else:
         cm.commit_flows(ovs_flows_add, ovs_flows_del)
+    logger.info('insert flow number:%d, del flow number:%d',
+                len(ovs_flows_add), len(ovs_flows_del))
 
 def update_logical_view(entity_zoo, extra):
     cnt_upload = 0
