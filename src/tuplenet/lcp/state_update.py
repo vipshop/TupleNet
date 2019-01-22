@@ -4,32 +4,23 @@ import time
 import logging
 import subprocess
 import struct, socket
-import flow_common
-import run_env
 from pyDatalog import pyDatalog
 from commit_ovs import commit_flows
 from onexit import on_parent_exit
 from tp_utils import pipe
-from run_env import get_extra
-from tuplesync import update_ovs_side
+from tp_utils.run_env import get_extra
+from tuplesync import update_ovs_side,update_ovs_arp_ip_mac
 from logicalview import LOGICAL_ENTITY_TYPE_LSP, LOGICAL_ENTITY_TYPE_CHASSIS, \
                         LOGICAL_ENTITY_TYPE_OVSPORT_CHASSIS
 
 MAX_BUF_LEN = 10240
 
-extra = run_env.get_extra()
+extra = get_extra()
 logger = logging.getLogger(__name__)
 entity_zoo = None
 
 def int_to_ip(ip_int):
     return socket.inet_ntoa(struct.pack('I',socket.htonl(ip_int)))
-
-def update_ovs_arp_ip_mac(mac_addr, ip_int):
-    match = 'table={t},priority=1,ip,reg2={dst},'.format(
-                    t = flow_common.TABLE_SEARCH_IP_MAC, dst = ip_int)
-    action = 'actions=mod_dl_dst:{}'.format(mac_addr)
-    flow = match + action
-    commit_flows([flow], [])
 
 def process_arp(arp_msg_seg):
     #TODO verify mac_addr, ip
@@ -37,9 +28,17 @@ def process_arp(arp_msg_seg):
     mac_addr = arp_msg_seg[2]
     ip_int = int(arp_msg_seg[3])
     ip = int_to_ip(ip_int)
-    logger.info("update arp mac_ip bind map[%s,%d(%s),%d]",
-                mac_addr, ip_int, ip, datapath)
-    update_ovs_arp_ip_mac(mac_addr, ip_int)
+    if process_arp.arp_dict.has_key(ip_int) and \
+       process_arp.arp_dict[ip_int] == mac_addr:
+       logger.debug("skip duplicate mac_ip bind map[%s,%d(%s),%d]",
+                    mac_addr, ip_int, ip, datapath)
+       return
+    else:
+        logger.info("update arp mac_ip bind map[%s,%d(%s),%d]",
+                    mac_addr, ip_int, ip, datapath)
+        update_ovs_arp_ip_mac(mac_addr, ip_int)
+        process_arp.arp_dict[ip_int] = mac_addr
+process_arp.arp_dict = {}
 
 def _parse_ofport2iface(ofport):
     if ofport == 0xffff:
@@ -75,7 +74,7 @@ def process_trace(trace_msg_seg):
                 table_id, datapath_id, cmd_id,
                 src_port_id, dst_port_id, seq_n, tun_src, ofport)
     ttl = 30
-    chassis_id = get_extra()['system_id']
+    chassis_id = extra['system_id']
     key = "cmd_result/{}/{}/{}".format(cmd_id, seq_n, chassis_id)
 
     iface_id = _parse_ofport2iface(ofport)

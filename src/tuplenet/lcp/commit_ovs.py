@@ -8,7 +8,7 @@ import time, random, string
 import logicalview as lgview
 from pyDatalog import pyDatalog
 from onexit import on_parent_exit
-from run_env import is_gateway_chassis, get_extra
+from tp_utils.run_env import is_gateway_chassis, get_extra
 
 logger = logging.getLogger(__name__)
 flow_lock = threading.Lock()

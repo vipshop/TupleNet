@@ -21,7 +21,6 @@ import re
 import lflow
 import commit_ovs as cm
 import logicalview as lgview
-import run_env
 import state_update
 import tentacle
 import tuplesync
@@ -29,7 +28,7 @@ import link_master as lm
 from onexit import on_parent_exit
 from optparse import OptionParser
 from pyDatalog import pyDatalog
-from tp_utils import pipe
+from tp_utils import run_env, pipe
 import version
 
 logger = None
@@ -74,7 +73,8 @@ def write_pid_into_file(pid_lock_file):
 
 def check_single_instance():
     current_file_name = os.path.realpath(__file__).split('/')[-1]
-    pid_lock_file = pipe.RUNNING_ENV_PATH + current_file_name + '.pid'
+    pid_lock_file = os.path.join(extra['options']['TUPLENET_RUNDIR'],
+                                 current_file_name + '.pid')
     if os.path.exists(pid_lock_file):
         with open(pid_lock_file, 'r') as fd:
             pid = int(fd.read())
@@ -97,7 +97,6 @@ def init_env(options):
 
     pipe.create_runtime_folder()
     check_single_instance()
-    run_env.acquire_outside_env()
     lflow.init_build_flows_clause(extra['options'])
 
     system_id = cm.system_id()

@@ -15,7 +15,7 @@ import time
 import sys
 import ecmp
 import tunnel
-from run_env import get_extra
+from tp_utils.run_env import get_extra
 import lsp_ingress, lsp_egress, lrp_ingress, lrp_egress, physical_flow
 import middle_table as mid
 import logging

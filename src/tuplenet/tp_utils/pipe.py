@@ -2,13 +2,12 @@ import pickle
 import os
 import logging
 import threading
+import run_env
 
-if not os.environ.has_key('TUPLENET_RUNDIR'):
-    RUNNING_ENV_PATH = '/var/run/tuplenet/'
-else:
-    RUNNING_ENV_PATH = os.environ['TUPLENET_RUNDIR'] + '/'
-PKT_CONTROLLER_PIPE_PATH = RUNNING_ENV_PATH + 'pkt_controller_pipe'
-DEBUG_PIPE_PATH = RUNNING_ENV_PATH + 'debug_pipe'
+options = run_env.get_extra()['options']
+RUNNING_ENV_PATH = options['TUPLENET_RUNDIR']
+PKT_CONTROLLER_PIPE_PATH = os.path.join(RUNNING_ENV_PATH, 'pkt_controller_pipe')
+DEBUG_PIPE_PATH = os.path.join(RUNNING_ENV_PATH, 'debug_pipe')
 
 logger = logging.getLogger(__name__)
 logger.info('RUNNING_ENV_PATH:%s', RUNNING_ENV_PATH)
