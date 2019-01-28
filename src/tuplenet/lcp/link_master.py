@@ -1,12 +1,9 @@
-import sys
 import time
 import logging
 import logging.handlers
 import threading
 import os
 import random
-import signal
-from optparse import OptionParser
 import etcd3
 import grpc
 
@@ -435,5 +432,4 @@ def sanity_etcdhost(s):
     except Exception as err:
         logger.warning("error etcd host address:%s", s)
         raise RuntimeError("error etcd host address:%s"%s)
-        return
 

@@ -1,11 +1,9 @@
 import threading
-import os, sys
-import time
+import os
 import logging
 import subprocess
 import struct, socket
 from pyDatalog import pyDatalog
-from commit_ovs import commit_flows
 from onexit import on_parent_exit
 from tp_utils import pipe
 from tp_utils.run_env import get_extra
@@ -91,7 +89,6 @@ def process_unknow_dst(unknow_dst_msg_seg):
     ip_int = int(unknow_dst_msg_seg[2])
     ip = int_to_ip(ip_int)
     logger.info("receive unknow packet: datapath:%d,dst_ip:%s", datapath_id, ip)
-    table_id = int(unknow_dst_msg_seg[1])
 
     # find all lsp by using ip
     # TODO figure out all or just one?
