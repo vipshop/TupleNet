@@ -1,5 +1,4 @@
 from pyDatalog import pyDatalog
-import flow_common as fc
 
 Action_output = 1
 Action_output_reg = 2

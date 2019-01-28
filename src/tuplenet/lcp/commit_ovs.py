@@ -1,4 +1,4 @@
-import sys, os
+import os
 import json
 import subprocess
 import logging

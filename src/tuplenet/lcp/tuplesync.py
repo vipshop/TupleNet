@@ -1,15 +1,12 @@
 import os
-import sys
 import commit_ovs as cm
 import flow_common as fc
-import pkt_trace
 import logging
 import logicalview as lgview
 import lflow
 import ecmp
 import action as ovsaction
 import match as ovsmatch
-import link_master as lm
 import time
 from pyDatalog import pyDatalog
 from tp_utils.run_env import is_gateway_chassis, get_extra

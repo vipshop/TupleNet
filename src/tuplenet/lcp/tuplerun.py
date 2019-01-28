@@ -4,7 +4,6 @@ import os
 import time
 import logging
 import threading
-import subprocess
 from logging.handlers import RotatingFileHandler
 import socket
 import fcntl
@@ -25,7 +24,6 @@ import state_update
 import tentacle
 import tuplesync
 import link_master as lm
-from onexit import on_parent_exit
 from optparse import OptionParser
 from pyDatalog import pyDatalog
 from tp_utils import run_env, pipe
@@ -133,7 +131,6 @@ def update_chassis(interface_list):
     logger.info("update local system-id %s to remote etcd", extra['system_id'])
 
 def run_monitor_thread():
-    logic = extra['logic']
     extra['lock'] = threading.Lock()
     logger.info("start a monitor thread")
     mon_ovsdb_thread = cm.start_monitor_ovsdb(entity_zoo, extra)

@@ -1,5 +1,3 @@
-import random
-import uuid
 import logging
 from pyDatalog import pyDatalog
 import socket, struct
@@ -581,7 +579,6 @@ class LogicalEntityZoo():
         if entity is None:
             return
         entity_group = self.entity_set[entity_type]
-        entity_sink_group = self.entity_sink_set[entity_type]
         with self.lock:
             # pop out previous entity into entity_sink_set for removing later
             if entity_group.has_key(entity.uuid):
@@ -593,8 +590,6 @@ class LogicalEntityZoo():
 
     def convert_pool2entity(self, entity_type, add_pool):
         entity_class = LogicalEntityZoo.logical_entity_types[entity_type]
-        entity_group = self.entity_set[entity_type]
-        entity_sink_group = self.entity_sink_set[entity_type]
         for path, value_set in add_pool.items():
             path = path.split('/')
             self._convert_kv2entity(entity_class, path, value_set)
@@ -748,7 +743,7 @@ class LogicalEntityZoo():
 
     def _sweep_entity_set(self):
         # TODO it is a time cost function
-        for group_key, group in self.entity_set.items():
+        for group in self.entity_set.values():
             for key,e in group.items():
                 if e.state == State_ADD:
                     e.mark(State_NO)
@@ -756,7 +751,7 @@ class LogicalEntityZoo():
 
 
     def _clean_sink(self):
-        for group_key, group in self.entity_sink_set.items():
+        for group in self.entity_sink_set.values():
             for key, e in group.items():
                 if type(e) is list:
                     # some entities in sink may be list
