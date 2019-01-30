@@ -116,8 +116,9 @@ def execute_pushed_cmd_inject_pkt(cmd_id, packet_data, lsp, entity_zoo):
         ovsport_set = entity_set['ovsport']
         for _, ovsport in ovsport_set.items():
             if ovsport.iface_id == lsp:
-                logger.info("inject packet to ovsport %s, packet_data:%s",
-                            ovsport.ovsport_name, packet_data)
+                logger.info("inject packet to ovsport %s, packet_data:%s, "
+                            "cmd_id:%s",
+                            ovsport.ovsport_name, packet_data, cmd_id)
                 cm.inject_pkt_to_ovsport(cmd_id, packet_data,
                                          ovsport.ofport)
 

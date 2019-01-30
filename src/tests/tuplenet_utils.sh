@@ -106,11 +106,14 @@ inject_trace_packet()
     if [ -z "$TRACE_WAIT_TIME" ]; then
         TRACE_WAIT_TIME=3
     fi
-    local port=$1
-    if [ $# == 2 ]; then
+    if [ $# == 1 ]; then
+        $PYTHON ../tuplenet/tools/pkt-trace.py --endpoints $etcd_client_specs  -p $tuplenet_prefix --wait_time=$TRACE_WAIT_TIME --auto_detect $1
+    elif [ $# == 2 ]; then
+        local port=$1
         local pkt=$2
         $PYTHON ../tuplenet/tools/pkt-trace.py --endpoints $etcd_client_specs -j $port -p $tuplenet_prefix -d $pkt --wait_time=$TRACE_WAIT_TIME
     else
+        local port=$1
         local src_mac=$2
         local src_ip=$3
         local dst_mac=$4

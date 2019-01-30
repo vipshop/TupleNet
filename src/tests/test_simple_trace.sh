@@ -9,10 +9,12 @@ env_init ${0##*/} # 0##*/ is the filename
 sim_create hv1 || exit_test
 sim_create hv2 || exit_test
 sim_create hv3 || exit_test
+sim_create hv4 || exit_test
 net_create phy || exit_test
 net_join phy hv1 || exit_test
 net_join phy hv2 || exit_test
 net_join phy hv3 || exit_test
+net_join phy hv4 || exit_test
 
 # create logical switch and logical router first
 etcd_ls_add LS-A
@@ -26,6 +28,7 @@ etcd_ls_add outside1
 etcd_ls_add outside2
 
 start_tuplenet_daemon hv1 192.168.100.1
+start_tuplenet_daemon hv4 192.168.100.4
 ONDEMAND=0 GATEWAY=1 start_tuplenet_daemon hv2 192.168.100.2
 ONDEMAND=0 GATEWAY=1 start_tuplenet_daemon hv3 192.168.100.3
 install_arp
@@ -220,5 +223,23 @@ fi
 expect_path=`echo -e "${expect_path}${last_path}"`
 verify_trace "$expect_path" "$real_path" || exit_test
 
+# create a lot of lsp to test if pkt-trace works well.
+i=15
+MAX_PORT_N=$((10+i))
+while [ $i -lt $MAX_PORT_N ]; do
+    mac_hex=`int_to_hex $i`
+    port_add hv4 lsp-portA${i} || exit_test
+    etcd_lsp_add LS-A lsp-portA${i} 10.10.1.${i} 00:00:09:09:09:$mac_hex
+    port_add hv1 lsp-portB${i} || exit_test
+    etcd_lsp_add LS-B lsp-portB${i} 10.10.2.${i} 00:00:09:09:0a:$mac_hex
+    i=$((i+1))
+done
+wait_for_flows_unchange
+output="$(BATCH_NUM=50 TRACE_WAIT_TIME=5 DETECT_LOOP=3 inject_trace_packet LS-A,LS-B 2>&1)"
+if [ "$output" != "" ]; then
+    pmsg "error tracing output"
+    pmsg "$output"
+    exit_test
+fi
 
 pass_test

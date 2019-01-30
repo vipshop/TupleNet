@@ -408,9 +408,9 @@ def config_ovsport_bfd(portname, config):
 def inject_pkt_to_ovsport(cmd_id, packet_data, ofport):
     try:
         ovs_ofctl('packet-out', 'br-int', 'NONE',
-                  'load:{}->NXM_OF_IN_PORT[],'
+                  ('load:{}->NXM_OF_IN_PORT[],'
                   'load:{}->NXM_NX_REG10[16..31],'
-                  'load:1->NXM_NX_REG10[1],resubmit(,0)'.format(ofport, cmd_id),
+                  'load:1->NXM_NX_REG10[1],resubmit(,0)').format(ofport, cmd_id),
                   packet_data)
     except Exception as err:
         logger.warning("failed to inject packet %s to ofport %d",
