@@ -43,6 +43,7 @@ def init_lrp_egress_clause(options):
         ls_array(LS, UUID_LS, State3) &
         lr_array(LR, UUID_LR, State4) &
         lsp_array(UUID_LSP, LSP, UUID_LS, UUID_CHASSIS2, UUID_LRP2, State5) &
+        (UUID_CHASSIS2 != None) &
         (State == State1 + State2 + State3 + State4 + State5) & (State != 0)
         )
 
