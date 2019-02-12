@@ -33,51 +33,20 @@ def _gen_mac_by_ip(ip_int):
     return mac
 
 class LogicalEntity(object):
-    property_hashmap = {}
-
-    @staticmethod
-    def property_hashmap_add(entity):
-        key = entity.essential_property_key
-        if LogicalEntity.property_hashmap.has_key(key):
-            raise RuntimeError('FATAL, we already get same essential property '
-                               'in hashmap!,exist entity:%s, new entity:%s'%
-                               (LogicalEntity.property_hashmap[key], entity))
-        # TODO a time cost function
-        if isinstance(entity, LogicalSwitchPort):
-            for p in LogicalEntity.property_hashmap.values():
-                if isinstance(p, LogicalSwitchPort) and \
-                   (p.ip == entity.ip or p.mac == entity.mac) and \
-                   p.ls_uuid == entity.ls_uuid and p.uuid != entity.uuid:
-                    raise RuntimeError('FATAL, we already get same essential property '
-                                       'in hashmap!,exist lsp:%s, new lsp:%s'%
-                                       (p, entity))
-        LogicalEntity.property_hashmap[key] = entity
-
-    @staticmethod
-    def property_hashmap_del(entity):
-        key = entity.essential_property_key
-        if LogicalEntity.property_hashmap.has_key(key):
-            LogicalEntity.property_hashmap.pop(key)
-        else:
-            raise RuntimeError('FATAL, we cannot found essential property '
-                               'in hashmap!,entity:%s', entity)
 
     def __init__(self):
         self.state = State_ADD
+        self.populated = False
 
     def populate(self):
-        self._update_dup_data()
-        LogicalEntity.property_hashmap_add(self)
-        self.add_clause()
+        if self.populated is False:
+            self._update_dup_data()
+            self.add_clause()
+            self.populated = True
 
     def _update(self, event):
         self.del_clause()
-        LogicalEntity.property_hashmap_del(self)
         self._update_dup_data()
-        if event != State_DEL:
-            # marking State_DEL means entity push in sink, no need to add
-            # back to property_hashmap
-            LogicalEntity.property_hashmap_add(self)
         self.add_clause()
 
     def eliminate(self):
@@ -113,6 +82,9 @@ class LogicalSwitchPort(LogicalEntity):
     property_keys = [LOGICAL_ENTITY_ID, 'ip', 'mac',
                      LOGICAL_ENTITY_PARENT_ID, 'chassis', 'peer']
     entity_type = LOGICAL_ENTITY_TYPE_LSP
+    # NOTE: please change the name of variable if you had changed the string
+    #       in uniq_check_keys. _insert_entity_idxmap consumes them.
+    uniq_check_keys = ['ls_view_ip', 'ls_view_mac']
 
     def __init__(self, uuid, ip, mac, ls_uuid,
                  chassis = None, peer = None):
@@ -126,15 +98,11 @@ class LogicalSwitchPort(LogicalEntity):
         self.ls_uuid = ls_uuid
         self.peer = peer
         self.portID = self.ip_int & 0xffff # 0 ~ 0xffff
+        self.ls_view_ip = '{}{}'.format(self.ls_uuid, self.ip)
+        self.ls_view_mac = '{}{}'.format(self.ls_uuid, self.mac)
         self.lsp_shop = lsp_array if peer is None else exchange_lsp_array
         # only regular lsp need to be touched
         self.touched = False if peer is None else True
-        self.populate()
-
-    @property
-    def essential_property_key(self):
-        return "lsp{}{}{}{}".format(self.ip, self.mac,
-                                    self.ls_uuid, self.chassis)
 
     def _update_dup_data(self):
         self.lsp = [self.uuid, self.ip, self.ip_int, self.mac,
@@ -197,6 +165,8 @@ class LogicalRouterPort(LogicalEntity):
     property_keys = [LOGICAL_ENTITY_ID, 'ip', 'prefix', 'mac',
                      LOGICAL_ENTITY_PARENT_ID, 'peer']
     entity_type = LOGICAL_ENTITY_TYPE_LRP
+    uniq_check_keys = ['lr_view_ip', 'lr_view_mac']
+
     def __init__(self, uuid, ip, prefix,
                  mac, lr_uuid, peer = None):
         super(LogicalRouterPort, self).__init__()
@@ -209,11 +179,8 @@ class LogicalRouterPort(LogicalEntity):
         self.lr_uuid = lr_uuid
         self.peer = peer
         self.portID = self.ip_int & 0xffff # 0 ~ 0xffff
-        self.populate()
-
-    @property
-    def essential_property_key(self):
-        return "lrp{}{}{}".format(self.ip, self.mac, self.lr_uuid)
+        self.lr_view_ip = '{}{}'.format(self.lr_uuid, self.ip)
+        self.lr_view_mac = '{}{}'.format(self.lr_uuid, self.mac)
 
     def _update_dup_data(self):
         self.lrp = [self.uuid, self.prefix, self.ip,
@@ -248,16 +215,13 @@ LR_State = 3
 class LogicalRouter(LogicalEntity):
     property_keys = [LOGICAL_ENTITY_ID, 'id', 'chassis']
     entity_type = LOGICAL_ENTITY_TYPE_LR
+    uniq_check_keys = ['global_view_id']
     def __init__(self, uuid, lrID, chassis = None):
         super(LogicalRouter, self).__init__()
         self.uuid = uuid
         self.chassis = chassis
         self.lrID = int(lrID)
-        self.populate()
-
-    @property
-    def essential_property_key(self):
-        return "porthub{}".format(self.lrID) # ls and lr cannot share same id
+        self.global_view_id = str(self.lrID)
 
     def _update_dup_data(self):
         self.lr = [self.uuid, self.chassis, self.lrID, self.state]
@@ -291,6 +255,7 @@ class LogicalStaticRoute(LogicalEntity):
     property_keys = [LOGICAL_ENTITY_ID, 'ip', 'prefix', 'next_hop',
                      'outport', LOGICAL_ENTITY_PARENT_ID]
     entity_type = LOGICAL_ENTITY_TYPE_LSR
+    uniq_check_keys = ['lr_view_lsr']
     def __init__(self, uuid, ip, prefix, next_hop,
                  outport, lr_uuid):
         super(LogicalStaticRoute, self).__init__()
@@ -302,13 +267,9 @@ class LogicalStaticRoute(LogicalEntity):
         self.next_hop = next_hop
         self.next_hop_int = struct.unpack("!L", socket.inet_aton(next_hop))[0]
         self.outport = outport
-        self.populate()
-
-    @property
-    def essential_property_key(self):
-        return "lsr{}{}{}{}{}".format(self.lr_uuid, self.ip,
-                                      self.prefix, self.next_hop,
-                                      self.outport)
+        self.lr_view_lsr = "lsr{}{}{}{}{}".format(self.lr_uuid, self.ip,
+                                                  self.prefix, self.next_hop,
+                                                  self.outport)
 
     def _update_dup_data(self):
         self.lsr = [self.uuid, self.lr_uuid, self.ip,
@@ -348,6 +309,7 @@ class LogicalNetAddrXlate(LogicalEntity):
     property_keys = [LOGICAL_ENTITY_ID, 'ip', 'prefix', 'xlate_ip',
                      'xlate_type', LOGICAL_ENTITY_PARENT_ID]
     entity_type = LOGICAL_ENTITY_TYPE_LNAT
+    uniq_check_keys = ['lr_view_lnat']
     def __init__(self, uuid, ip, prefix, xlate_ip,
                  xlate_type, lr_uuid):
         super(LogicalNetAddrXlate, self).__init__()
@@ -361,12 +323,8 @@ class LogicalNetAddrXlate(LogicalEntity):
         self.xlate_mac = _gen_mac_by_ip(self.xlate_ip_int)
         self.xlate_mac_int = int(self.xlate_mac.translate(None, ":.- "), 16)
         self.xlate_type = xlate_type
-        self.populate()
-
-    @property
-    def essential_property_key(self):
-        return "lnat{}{}{}{}".format(self.lr_uuid, self.ip,
-                                     self.prefix, self.xlate_type)
+        self.lr_view_lnat = "lnat{}{}{}{}".format(self.lr_uuid, self.ip,
+                                                  self.prefix, self.xlate_type)
 
     def _update_dup_data(self):
         self.lnat = [self.uuid, self.lr_uuid, self.ip,
@@ -403,15 +361,12 @@ LS_State = 2
 class LogicalSwitch(LogicalEntity):
     property_keys = [LOGICAL_ENTITY_ID, 'id']
     entity_type = LOGICAL_ENTITY_TYPE_LS
+    uniq_check_keys = ['global_view_id']
     def __init__(self, uuid, lsID):
         super(LogicalSwitch, self).__init__()
         self.uuid = uuid
         self.lsID = lsID
-        self.populate()
-
-    @property
-    def essential_property_key(self):
-        return "porthub{}".format(self.lsID) # ls and lr cannot share same id
+        self.global_view_id = str(self.lsID)
 
     def _update_dup_data(self):
         self.ls = [self.uuid, self.lsID, self.state]
@@ -439,6 +394,7 @@ PCH_OFPORT = 4 # external data
 class PhysicalChassis(LogicalEntity):
     property_keys = [LOGICAL_ENTITY_ID, 'ip', 'tick']
     entity_type = LOGICAL_ENTITY_TYPE_CHASSIS
+    uniq_check_keys = ['global_view_chassis']
     def __init__(self, uuid, ip, tick):
         super(PhysicalChassis, self).__init__()
         self.uuid = uuid
@@ -446,13 +402,8 @@ class PhysicalChassis(LogicalEntity):
         self.ip_int = struct.unpack("!L", socket.inet_aton(ip))[0]
         # it tells which chassis(has same IP) is the latest one
         self.tick = int(tick)
+        self.global_view_chassis = "chassis{}{}".format(self.ip, self.tick)
         self.touched = False
-        self.populate()
-
-    @property
-    def essential_property_key(self):
-        #we allow different chassis owns same IP
-        return "chassis{}{}".format(self.ip, self.tick)
 
     def _update_dup_data(self):
         self.ch = [self.uuid, self.ip, self.tick, self.state]
@@ -499,6 +450,7 @@ OVSPORT_State = 3
 +ovsport_chassis(0,0,0,0)
 -ovsport_chassis(0,0,0,0)
 class OVSPort(LogicalEntity):
+    uniq_check_keys = ['host_view_ovsport']
     def __init__(self, name, iface_id, ofport, is_remote):
         super(OVSPort, self).__init__()
         self.ovsport_name = name
@@ -506,13 +458,10 @@ class OVSPort(LogicalEntity):
         self.iface_id = iface_id
         self.ofport = ofport
         self.is_remote = is_remote
+        self.host_view_ovsport = "ovsport{}{}{}".format(self.ovsport_name,
+                                                        self.iface_id, self.ofport)
         self.port_shop = ovsport_chassis if is_remote else ovsport
-        self.populate()
 
-    @property
-    def essential_property_key(self):
-        return "ovsport{}{}{}".format(self.ovsport_name,
-                                      self.iface_id, self.ofport)
 
     def _update_dup_data(self):
         self.port = [self.ovsport_name, self.iface_id, self.ofport, self.state]
@@ -569,6 +518,7 @@ class LogicalEntityZoo():
         self.zoo_ver = 0 # if you modify the init value, please fix prev_zoo_ver as well
         self.entity_set = {}
         self.entity_sink_set = {}
+        self.entity_idxmap = {}
         self.zoo_gate = ZooGate(self.entity_set, self.entity_sink_set,
                                 self.lock)
         for name in LogicalEntityZoo.logical_entity_types:
@@ -584,9 +534,14 @@ class LogicalEntityZoo():
             if entity_group.has_key(entity.uuid):
                 logger.info("pop out old entity %s into sink", entity.uuid)
                 self.move_entity2sink(entity_type, entity.uuid)
+
+            if self._insert_entity_idxmap(entity) is False:
+                logger.warn("faild to insert entity into idxmap")
+                return
             entity_group[entity.uuid] = entity
             self.zoo_ver += 1
         logger.info('create a new %s:%s', entity_type, entity)
+        return entity
 
     def convert_pool2entity(self, entity_type, add_pool):
         entity_class = LogicalEntityZoo.logical_entity_types[entity_type]
@@ -609,8 +564,34 @@ class LogicalEntityZoo():
                 args.append(properties.get(pname))
             self.add_entity(entity_class.entity_type, *args)
         except Exception as err:
-            logger.warning("hit error in converting properties to entity "
-                           "property:%s, err:%s", properties, err)
+            logger.exception("hit error in converting properties to entity "
+                             "property:%s, err:%s", properties, err)
+
+    def _insert_entity_idxmap(self, entity):
+        with self.lock:
+            for k in entity.uniq_check_keys:
+                v = getattr(entity, k)
+                if not self.entity_idxmap.has_key(k):
+                    self.entity_idxmap[k] = {}
+                if self.entity_idxmap[k].has_key(v):
+                    logger.info('cannot insert %s in entity_idxmap, it already'
+                                'has %s', entity, self.entity_idxmap[k][v])
+                    return False
+                self.entity_idxmap[k][v] = entity
+
+        return True
+
+    def _del_entity_idxmap(self, entity):
+        with self.lock:
+            for k in entity.uniq_check_keys:
+                v = getattr(entity, k)
+                try:
+                    self.entity_idxmap[k].pop(v)
+                except:
+                    logger.exception("failed to remove entity:%s "
+                                     "from entity_idxmap", entity)
+                    return
+
 
     def add_entity(self, entity_type, *properties):
         entity_class = LogicalEntityZoo.logical_entity_types.get(entity_type)
@@ -634,7 +615,10 @@ class LogicalEntityZoo():
                                  "property:%s, err:%s",
                                  entity_type, properties, err)
                 return
-        self._add_entity_in_zoo(entity_type, e)
+        e = self._add_entity_in_zoo(entity_type, e)
+        if e is None:
+            return None
+        e.populate()
 
         # a chassis which a LR pin on should be touch to generate
         # tunnel. This tunnel was use to redirect traffic.
@@ -668,15 +652,10 @@ class LogicalEntityZoo():
 
             entity.mark(State_DEL)
             if entity_sink_group.has_key(key):
-                if type(entity_sink_group[key]) == list:
-                    entity_sink_group[key].append(entity)
-                else:
-                    prev_entity = entity_sink_group[key]
-                    entity_sink_group[entity.uuid] = [entity, prev_entity]
-                logger.info("sink %s has previous entity, append %s in",
-                            entity_type, key)
+                entity_sink_group[key].append(entity)
             else:
-                entity_sink_group[key] = entity
+                entity_sink_group[key] = [entity]
+            self._del_entity_idxmap(entity)
             # update the zoo version as well
             self.zoo_ver += 1
         logger.info('move %s to sink', entity)
@@ -753,16 +732,10 @@ class LogicalEntityZoo():
     def _clean_sink(self):
         for group in self.entity_sink_set.values():
             for key, e in group.items():
-                if type(e) is list:
-                    # some entities in sink may be list
-                    # due to they have same key.
-                    for entry in e:
-                        entry.eliminate()
-                        logger.debug('eliminate %s from sink', entry)
-                else:
-                    e.eliminate()
+                for entry in e:
+                    entry.eliminate()
+                    logger.debug('eliminate %s from sink', entry)
                 group.pop(key)
-                logger.debug('eliminate %s from sink', e)
 
 
 entity_zoo = LogicalEntityZoo()
