@@ -348,12 +348,21 @@ def commit_flows(add_flows, del_flows):
             cm_cnt += 1
     return cm_cnt;
 
+def _get_br_integration_mac(br):
+    try:
+        mac = ovs_vsctl('get', 'interface', br, 'mac_in_use')
+    except Exception:
+        logger.error("failed to get bridge %s's mac_in_use", br)
+        return
+    mac = mac.encode('ascii','ignore').replace('"', '')
+    return mac
+
 def build_br_integration(br = 'br-int'):
     try:
         ovs_vsctl('br-exists', br)
         logger.info("the bridge %s is exist", br)
         # if we hit no issue, then it means the bridge is exist
-        return
+        return _get_br_integration_mac(br)
     except Exception as err:
         logger.info("the bridge %s is not exist, try to create a new one", br)
     try:
@@ -364,6 +373,7 @@ def build_br_integration(br = 'br-int'):
         raise OVSToolErr("failed to create integration bridge")
 
     clean_ovs_flows()
+    return _get_br_integration_mac(br)
 
 def set_tunnel_tlv(vipclass = 0xffee, br = 'br-int'):
     while True:

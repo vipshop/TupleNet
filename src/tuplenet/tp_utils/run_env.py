@@ -34,6 +34,10 @@ def acquire_outside_env():
         extra['options']['GATEWAY'] = 1
         logger.info("enable gateway feature")
 
+    if os.environ.has_key('ENABLE_UNTUNNEL') and os.environ['ENABLE_UNTUNNEL'] == '1':
+        extra['options']['ENABLE_UNTUNNEL'] = 1
+        logger.info("enable untunnel feature")
+
     if os.environ.has_key('IPFIX_COLLECTOR'):
         try:
             # validate collector ip:port
