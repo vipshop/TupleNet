@@ -15,6 +15,10 @@ pyDatalog.create_terms('ecmp_aggregate_outport, ecmp_aggregate_outport_readd')
 pyDatalog.create_terms('ecmp_static_route, ecmp_static_route_judge, ecmp_bfd_port')
 pyDatalog.create_terms('State_COMBIND1, State_COMBIND2')
 
+# NOTE: same to the function of _cal_priority in lrp_ingress.py
+def _cal_priority(prefix, level, idx):
+    return (int(prefix) << 10) + (int(level) << 6) + idx
+pyDatalog.create_terms('_cal_priority')
 
 def init_ecmp_clause(options):
     # for adding
@@ -84,7 +88,7 @@ def init_ecmp_clause(options):
         (ecmp_aggregate_outport[X] == Y) &
         (State == State1 + X[3]) & (State != 0) &
         (X[0] == UUID_LR) &
-        (Priority == X[2] * 3 + 2) &
+        (Priority == _cal_priority(X[2], 2, 0)) &
         match.ip_proto(Match1) &
         match.ip_dst_prefix(X[1], X[2], Match2) &
         (Match == Match1 + Match2) &
@@ -98,7 +102,7 @@ def init_ecmp_clause(options):
         (ecmp_aggregate_outport_readd[X] == Y) &
         (State == State1 + X[3]) & (State != 0) &
         (X[0] == UUID_LR) &
-        (Priority == X[2] * 3 + 2) &
+        (Priority == _cal_priority(X[2], 2, 0)) &
         match.ip_proto(Match1) &
         match.ip_dst_prefix(X[1], X[2], Match2) &
         (Match == Match1 + Match2) &
@@ -117,7 +121,7 @@ def init_ecmp_clause(options):
             lr_array(LR, UUID_LR, State3) &
             lrp_array(Route[LSR_OUTPORT], LRP, UUID_LR, UUID_LSP, State4) &
             (State == State1 + State2 + State3 + State4) & (State != 0) &
-            (Priority == Route[LSR_PREFIX] * 3 + 2) &
+            (Priority == _cal_priority(Route[LSR_PREFIX], 2, 0)) &
             match.reg_outport(OFPORT, Match1) &
             match.ip_proto(Match2) &
             match.ip_dst_prefix(Route[LSR_IP], Route[LSR_PREFIX], Match3) &

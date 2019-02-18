@@ -18,6 +18,10 @@ pyDatalog.create_terms('lsp_arp_response')
 pyDatalog.create_terms('lsp_untunnel_deliver')
 pyDatalog.create_terms('_lsp_remote_lsp_changed')
 
+def _cal_priority(prefix, level, idx):
+    return (int(prefix) << 10) + (int(level) << 6) + idx
+pyDatalog.create_terms('_cal_priority')
+
 # NOTE
 # reg0: src_port_id
 # reg1: dst_port_id
@@ -81,10 +85,10 @@ def init_lsp_ingress_clause(options):
 
     if options.has_key('ENABLE_UNTUNNEL'):
         lsp_untunnel_deliver(LS, Priority, Match, Action, State) <= (
-            (Priority == 2) &
             ls_array(LS, UUID_LS, State1) &
             lsp_link_lrp(LSP, LS1, UUID_LS1, LRP, LR,
                          UUID_LR, UUID_LR_CHASSIS, State2) &
+            (Priority == _cal_priority(LRP[LRP_PREFIX], 2, LRP[LRP_ILK_IDX])) &
             (State == State1 + State2) & (State != 0) &
             match.ip_proto(Match1) &
             match.ip_dst_prefix(LRP[LRP_IP], LRP[LRP_PREFIX], Match2) &

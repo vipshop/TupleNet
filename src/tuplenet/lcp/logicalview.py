@@ -51,10 +51,62 @@ class LogicalEntity(object):
 
     def eliminate(self):
         self.del_clause()
+        eliminate_me = getattr(self, '_eliminate', None)
+        if eliminate_me is not None:
+            eliminate_me()
 
     def mark(self, event):
         self.state = event
         self._update(event)
+
+class ILKEntity(object):
+    # user may config several lrp which has same ip and prefix but different
+    # output. A deletion of lsr may delete other ilk lrp ovs-flow. We consume
+    # priority to distinguish it to avoid overlap deletion.
+    # Max value of priority is 65535, and max prefix is 32. So we set 64 to
+    # max_ilk_n. 64 ilk lrp are enough for tuplenet network
+    _max_ilk_n = 64
+    _ilk_group = {}
+    _whole_idx_set = set(i for i in range(_max_ilk_n))
+
+    def __init__(self):
+        self.ilk_idx = self._get_ilk_idx()
+
+    def _get_free_idx(self, occupy_idx_set):
+        free_idx_set = ILKEntity._whole_idx_set - occupy_idx_set
+        if len(free_idx_set) == 0:
+            return -1
+        return free_idx_set.pop()
+
+    def _free_ilk_idx(self):
+        etype = self.entity_type
+        ip_prefix_int = (self.ip_int >> (32 - self.prefix)) << (32 - self.prefix)
+        key = "{}{}{}".format(self.lr_uuid, ip_prefix_int, self.prefix)
+        ILKEntity._ilk_group[etype][key].remove(self.ilk_idx)
+        return self.ilk_idx
+
+    def _get_ilk_idx(self):
+        idx = 0
+        etype = self.entity_type
+        ip_prefix_int = (self.ip_int >> (32 - self.prefix)) << (32 - self.prefix)
+        key = "{}{}{}".format(self.lr_uuid, ip_prefix_int, self.prefix)
+        if not ILKEntity._ilk_group.has_key(etype):
+            ILKEntity._ilk_group[etype] = {}
+        if ILKEntity._ilk_group[etype].has_key(key):
+            idx = self._get_free_idx(ILKEntity._ilk_group[etype][key])
+            if idx < 0:
+                raise Exception("too many ilk, entity:%s" % self.uuid)
+            ILKEntity._ilk_group[etype][key].add(idx)
+        else:
+            ILKEntity._ilk_group[etype][key] = set([idx])
+        return idx
+
+    # NOTE: please do NOT change the function name, it is consumed by
+    # LogicalEntity
+    def _eliminate(self):
+        ilk_idx = self._free_ilk_idx()
+        logger.debug("entity %s free ilk idx %u", self, ilk_idx)
+
 
 pyDatalog.create_terms('lsp_array, exchange_lsp_array')
 pyDatalog.create_terms('lrp_array, ls_array, lr_array, chassis_array')
@@ -158,10 +210,11 @@ LRP_MAC_INT = 5
 LRP_LR_UUID = 6
 LRP_PEER = 7
 LRP_PORTID = 8
-LRP_State = 9
+LRP_ILK_IDX = 9
+LRP_State = 10
 +lrp_array(0,0,0,0,0)
 -lrp_array(0,0,0,0,0)
-class LogicalRouterPort(LogicalEntity):
+class LogicalRouterPort(LogicalEntity, ILKEntity):
     property_keys = [LOGICAL_ENTITY_ID, 'ip', 'prefix', 'mac',
                      LOGICAL_ENTITY_PARENT_ID, 'peer']
     entity_type = LOGICAL_ENTITY_TYPE_LRP
@@ -171,7 +224,7 @@ class LogicalRouterPort(LogicalEntity):
                  mac, lr_uuid, peer = None):
         super(LogicalRouterPort, self).__init__()
         self.uuid = uuid
-        self.prefix = int(prefix)
+        self.prefix = max(min(int(prefix), 32), 0)
         self.ip = ip
         self.ip_int = struct.unpack("!L", socket.inet_aton(ip))[0]
         self.mac = mac;
@@ -181,12 +234,13 @@ class LogicalRouterPort(LogicalEntity):
         self.portID = self.ip_int & 0xffff # 0 ~ 0xffff
         self.lr_view_ip = '{}{}'.format(self.lr_uuid, self.ip)
         self.lr_view_mac = '{}{}'.format(self.lr_uuid, self.mac)
+        ILKEntity.__init__(self)
 
     def _update_dup_data(self):
         self.lrp = [self.uuid, self.prefix, self.ip,
                     self.ip_int, self.mac, self.mac_int,
                     self.lr_uuid, self.peer,
-                    self.portID, self.state]
+                    self.portID, self.ilk_idx, self.state]
 
     def del_clause(self):
         -lrp_array(self.lrp[LRP_UUID], self.lrp, self.lrp[LRP_LR_UUID],
@@ -202,8 +256,8 @@ class LogicalRouterPort(LogicalEntity):
                self.lr_uuid == lr_uuid and self.peer == peer
 
     def __repr__(self):
-        return "lrp({},ip:{},mac:{},peer:{})".format(self.uuid, self.ip,
-                                                     self.mac, self.peer)
+        return "lrp({},ip:{},mac:{},peer:{}, ilk_idx:{})".format(
+                        self.uuid, self.ip, self.mac, self.peer, self.ilk_idx)
 
 
 LR_UUID = 0
@@ -248,34 +302,38 @@ LSR_PREFIX = 4
 LSR_NEXT_HOP = 5
 LSR_NEXT_HOP_INT = 6
 LSR_OUTPORT = 7
-LSR_State = 8
+LSR_ILK_IDX = 8
+LSR_State = 9
 +lroute_array(0,0,0)
 -lroute_array(0,0,0)
-class LogicalStaticRoute(LogicalEntity):
+class LogicalStaticRoute(LogicalEntity, ILKEntity):
     property_keys = [LOGICAL_ENTITY_ID, 'ip', 'prefix', 'next_hop',
                      'outport', LOGICAL_ENTITY_PARENT_ID]
     entity_type = LOGICAL_ENTITY_TYPE_LSR
     uniq_check_keys = ['lr_view_lsr']
+
     def __init__(self, uuid, ip, prefix, next_hop,
                  outport, lr_uuid):
         super(LogicalStaticRoute, self).__init__()
         self.uuid = uuid
         self.lr_uuid = lr_uuid
+        self.prefix = max(min(int(prefix), 32), 0)
         self.ip = ip
         self.ip_int = struct.unpack("!L", socket.inet_aton(ip))[0]
-        self.prefix = int(prefix)
+        self.ip_int = (self.ip_int >> (32 - self.prefix)) << (32 - self.prefix)
         self.next_hop = next_hop
         self.next_hop_int = struct.unpack("!L", socket.inet_aton(next_hop))[0]
         self.outport = outport
         self.lr_view_lsr = "lsr{}{}{}{}{}".format(self.lr_uuid, self.ip,
                                                   self.prefix, self.next_hop,
                                                   self.outport)
+        ILKEntity.__init__(self)
 
     def _update_dup_data(self):
         self.lsr = [self.uuid, self.lr_uuid, self.ip,
                     self.ip_int, self.prefix, self.next_hop,
                     self.next_hop_int, self.outport,
-                    self.state]
+                    self.ilk_idx, self.state]
 
     def del_clause(self):
         -lroute_array(self.lsr, self.lsr[LSR_LR_UUID], self.lsr[LSR_State])
@@ -289,8 +347,9 @@ class LogicalStaticRoute(LogicalEntity):
                self.outport == outport and self.lr_uuid == lr_uuid
 
     def __repr__(self):
-        return "lsr:({}, rule:{}/{}, output:{})".format(self.uuid, self.ip,
-                                                        self.prefix, self.outport)
+        return "lsr:({}, rule:{}/{}, output:{}, ilk_idx:{})".format(
+                        self.uuid, self.ip, self.prefix,
+                        self.outport, self.ilk_idx)
 
 LNAT_UUID = 0
 LNAT_LR_UUID = 1
@@ -574,7 +633,7 @@ class LogicalEntityZoo():
                 if not self.entity_idxmap.has_key(k):
                     self.entity_idxmap[k] = {}
                 if self.entity_idxmap[k].has_key(v):
-                    logger.info('cannot insert %s in entity_idxmap, it already'
+                    logger.info('cannot insert %s in entity_idxmap, it already '
                                 'has %s', entity, self.entity_idxmap[k][v])
                     return False
                 self.entity_idxmap[k][v] = entity
