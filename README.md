@@ -11,7 +11,7 @@ TupleNet和Flannel，Calico类似采用的基于数据库的架构方式。Tuple
 
 *Like Flannel and Calico the architecture of Tuplenet is base on Database. Etcd play a role of brain, and each compute-node has a TupleNet instance which utilizes OVS to construct virtual networking.*
 
-``` python
+```
                                      +-----------------+
                                      |      ETCD       |
                                      |                 |
@@ -52,11 +52,14 @@ TupleNet 的所有ovs-flow都是在本地生成，不需要一个额外的contro
 ### 5. TupleNet支持虚拟路径的 + 物理节点的数据报文tracing，快速定位网络故障
 在实际网络中很可能会出现某个网络链路出现问题，或者人为导致TupleNet配置错误，这些情况都会导致在虚拟网络中出现网路不可达。TupleNet提供了Packet tracing功能，可以通过pkt-trace工具从指定logical port发送被标记好的报文，报文所经过的TupleNet节点和虚拟网络中的虚拟节点（logical switch，logical router，logical port）都会被完整记录下来。这些信息可以帮助运维人员快速定位故障。
 
+### 6. TupleNet支持多路径overlay & non-overlay 报文传递
+在物理网络上架设TupleNet虚拟网络后，虚拟网络的节点需要和外界物理网络通信时候可以采用overlay & non-overlay 混杂传递报文（从TupleNet node到外部物理网络的报文不经过Geneve封装，直接传递给宿主机协议栈，由宿主机协议栈发送出去，避免解封报文带来的性能损耗。从物理网络到虚拟网络节点的报文仍然经过Edge节点转发）。可以大大提升overlay 虚拟网络的性能，以及减轻Edge节点压力。
 
 ## TupleNet目前支持以下特性：(TupleNet's features)
 - **分布式虚拟 Switch  (distributed virtual switch)**
-- **分布式虚拟 Router (distributed virtual router)**
-- **HA-HA Edge(虚拟网络与外部网络交互Gateway)**
+- **分布式或集中虚拟 Router (distributed virtual router)**
+- **Active-Active Edge(虚拟网络与外部网络交互Gateway)**
+- **Overlay & non-Overlay 混杂快速报文传递**
 - **Arp Proxy**
 - **ECMP to Edge(Gateway)，BFD探测Edge，自动切换**
 - **Router 设置静态路由规则 (static routes)**
@@ -72,7 +75,7 @@ TupleNet 的所有ovs-flow都是在本地生成，不需要一个额外的contro
 
 
 ## TupleNet 概要 (What TupleNet is)
-- TupleNet的设计目标是尽量用最简单的方式建立一个支持**500**物理节点，**5000** 虚拟节点的中型网络。所以整个TupleNet代码架构非常精简，其主要使用[**PyDatalog**](https://sites.google.com/site/pydatalog/home)来根据目前的网络拓扑动态实时生成ovs-flow。 *TupleNet was designed to support a system which contains 500 physical node and 5000 virtual node at most. Therefore we simplify whole architecture and code in TupleNet to make it easy to be upgraded and understand. TupleNet consume pyDatalog to generate ovs-flows in run-time *
+- TupleNet的设计目标是尽量用最简单的方式建立一个支持**2000**物理节点，**20000** 虚拟节点的中型网络。所以整个TupleNet代码架构非常精简，其主要使用[**PyDatalog**](https://sites.google.com/site/pydatalog/home)来根据目前的网络拓扑动态实时生成ovs-flow。 *TupleNet was designed to support a system which contains 500 physical node and 5000 virtual node at most. Therefore we simplify whole architecture and code in TupleNet to make it easy to be upgraded and understand. TupleNet consume pyDatalog to generate ovs-flows in run-time *
 - 同时TupleNet支持preprogrammed，ondemanded两种方式来生成ovs-flow，并支持将ondemand节点的packet offload给preprogrammed节点转发。 *TupleNet has two ways(on-demand and preprogrammed) to generate ovs-flow. Besides of that, tuplenet(on-demaned node ) can deliver traffic to other host to help forwarding*
 - 为了更好支持特性的添加，TupleNet目前只支持使用Geneve Tunnel进行网络虚拟化.   *TupleNet only support Geneve tunneling due to adding new feature easily*
 - [Want more details?](/Architecture.md)
@@ -93,9 +96,9 @@ TupleNet的主要逻辑都是由Python构建，只需要编译pkt_controller以�
 1. install [ETCD](https://coreos.com/etcd/)
 2. config ETCD start ETCD cluster
 - **on compute-host:**
-1. install [openvswitch](https://www.openvswitch.org/)(please install ovs which version above 2.8.0)
+1. install [openvswitch](https://www.openvswitch.org/)(please install ovs which version above 2.10.0)
 2. pip install tuplenet-xxx.whl(generate whl by running python setup.py  bdist_wheel in TupleNet folder)
 3. config & run tuplenet and enjoy it. For detail guide document, please visit [tutorials](/tutorials/README.md)
 
-### NOTE1: TupleNet还处于0.1.X的版本，还有很多不足也有很多工作要做。目前TupleNet使用在唯品会内网的测试开发云平台，只经过小规模集群验证。如果你在使用中遇到问题，欢迎告诉我们。
+### NOTE1: TupleNet还处于0.2.X的版本，还有很多不足也有很多工作要做。目前TupleNet使用在唯品会内网的测试开发云平台，经过小规模集群验证。如果你在使用中遇到问题，欢迎告诉我们。
 ### NOTE2: You can download and consume latest pypy to speed up the control path to accerlate generating ovs-flow
