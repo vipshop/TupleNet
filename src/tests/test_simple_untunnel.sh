@@ -98,10 +98,10 @@ sleep 1 # tcpdump need sometime to dump packet into file
 pkt_dump="`tcpdump -r $tcpdump_file -nnevvv`"
 verify_has_str "$pkt_dump" "192.168.30.10" || exit_test
 
-
-#(yes | tpctl ls del -r m1) || exit_test
-#wait_for_flows_unchange # waiting for install flows
-#ret="`ip netns exec ${LS_A} ping 100.10.10.3 -c 1`"
-#verify_has_str "$ret" "1 received" || exit_test
+# delete m1 to test if it cause overlap deletion
+(yes | tpctl ls del -r m1) || exit_test
+wait_for_flows_unchange # waiting for install flows
+ret="`ip netns exec ${LS_A} ping 100.10.10.3 -c 1`"
+verify_has_str "$ret" "1 received" || exit_test
 
 pass_test
