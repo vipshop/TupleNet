@@ -144,6 +144,16 @@ def init_build_flows_clause(options):
 
 # build flows for logical port ingress pipline
     build_flows_lsp(Table, Priority, Match, Action, State) <= (
+                (Table == TABLE_LSP_INGRESS_UNTUNNEL) &
+                lsp_ingress.lsp_untunnel_deliver(LS, Priority, Match2,
+                                                 Action1, State) &
+                action.note(flows_note2idx('lsp_untunnel_deliver'), Action2) &
+                (Action == Action1 + Action2) &
+                (match.datapath(LS[LS_ID], Match1)) &
+                (Match == Match1 + Match2)
+                )
+
+    build_flows_lsp(Table, Priority, Match, Action, State) <= (
                 (Table == TABLE_LSP_INGRESS_OUTPUT_DST_PORT) &
                 lsp_ingress.lsp_output_dst_port(LS, Priority, Match2,
                                                 Action1, State) &

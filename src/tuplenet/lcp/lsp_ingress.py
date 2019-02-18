@@ -9,12 +9,18 @@ pyDatalog.create_terms('Table, Priority, Match, Action')
 pyDatalog.create_terms('Action1, Action2, Action3, Action4, Action5')
 pyDatalog.create_terms('Action6, Action7, Action8, Action9, Action10')
 pyDatalog.create_terms('Match1, Match2, Match3, Match4, Match5')
+pyDatalog.create_terms('LS1, UUID_LS1')
 
 pyDatalog.create_terms('lsp_output_dst_port')
 pyDatalog.create_terms('lsp_lookup_dst_port')
 pyDatalog.create_terms('lsp_arp_controller')
 pyDatalog.create_terms('lsp_arp_response')
+pyDatalog.create_terms('lsp_untunnel_deliver')
 pyDatalog.create_terms('_lsp_remote_lsp_changed')
+
+def _cal_priority(prefix, level, idx):
+    return (int(prefix) << 10) + (int(level) << 6) + idx
+pyDatalog.create_terms('_cal_priority')
 
 # NOTE
 # reg0: src_port_id
@@ -70,6 +76,39 @@ def init_lsp_ingress_clause(options):
         )
 
     lsp_arp_response(LS, Priority, Match, Action, State) <= (
+        (Priority == 0) &
+        ls_array(LS, UUID_LS, State) & (State != 0) &
+        (match.match_none(Match)) &
+        action.resubmit_next(Action)
+        )
+
+
+    if options.has_key('ENABLE_UNTUNNEL'):
+        lsp_untunnel_deliver(LS, Priority, Match, Action, State) <= (
+            ls_array(LS, UUID_LS, State1) &
+            lsp_link_lrp(LSP, LS1, UUID_LS1, LRP, LR,
+                         UUID_LR, UUID_LR_CHASSIS, State2) &
+            (Priority == _cal_priority(LRP[LRP_PREFIX], 2, LRP[LRP_ILK_IDX])) &
+            (State == State1 + State2) & (State != 0) &
+            match.ip_proto(Match1) &
+            match.ip_dst_prefix(LRP[LRP_IP], LRP[LRP_PREFIX], Match2) &
+            (Match == Match1 + Match2) &
+            action.resubmit_next(Action)
+        )
+
+        lsp_untunnel_deliver(LS, Priority, Match, Action, State) <= (
+            (Priority == 1) &
+            ls_array(LS, UUID_LS, State) & (State != 0) &
+            match.ip_proto(Match) &
+            # output packet to local port which is an internal port.
+            # packet goes into tcpip stack
+            action.mod_dl_dst(options['br-int_mac'], Action1) &
+            action.output('LOCAL', Action2) &
+            (Action == Action1 + Action2)
+            )
+
+
+    lsp_untunnel_deliver(LS, Priority, Match, Action, State) <= (
         (Priority == 0) &
         ls_array(LS, UUID_LS, State) & (State != 0) &
         (match.match_none(Match)) &

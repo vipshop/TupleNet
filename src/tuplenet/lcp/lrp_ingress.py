@@ -21,6 +21,15 @@ pyDatalog.create_terms('lrp_ip_dnat_stage1, lrp_ip_dnat_stage2')
 pyDatalog.create_terms('lrp_ip_route')
 pyDatalog.create_terms('lrp_ecmp_judge')
 
+# NOTE: value of priority is in [0,65535]
+# ---------------------------------------------
+# |PREFIX(6Bit) | Level(4Bit) | lrp_idx(6Bit) |
+# ---------------------------------------------
+
+def _cal_priority(prefix, level, idx):
+    return (int(prefix) << 10) + (int(level) << 6) + idx
+pyDatalog.create_terms('_cal_priority')
+
 
 # NOTE: all lsp and lrp use IP least 16bits as a portID,
 # so a lrp(ip=10.10.1.1) has same portID=0x0101, and lrp(ip=20.20.1.1)
@@ -97,7 +106,7 @@ def init_lrp_ingress_clause(options):
     lrp_ip_route(LR, Priority, Match, Action, State) <= (
         lsp_link_lrp(LSP, LS, UUID_LS, LRP, LR,
                      UUID_LR, UUID_LR_CHASSIS, State) & (State != 0) &
-        (Priority == LRP[LRP_PREFIX] * 3) &
+        (Priority == _cal_priority(LRP[LRP_PREFIX], 0, LRP[LRP_ILK_IDX])) &
         match.ip_proto(Match1) &
         match.ip_dst_prefix(LRP[LRP_IP],
                             LRP[LRP_PREFIX], Match2) &
@@ -124,7 +133,7 @@ def init_lrp_ingress_clause(options):
         (UUID_LR == LR[LR_UUID]) &
         # only match the first outport
         (LRP[LRP_UUID] == Route[LSR_OUTPORT]) &
-        (Priority == 1 + Route[LSR_PREFIX] * 3) &
+        (Priority == _cal_priority(Route[LSR_PREFIX], 1, Route[LSR_ILK_IDX])) &
         match.ip_proto(Match1) &
         match.ip_dst_prefix(Route[LSR_IP],
                             Route[LSR_PREFIX], Match2) &

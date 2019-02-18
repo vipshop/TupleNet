@@ -27,6 +27,7 @@ import link_master as lm
 from optparse import OptionParser
 from pyDatalog import pyDatalog
 from tp_utils import run_env, pipe
+import syscmd
 import version
 
 logger = None
@@ -41,6 +42,9 @@ def handle_exit_signal(signum, frame):
         logger.warning("error in clearning environment, err:%s", err)
     logger.info('Exit tuplenet')
     sys.exit(0)
+
+def killme():
+    os.kill(os.getpid(), signal.SIGTERM)
 
 
 def clean_env(extra, ret):
@@ -84,6 +88,17 @@ def check_single_instance():
                             'clean the environment')
     write_pid_into_file(pid_lock_file)
 
+def _correct_sysctl_config(kv):
+    try:
+        for k,v in kv.items():
+            current_v = syscmd.sysctl_read(k)
+            if current_v != v:
+                syscmd.sysctl_write(k, v)
+    except syscmd.SyscmdErr as err:
+        logger.warning("failed to write sysctl config, err:%s", err)
+        return False
+    return True
+
 def create_watch_master(hosts, prefix, local_system_id):
     extra['lm'] = lm.WatchMaster(lm.sanity_etcdhost(hosts),
                                  prefix, local_system_id)
@@ -95,22 +110,44 @@ def init_env(options):
 
     pipe.create_runtime_folder()
     check_single_instance()
-    lflow.init_build_flows_clause(extra['options'])
 
     system_id = cm.system_id()
     if system_id is None or system_id == "":
-        logger.error('Openvswitch has no chassis id')
-        clean_env(extra, -1)
-        sys.exit(-1)
-    extra['system_id'] = system_id
-    +lgview.local_system_id(system_id)
+        logger.error('openvswitch has no chassis id')
+        killme()
 
+    extra['system_id'] = system_id
     logic = pyDatalog.Logic(True)
     extra['logic'] = logic
-    create_watch_master(options.host, options.path_prefix, system_id)
-    cm.build_br_integration()
-    cm.insert_ovs_ipfix()
-    cm.set_tunnel_tlv()
+
+    br_int_mac = cm.build_br_integration()
+    extra['options']['br-int_mac'] = br_int_mac
+    if extra['options'].has_key('ENABLE_UNTUNNEL'):
+        config = {'net.ipv4.conf.all.rp_filter':'0'}
+        config['net.ipv4.ip_forward'] = '1'
+        config['net.ipv4.conf.br-int.rp_filter'] = '0'
+        config['net.ipv4.conf.br-int.forwarding'] = '1'
+        if _correct_sysctl_config(config) is False:
+            logger.error('failed to correct sysctl config:%s', config)
+            killme()
+        try:
+            br = 'br-int'
+            syscmd.network_ifup(br)
+            logger.info('ifup the interface %s', br)
+        except Exception as err:
+            logger.error('failed to ifup %s interface, err:', br, err)
+            killme()
+
+    +lgview.local_system_id(system_id)
+    lflow.init_build_flows_clause(extra['options'])
+
+    try:
+        cm.insert_ovs_ipfix()
+        cm.set_tunnel_tlv()
+        create_watch_master(options.host, options.path_prefix, system_id)
+    except Exception as err:
+        logger.error("hit error in init_env, err:%s", err)
+        killme()
 
 def update_chassis(interface_list):
     if re.match(r"^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$", interface_list[0]):
@@ -119,8 +156,7 @@ def update_chassis(interface_list):
         host_ip = get_if_ip(interface_list)
     if host_ip is None:
         logger.error('cannot get a valid ip for ovs tunnel')
-        clean_env(extra, -1)
-        sys.exit(-1)
+        killme()
     logger.info('consume %s as tunnel ip', host_ip)
     wmaster = extra['lm']
     key = 'chassis/{}'.format(extra['system_id'])
@@ -141,8 +177,7 @@ def run_monitor_thread():
         # TODO we should figure out the root cause
         if time.time() - start_time > 5:
             logger.error("tuplenet hangs on starting ovsdb-client")
-            clean_env(extra, -1)
-            sys.exit(-1)
+            killme()
         with extra['lock']:
             if extra.has_key('ovsdb-client'):
                 break;

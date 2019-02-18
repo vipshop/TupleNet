@@ -162,16 +162,19 @@ packet=`build_icmp_request 000006080703 000006080601 $ip_src $ip_dst $ttl f891 8
 inject_pkt hv3 lsp-portC "$packet" || exit_test
 wait_for_packet # wait for packet
 ttl=fd
-expect_pkt=`build_icmp_response 000006080601 000006080703 $ip_dst $ip_src $ttl 0491 8d10`
-real_pkt=`get_tx_pkt hv3 lsp-portC`
+expect_pkt=""
+real_pkt=`get_tx_pkt hv3 lsp-portC`  # the receive packets has no change, becuase we don't want to get a feed back
 verify_pkt $expect_pkt $real_pkt || exit_test
+
 # send icmp to edge1 from hv3
+ip_src=`ip_to_hex 10 10 1 3`
 ip_dst=`ip_to_hex 172 20 11 11`
-ttl=09
+ttl=fd
 packet=`build_icmp_request 000006080703 000006080601 $ip_src $ip_dst $ttl f891 8510`
 inject_pkt hv3 lsp-portC "$packet" || exit_test
 wait_for_packet # wait for packet
-real_pkt=`get_tx_pkt hv3 lsp-portC`  # the receive packets has no change, becuase we don't want to get a feed back
+expect_pkt=`build_icmp_response 000006080601 000006080703 $ip_dst $ip_src $ttl f891 8d10`
+real_pkt=`get_tx_pkt hv3 lsp-portC`
 verify_pkt $expect_pkt $real_pkt || exit_test
 
 pass_test
