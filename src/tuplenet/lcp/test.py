@@ -28,6 +28,7 @@ pyDatalog.create_terms('A,B,C,D,E,F,G,H,I,J,K,X,Y,Z')
 lsp_ingress_flows = {
                      'lsp_arp_response':lsp_ingress.lsp_arp_response,
                      'lsp_arp_controller':lsp_ingress.lsp_arp_controller,
+                     'lsp_untunnel_deliver':lsp_ingress.lsp_untunnel_deliver,
                      'lsp_lookup_dst_port':lsp_ingress.lsp_lookup_dst_port,
                      'lsp_output_dst_port':lsp_ingress.lsp_output_dst_port,
                     }
@@ -301,6 +302,8 @@ extra['options'] = {}
 extra['options']['ENABLE_REDIRECT'] = ''
 extra['options']['ENABLE_PERFORMANCE_TESTING'] = ''
 extra['options']['ONDEMAND'] = ''
+extra['options']['ENABLE_UNTUNNEL'] = ''
+extra['options']['br-int_mac'] = '00:00:00:11:11:11'
 entity_set = entity_zoo.entity_set
 lflow.init_build_flows_clause(extra['options'])
 test_rand_entity(entity_set, 20, 500, 5000)

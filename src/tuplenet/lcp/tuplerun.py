@@ -9,14 +9,12 @@ import socket
 import fcntl
 import struct
 import signal
+import re
 
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ppparent_dir = os.path.dirname(os.path.dirname(parent_dir))
 py_third_dir = os.path.join(ppparent_dir, 'py_third')
-sys.path.append(parent_dir)
-sys.path.append(ppparent_dir)
-sys.path.append(py_third_dir)
-import re
+sys.path = [parent_dir, ppparent_dir, py_third_dir] + sys.path
 import lflow
 import commit_ovs as cm
 import logicalview as lgview
@@ -245,11 +243,21 @@ def init_logger(log_dir, log_level = logging.DEBUG):
                 print "can not create dir %s, err:%s" % (log_dir, str(e))
                 sys.exit(1)
 
+        # config regular and warning log path
         log_path = log_dir + '/tuplenet.log'
         rotate_handler = RotatingFileHandler(log_path, maxBytes = 2000 * 1024 * 1024,
                                              backupCount = 5)
         rotate_handler.setFormatter(formatter)
         logger.addHandler(rotate_handler)
+
+        # config warning log path, output warn/error log into another file
+        log_path = log_dir + '/tuplenet_warn.log'
+        rotate_handler = RotatingFileHandler(log_path, maxBytes = 2000 * 1024 * 1024,
+                                             backupCount = 5)
+        rotate_handler.setFormatter(formatter)
+        rotate_handler.setLevel(logging.WARN)
+        logger.addHandler(rotate_handler)
+
     else:
         console = logging.StreamHandler();
         console_formater = logging.Formatter(format_type, datefmt)
@@ -302,6 +310,7 @@ def main():
     logger.info("accept log path:%s", options.log_dir)
     logger.info("accept interval:%s", options.interval)
     logger.info("accept etcd host:%s", options.host)
+    logger.info("features config:%s", extra['options'])
     init_env(options)
     run_monitor_thread()
     run_arp_update_thread()
