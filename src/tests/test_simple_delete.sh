@@ -133,6 +133,8 @@ current_ovs_flows=`get_ovs_flows_sorted`
 echo "$current_ovs_flows" > $OVS_LOGDIR/current_ovs_flows.txt
 verify_ovsflow "$prev_ovs_flows" "$current_ovs_flows" || exit_test
 
+sleep 3 # waiting for BFD sync between nodes
+
 # send icmp to edge1 from hv1
 ip_src=`ip_to_hex 10 10 1 2`
 ip_dst=`ip_to_hex 172 20 11 11`

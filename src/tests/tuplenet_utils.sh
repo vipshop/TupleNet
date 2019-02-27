@@ -122,3 +122,40 @@ inject_trace_packet()
                 --src_mac $src_mac --src_ip $src_ip --dst_mac $dst_mac --dst_ip $dst_ip --wait_time=$TRACE_WAIT_TIME
     fi
 }
+
+init_ecmp_road()
+{
+    sim_id=$1
+    vip=$2
+    virt=$3
+    inner="100.64.88.200/24"
+    ext_gw=$4
+    # NOTE: only one etcd address
+    ovs_setenv $sim_id
+    echo "yes" |  PATH=$PATH:$CONTROL_BIN_PATH/bin/  $PYTHON ../tuplenet/tools/edge-operate.py --endpoint $etcd_client_specs \
+                       --prefix $tuplenet_prefix --op=init \
+                       --phy_br=br0 --vip=$vip --virt=$virt \
+                       --inner=$inner --ext_gw=$ext_gw || return 1
+}
+
+add_ecmp_road()
+{
+    sim_id=$1
+    vip=$2
+    # NOTE: only one etcd address
+    ovs_setenv $sim_id
+    echo "yes" |  PATH=$PATH:$CONTROL_BIN_PATH/bin/  $PYTHON ../tuplenet/tools/edge-operate.py --endpoint $etcd_client_specs \
+                       --prefix $tuplenet_prefix --op=add \
+                       --phy_br=br0 --vip=$vip || return 1
+}
+
+remove_ecmp_road()
+{
+    sim_id=$1
+    vip=$2
+    # NOTE: only one etcd address
+    ovs_setenv $sim_id
+    echo "yes" |  PATH=$PATH:$CONTROL_BIN_PATH/bin/  $PYTHON ../tuplenet/tools/edge-operate.py --endpoint $etcd_client_specs \
+                       --prefix $tuplenet_prefix --op=remove \
+                       --phy_br=br0 --vip=$vip || return 1
+}
