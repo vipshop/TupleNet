@@ -896,7 +896,7 @@ def init_entity_clause(options):
         exchange_lsp_array(UUID_LSP2, LSP2, UUID_LS, UUID_CHASSIS2, UUID_LRP2, State3) &
         lrp_array(UUID_LRP2, LRP2, UUID_LR2, UUID_LSP2, State4) & (UUID_LR != UUID_LR2) &
         lr_array(LR2, UUID_LR2, State5) &
-        ovsport_chassis(PORT_NAME, LR2[LR_CHASSIS_UUID], OFPORT, State6) &
+        ovsport_chassis(PORT_NAME, LR2[LR_CHASSIS_UUID], OFPORT, State6) & (OFPORT > 0) &
         (State == State1 + State2 + State3 + State4 + State5 + State6)
         )
 

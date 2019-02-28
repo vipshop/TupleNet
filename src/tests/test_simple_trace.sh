@@ -235,7 +235,7 @@ while [ $i -lt $MAX_PORT_N ]; do
     i=$((i+1))
 done
 wait_for_flows_unchange
-output="$(BATCH_NUM=50 TRACE_WAIT_TIME=5 DETECT_LOOP=3 inject_trace_packet LS-A,LS-B 2>&1)"
+output="$(BATCH_NUM=20 TRACE_WAIT_TIME=6 DETECT_LOOP=3 inject_trace_packet LS-A,LS-B 2>&1)"
 if [ "$output" != "" ]; then
     pmsg "error tracing output"
     pmsg "$output"
