@@ -194,7 +194,10 @@ type:LS,pipeline:m2,from:m2_to_LR-A,to:m2_to_edge2,stage:TABLE_LSP_TRACE_EGRESS_
 type:LR,pipeline:edge2,from:edge2_to_m2,to:<UNKNOW>,stage:TABLE_LRP_TRACE_INGRESS_IN,chassis:hv3,output_iface_id:<UNK_PORT>
 type:LR,pipeline:edge2,from:edge2_to_m2,to:edge2_to_outside2,stage:TABLE_LRP_TRACE_INGRESS_OUT,chassis:hv3,output_iface_id:<UNK_PORT>
 type:LR,pipeline:edge2,from:edge2_to_m2,to:edge2_to_outside2,stage:TABLE_LRP_TRACE_EGRESS_IN,chassis:hv3,output_iface_id:<UNK_PORT>
-type:LR,pipeline:edge2,from:edge2_to_m2,to:edge2_to_outside2,stage:TABLE_DROP_PACKET,chassis:hv3,output_iface_id:<UNK_PORT>"
+type:LR,pipeline:edge2,from:edge2_to_m2,to:edge2_to_outside2,stage:TABLE_OUTPUT_PKT,chassis:hv3,output_iface_id:hv2
+type:LR,pipeline:edge2,from:edge2_to_m2,to:edge2_to_outside2,stage:TABLE_LRP_TRACE_INGRESS_OUT,chassis:hv2,output_iface_id:<UNK_PORT>
+type:LR,pipeline:edge2,from:edge2_to_m2,to:edge2_to_outside2,stage:TABLE_LRP_TRACE_EGRESS_IN,chassis:hv2,output_iface_id:<UNK_PORT>
+type:LR,pipeline:edge2,from:edge2_to_m2,to:edge2_to_outside2,stage:TABLE_DROP_PACKET,chassis:hv2,output_iface_id:<UNK_PORT>"
 verify_trace "$expect_path" "$real_path" || exit_test
 
 real_path=`inject_trace_packet lsp-portA 00:00:06:08:07:01 10.10.1.2 00:00:06:08:06:01 100.10.10.111`
