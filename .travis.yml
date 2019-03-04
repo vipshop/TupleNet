@@ -29,7 +29,7 @@ script:
     - cd src/tests
     - wget https://github.com/etcd-io/etcd/releases/download/v3.1.20/etcd-v3.1.20-linux-amd64.tar.gz
     - tar -xf etcd-v3.1.20-linux-amd64.tar.gz
-    - sudo PATH=$PATH:`pwd`/etcd-v3.1.20-linux-amd64/ USE_SYSTEM_DOCKER=1 WAIT_FLOW_TIMEOUT=10 WAIT_PKT_TIMEOUT=0.2 ./runtest.sh
+    - sudo PATH=$PATH:`pwd`/etcd-v3.1.20-linux-amd64/ USE_SYSTEM_DOCKER=1 WAIT_FLOW_TIMEOUT=10 WAIT_PKT_TIMEOUT=0.2 ./runtest.sh 2
     - cd -
     - ./build-dist.sh
 

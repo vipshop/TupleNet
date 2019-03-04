@@ -276,4 +276,42 @@ expect_pkt=`build_icmp_request 000006080601 000006080701 $ip_src $ip_dst $ttl b1
 real_pkt=`get_tx_last_pkt hv1 lsp-portA`
 verify_pkt $expect_pkt $real_pkt || exit_test
 
+# readd hv3 into edge, but using another ip
+add_ecmp_road hv3 192.168.100.61/24 || exit_test
+port_add hv1 lsp-portC || exit_test
+etcd_lsp_add LS-B lsp-portC 10.10.2.3 00:00:06:08:09:05
+wait_for_flows_unchange # waiting for install flows
+# try to send icmp to edge1(hv2) from hv1, but edge2(hv3) cannot receive it due
+# to incorrect hash, the packet has been forward to  edge3(hv4)
+ip_src=`ip_to_hex 10 10 2 3`
+ip_dst=`ip_to_hex 192 168 100 61`
+ttl=09
+packet=`build_icmp_request 000006080905 000006080602 $ip_src $ip_dst $ttl af76 8510`
+inject_pkt hv1 lsp-portC "$packet" || exit_test
+wait_for_packet # wait for packet
+ttl=fd
+expect_pkt="" # expect receive nothing
+real_pkt=`get_tx_pkt hv1 lsp-portC`
+verify_pkt $expect_pkt $real_pkt || exit_test
+
+
+pmsg "terminate hv1"
+kill_tuplenet_daemon hv1 -TERM
+sleep 2
+pmsg "restart hv1, consume symmetric_l3l4"
+# consume symmetric_l3l4 in selecting dst edge(hv2, hv3)
+HASH_FN=symmetric_l3l4 tuplenet_boot hv1 192.168.100.2
+wait_for_flows_unchange # waiting for install flows
+# send icmp to edge1(hv2) from hv1
+ip_src=`ip_to_hex 10 10 2 3`
+ip_dst=`ip_to_hex 192 168 100 61`
+ttl=09
+packet=`build_icmp_request 000006080905 000006080602 $ip_src $ip_dst $ttl af76 8510`
+inject_pkt hv1 lsp-portC "$packet" || exit_test
+wait_for_packet # wait for packet
+ttl=fd
+expect_pkt=`build_icmp_response 000006080602 000006080905 $ip_dst $ip_src $ttl bb75 8d10`
+real_pkt=`get_tx_pkt hv1 lsp-portC`
+verify_pkt $expect_pkt $real_pkt || exit_test
+
 pass_test

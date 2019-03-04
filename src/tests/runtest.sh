@@ -74,9 +74,14 @@ pmsg_green "thread number:$thread_num, testcase number:$testcase_num"
 #dispatch testcase to each thread
 i=0
 for testcase in $testcase_array; do
-    test_per_thread[$i]="${test_per_thread[$i]} $testcase"
-    i=$((i+1))
-    let i=i%thread_num
+    if [ "`cat $testcase | grep noparallel | wc -l`" -gt 0 ]; then
+        # testcase file which contains noparallel should not not parallel
+        test_per_thread[0]="${test_per_thread[0]} $testcase"
+    else
+        test_per_thread[$i]="${test_per_thread[$i]} $testcase"
+        i=$((i+1))
+        let i=i%thread_num
+    fi
 done
 
 start_time=$(date +%s)
