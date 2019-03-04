@@ -183,9 +183,10 @@ expect_pkt=""
 real_pkt=`get_tx_pkt hv1 lsp-portA`
 verify_pkt $expect_pkt $real_pkt || exit_test
 
-# edge1 drop a unknow dst icmp packet
-ovs_verify_drop_pkt_num hv2 2 || exit_test
-ovs_verify_drop_pkt_num hv3 1 || exit_test
+# edge1 do not know this unknow dst icmp packet, redirect this packet to edge2
+# edge2 do not know this the dst as well, so drop it in edge2(hv3)
+ovs_verify_drop_pkt_num hv2 1 || exit_test
+ovs_verify_drop_pkt_num hv3 2 || exit_test
 
 # kill ext1 and restart a new ext3, has same IP, but different mac
 pmsg "kill ext1"

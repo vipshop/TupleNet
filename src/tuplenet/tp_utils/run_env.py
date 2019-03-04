@@ -38,6 +38,14 @@ def acquire_outside_env():
         extra['options']['ENABLE_UNTUNNEL'] = 1
         logger.info("enable untunnel feature")
 
+    if os.environ.has_key('HASH_FN') and \
+       os.environ['HASH_FN'] in ['eth_src', 'symmetric_l4', 'symmetric_l3l4',
+                                 'symmetric_l3l4+udp', 'nw_src', 'nw_dst']:
+        extra['options']['HASH_FN'] = os.environ['HASH_FN']
+    else:
+        extra['options']['HASH_FN'] = 'nw_dst'
+    logger.info("HASH_FN is %s", extra['options']['HASH_FN'])
+
     if os.environ.has_key('IPFIX_COLLECTOR'):
         try:
             # validate collector ip:port

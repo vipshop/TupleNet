@@ -28,7 +28,7 @@ etcd_ls_add outside2
 start_tuplenet_daemon hv1 172.20.11.1
 GATEWAY=1 ONDEMAND=0 start_tuplenet_daemon hv2 172.20.11.2
 GATEWAY=1 ONDEMAND=0 start_tuplenet_daemon hv3 172.20.11.3
-start_tuplenet_daemon ext1 172.20.11.4
+start_tuplenet_daemon ext1 172.20.11.7
 start_tuplenet_daemon ext2 172.20.11.6
 install_arp
 wait_for_brint # waiting for building br-int bridge
@@ -93,12 +93,11 @@ test_bundle()
     done
 }
 
-# send arp from ext1 to edge2(hv3)
-# send arp packet to request feedback
+# send arp packet to request feedback, it helps edge2 learn ext1 mac
 src_mac=`get_ovs_iface_mac ext1 br0`
 src_mac=${src_mac//:} # convert xx:xx:xx:xx:xx:xx -> xxxxxxxxxxxx
 sha=$src_mac
-spa=`ip_to_hex 172 20 11 4`
+spa=`ip_to_hex 172 20 11 7`
 tpa=`ip_to_hex 172 20 11 12`
 # build arp request
 packet=ffffffffffff${sha}08060001080006040001${sha}${spa}ffffffffffff${tpa}
@@ -109,13 +108,78 @@ expect_pkt=${sha}${reply_ha}08060001080006040002${reply_ha}${tpa}${sha}${spa}
 real_pkt=`get_tx_last_pkt ext1 br0`
 verify_pkt "$expect_pkt" "$real_pkt" || exit_test
 
+# stop tuplenet hv3, add now we and add a new lsp to test if ext1 can send
+# packet to this new lsp through hv3.(hv3 doesn't know where is new lsp is, so
+# it tries to redirect to other edge(edge1 hv2))
+kill_tuplenet_daemon hv3 -TERM
+sleep 3
+port_add hv1 lsp-portT || exit_test
+etcd_lsp_add LS-A lsp-portT 10.10.1.20 00:00:06:08:07:20
+wait_for_flows_unchange # waiting for installing flows
+# send icmp from ext1 to lsp-portT through edge2(hv3),
+# but edge2 redirect packet to edge1(hv2)
+src_mac=`get_ovs_iface_mac ext1 br0`
+src_mac=${src_mac//:} # convert xx:xx:xx:xx:xx:xx -> xxxxxxxxxxxx
+ip_src=`ip_to_hex 172 20 11 7`
+ip_dst=`ip_to_hex 10 10 1 20`
+ttl=09
+packet=`build_icmp_request $src_mac 000006080608 $ip_src $ip_dst $ttl af85 8510`
+inject_pkt ext1 br0 "$packet" || exit_test
+wait_for_packet # wait for packet
+ttl=07
+expect_pkt=`build_icmp_request 000006080601 000006080720 $ip_src $ip_dst $ttl b185 8510`
+real_pkt=`get_tx_pkt hv1 lsp-portT`
+verify_pkt $expect_pkt $real_pkt || exit_test
+pkt_dump="`get_rx_tcpdump hv1 br0-phy`"
+num=`echo "$pkt_dump" | grep -E 'ICMP|length 118' | grep "172.20.11.2" | wc -l`
+if [ "$num" != 1 ]; then
+    echo "error tcpdump:$pkt_dump"
+    exit_test
+fi
+
+
+# send arp from ext1 to edge2(hv3) again to test if dead-tuplenet break ovs
+# send arp packet to request feedback
+src_mac=`get_ovs_iface_mac ext1 br0`
+src_mac=${src_mac//:} # convert xx:xx:xx:xx:xx:xx -> xxxxxxxxxxxx
+sha=$src_mac
+spa=`ip_to_hex 172 20 11 7`
+tpa=`ip_to_hex 172 20 11 12`
+# build arp request
+packet=ffffffffffff${sha}08060001080006040001${sha}${spa}ffffffffffff${tpa}
+inject_pkt ext1 br0 "$packet" || exit_test
+wait_for_packet # wait for packet
+reply_ha=000006080608
+expect_pkt=${sha}${reply_ha}08060001080006040002${reply_ha}${tpa}${sha}${spa}
+real_pkt=`get_tx_last_pkt ext1 br0`
+verify_pkt "$expect_pkt" "$real_pkt" || exit_test
+
+# send icmp to ext1 from hv1 through edge2(hv3, which tuplenet is down)
+# NOTE: hv3's ovs already get ext1 mac address
+ip_src=`ip_to_hex 10 10 1 20`
+ip_dst=`ip_to_hex 172 20 11 7`
+ttl=09
+packet=`build_icmp_request 000006080720 000006080601 $ip_src $ip_dst $ttl af85 8510`
+inject_pkt hv1 lsp-portT "$packet" || exit_test
+wait_for_packet # wait for packet
+dst_mac=`get_ovs_iface_mac ext1 br0`
+dst_mac=${dst_mac//:} # convert xx:xx:xx:xx:xx:xx -> xxxxxxxxxxxx
+ttl=07
+expect_pkt=`build_icmp_request 000006080608 $dst_mac $ip_src $ip_dst $ttl b185 8510`
+real_pkt=`get_tx_last_pkt ext1 br0`
+verify_pkt $expect_pkt $real_pkt || exit_test
+
+# bring hv3 tuplenet back
+GATEWAY=1 ONDEMAND=0 tuplenet_boot hv3 172.20.11.3
+wait_for_flows_unchange
+
 # disable the bfd detection between hv1 and hv3. then make hv3 believe that
 # hv1 is not reachable, so it will redirect the packet to edge1(hv2)
 disable_bfd hv1 hv3
 sleep 4
 # send icmp from ext1 to lsp-portA through edge2(hv3),
 # but edge2 redirect packet to edge1(hv2)
-ip_src=`ip_to_hex 172 20 11 4`
+ip_src=`ip_to_hex 172 20 11 7`
 ip_dst=`ip_to_hex 10 10 1 2`
 ttl=09
 packet=`build_icmp_request $src_mac 000006080608 $ip_src $ip_dst $ttl af85 8510`
@@ -127,7 +191,7 @@ real_pkt=`get_tx_pkt hv1 lsp-portA`
 verify_pkt $expect_pkt $real_pkt || exit_test
 pkt_dump="`get_rx_tcpdump hv1 br0-phy`"
 num=`echo "$pkt_dump" | grep -E 'ICMP|length 118' | grep "172.20.11.2" | wc -l`
-if [ "$num" != 1 ]; then
+if [ "$num" != 2 ]; then
     echo "error tcpdump:$pkt_dump"
     exit_test
 fi

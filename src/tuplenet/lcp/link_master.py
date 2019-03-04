@@ -69,7 +69,7 @@ class WatchMaster():
         self.watch_canceled = True
         self.watch_id_hash = {}
         self._previous_choose_id = -1
-        self.reconn_master(3)
+        self.reconn_master(10)
 
     def __del__(self):
         if not self.watch_canceled:
@@ -88,6 +88,7 @@ class WatchMaster():
 
 
     def reconn_master(self, retry_n = 0xffffffff):
+        tolerate_log_n = 0
         while True:
             if retry_n == 0:
                 raise Exception('failed to connect remote etcd')
@@ -121,7 +122,9 @@ class WatchMaster():
                             'delete': self.etcd.delete,
                             'add_watch_callback': self.etcd.add_watch_callback}
             except Exception as err:
-                logger.warning('failed to get member list, retry..')
+                tolerate_log_n += 1
+                if tolerate_log_n % 3 == 0:
+                    logger.warning('failed to get member list, retry..')
                 time.sleep(1)
                 continue
             finally:

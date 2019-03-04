@@ -126,12 +126,21 @@ def init_lrp_egress_clause(options):
     # upload packet to controller, if this packet cannot trigger generating
     # arp and didn't know the destination's macaddress. controller will
     # ask tuplenet to generate it.
-    if options.has_key('ONDEMAND'):
+    if options.has_key('GATEWAY') or options.has_key('ONDEMAND'):
         if options.has_key('ENABLE_REDIRECT'):
+            # A regular tuplenet node(with ondemand) may not know where dst lsp is,
+            # so it uploads packet to controller and redirects pkt to an edge node.
+
+            # A edge node(with ondemand disable) should know where is dst, but
+            # tuplenet instance may down so ovs-flow doesn't know the new dst(
+            # a lsp may be create while tuplenet is down, ovs-flow not updated).
+            # This ovs-flow should redirect this packet to other edge now as well.
             lrp_handle_unknow_dst_pkt(LR, Priority, Match, Action, State) <= (
                 (Priority == 2) &
                 lr_array(LR, UUID_LR, State) & (State != 0) &
                 match.ip_proto(Match1) &
+                # set macaddress to 0, then other host know this packet
+                # should be threw to LR pipline
                 match.eth_dst("00:00:00:00:00:00", Match2) &
                 (Match == Match1 + Match2) &
                 action.load(1, NXM_Reg(REG_FLAG_IDX, FLAG_REDIRECT_BIT_IDX,

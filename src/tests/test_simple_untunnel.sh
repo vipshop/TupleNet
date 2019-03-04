@@ -1,4 +1,5 @@
 #!/bin/bash
+#noparallel
 . env_utils.sh
 
 env_init ${0##*/} # 0##*/ is the filename

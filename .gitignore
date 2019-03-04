@@ -6,6 +6,7 @@ rpmbuild/
 output/
 build/
 dist/
+src/control/bin/
 src/tuplenet.egg-info/
 src/tuplenet/pkt_controller/.*
 src/tuplenet/pkt_controller/COPYING
