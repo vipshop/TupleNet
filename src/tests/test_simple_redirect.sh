@@ -5,12 +5,14 @@ env_init ${0##*/} # 0##*/ is the filename
 sim_create hv1 || exit_test
 sim_create hv2 || exit_test
 sim_create hv3 || exit_test
+sim_create hv_new || exit_test
 sim_create ext1 || exit_test
 sim_create ext2 || exit_test
 net_create phy || exit_test
 net_join phy hv1 || exit_test
 net_join phy hv2 || exit_test
 net_join phy hv3 || exit_test
+net_join phy hv_new || exit_test
 net_join phy ext1 || exit_test
 net_join phy ext2 || exit_test
 
@@ -30,10 +32,10 @@ GATEWAY=1 ONDEMAND=0 start_tuplenet_daemon hv2 172.20.11.2
 GATEWAY=1 ONDEMAND=0 start_tuplenet_daemon hv3 172.20.11.3
 start_tuplenet_daemon ext1 172.20.11.7
 start_tuplenet_daemon ext2 172.20.11.6
+start_tuplenet_daemon hv_new 172.20.11.9
 install_arp
 wait_for_brint # waiting for building br-int bridge
 
-port_add hv1 lsp-portA || exit_test
 patchport_add hv2 patchport-outside1 || exit_test
 patchport_add hv3 patchport-outside2 || exit_test
 
@@ -67,7 +69,10 @@ etcd_lsr_add edge1 10.10.0.0 16 100.10.10.1 edge1_to_m1
 etcd_lsr_add edge2 10.10.0.0 16 100.10.10.3 edge2_to_m2
 
 # create logical switch port
+port_add hv1 lsp-portA || exit_test
 etcd_lsp_add LS-A lsp-portA 10.10.1.2 00:00:06:08:07:01
+port_add hv1 lsp-port_old || exit_test
+etcd_lsp_add LS-A lsp-port_old 10.10.1.15 00:00:06:08:05:05
 wait_for_flows_unchange # waiting for installing flows
 
 ofport_hv1=`get_ovs_iface_ofport hv2 tupleNet-2886994689`
@@ -168,6 +173,39 @@ ttl=07
 expect_pkt=`build_icmp_request 000006080608 $dst_mac $ip_src $ip_dst $ttl b185 8510`
 real_pkt=`get_tx_last_pkt ext1 br0`
 verify_pkt $expect_pkt $real_pkt || exit_test
+
+# delete lsp-port_old, create lsp-port_new on hv_new which has lsp-port_old's
+# mac and ip. Send icmp to lsp-port_new from ext1 through dead edge node(hv3),
+# hv3 will deliver packet to hv1 first(because ovs in hv3 still has
+# lsp-port_old's information, but has no idea that lsp-port_old had been
+# removed). hv1 receive this icmp packet then figure out the right
+# destination. So hv2 can deliver it to hv_new if hv2 receive next icmp.
+port_del hv1 lsp-port_old || exit_test
+etcd_lsp_del LS-A lsp-port_old || exit_test
+etcd_lsp_add LS-A lsp-port_new 10.10.1.15 00:00:06:08:05:05
+port_add hv_new lsp-port_new || exit_test
+wait_for_flows_unchange
+src_mac=`get_ovs_iface_mac ext1 br0`
+src_mac=${src_mac//:} # convert xx:xx:xx:xx:xx:xx -> xxxxxxxxxxxx
+ip_src=`ip_to_hex 172 20 11 7`
+ip_dst=`ip_to_hex 10 10 1 15`
+ttl=09
+packet=`build_icmp_request $src_mac 000006080608 $ip_src $ip_dst $ttl af85 8510`
+if [[ -z "$ONDEMAND" || "$ONDEMAND" == 1 ]]; then
+    inject_pkt ext1 br0 "$packet" || exit_test
+    wait_for_packet # wait for packet
+    real_pkt=`get_tx_pkt hv_new lsp-port_new`
+    expect_pkt="" # cannot receive first icmp, first icmp trigger hv1's caculation
+    verify_pkt $expect_pkt $real_pkt || exit_test
+    sleep 2
+fi
+inject_pkt ext1 br0 "$packet" || exit_test
+wait_for_packet
+ttl=07
+expect_pkt=`build_icmp_request 000006080601 000006080505 $ip_src $ip_dst $ttl b185 8510`
+real_pkt=`get_tx_pkt hv_new lsp-port_new`
+verify_pkt $expect_pkt $real_pkt || exit_test
+
 
 # bring hv3 tuplenet back
 GATEWAY=1 ONDEMAND=0 tuplenet_boot hv3 172.20.11.3

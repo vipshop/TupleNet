@@ -348,6 +348,20 @@ def commit_flows(add_flows, del_flows):
             cm_cnt += 1
     return cm_cnt;
 
+def _set_br_failmode(br, mode):
+    try:
+        cur_mode = ovs_vsctl('get-fail-mode', br)
+    except Exception:
+        logger.error("failed to get fail mode of bridge %s", br)
+        raise OVSToolErr("failed to get fail mode of bridge")
+    if cur_mode != mode:
+        logger.info("config bridge %s fail-mode into %s", br, mode)
+        try:
+            ovs_vsctl('set-fail-mode', br, mode)
+        except Exception:
+            logger.error("failed to config %s fail-mode into %s", br, mode)
+            raise OVSToolErr("failed to config fail-mode")
+
 def _get_br_integration_mac(br):
     try:
         mac = ovs_vsctl('get', 'interface', br, 'mac_in_use')
@@ -361,12 +375,13 @@ def build_br_integration(br = 'br-int'):
     try:
         ovs_vsctl('br-exists', br)
         logger.info("the bridge %s is exist", br)
+        _set_br_failmode(br, 'secure')
         # if we hit no issue, then it means the bridge is exist
         return _get_br_integration_mac(br)
     except Exception as err:
         logger.info("the bridge %s is not exist, try to create a new one", br)
     try:
-        ovs_vsctl('add-br', br)
+        ovs_vsctl('add-br', br, '--', 'set', 'Bridge', br, 'fail-mode=secure')
         logger.info("create bridge %s for integration", br)
     except Exception as err:
         logger.error("failed to create %s", br)

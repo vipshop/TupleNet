@@ -40,7 +40,7 @@ wait_for_flows_unchange # waiting for install flows
 # only get a central_lr, 2 LS, test if script can add ecmp road
 ! add_ecmp_road hv2 192.168.100.51/24 || exit_test
 # adding a new ecmp road
-init_ecmp_road hv2 192.168.100.51/24 10.10.1.1/16 192.168.100.1 || exit_test
+init_ecmp_road hv2 192.168.100.51/24 10.10.0.0/16 192.168.100.1 || exit_test
 # test if failed to add ecmp road in same hv
 ! add_ecmp_road hv2 192.168.100.51/24 || exit_test
 wait_for_flows_unchange # waiting for install flows
@@ -233,7 +233,7 @@ verify_pkt "$expect_pkt" "$real_pkt" || exit_test
 # only get a central_lr, 2 LS, test if script can add ecmp road
 ! add_ecmp_road hv4 192.168.100.57/24 || exit_test
 # adding a new ecmp road(on hv3)
-init_ecmp_road hv4 192.168.100.57/24 10.10.1.1/16 192.168.100.1 || exit_test
+init_ecmp_road hv4 192.168.100.57/24 10.10.0.0/16 192.168.100.1 || exit_test
 wait_for_flows_unchange # waiting for install flows
 
 # send icmp to edge3(hv4) from hv1 again by lsp-portB
