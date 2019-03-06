@@ -228,8 +228,8 @@ def run_main(interval):
 
 def init_logger(log_dir, log_level = logging.DEBUG):
     global logger
-
-    format_type = '%(asctime)s.%(msecs)03d %(levelname)s %(process)d %(filename)s[line:%(lineno)d]: %(message)s'
+    # NOTE: set event type to default, tuplenet does not need to specify the event of logs
+    format_type = '[%(asctime)s.%(msecs)03d][%(levelname)s][%(process)d][%(filename)s:%(lineno)d]>>>[default]msg=%(message)s'
     datefmt = '%Y-%m-%d %H:%M:%S'
     formatter = logging.Formatter(format_type, datefmt)
     logger = logging.getLogger('')
