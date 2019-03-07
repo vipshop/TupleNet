@@ -18,6 +18,8 @@ start_tuplenet_daemon hv2 192.168.100.2
 ONDEMAND=0 start_tuplenet_daemon hv3 192.168.100.3
 install_arp
 wait_for_brint # waiting for building br-int bridge
+is_br_int_secure_failmode hv1 || exit_test
+is_br_int_secure_failmode hv3 || exit_test
 
 tpctl lr add agent_LR hv3
 

@@ -72,6 +72,17 @@ sim_destroy()
     test -e "$pidfile" && kill `cat $pidfile`
 }
 
+is_br_int_secure_failmode()
+{
+    local sim_id=$1
+    ovs_setenv $sim_id
+    mode=`ovs-vsctl get-fail-mode br-int`
+    if [ "$mode" != "secure" ]; then
+        return 1
+    fi
+    return 0
+}
+
 remove_sim_id_from_array()
 {
     remove_sim=$1

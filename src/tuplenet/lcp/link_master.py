@@ -131,6 +131,22 @@ class WatchMaster():
                 retry_n -= 1
             return
 
+    def update_chassis(self, ip):
+        if self.system_id is None:
+            logger.info("system_id is None, do NOT update chassis")
+            return 0
+        key = 'chassis/{}'.format(self.system_id)
+        value = 'ip={},tick={}'.format(ip, int(time.time()))
+        return self.put_entity_view(key, value)
+
+    def remove_chassis(self):
+        if self.system_id is None:
+            logger.info("system_id is None, do NOT remove chassis")
+            return 0
+        key = 'chassis/{}'.format(self.system_id)
+        return self.delete_entity_no_retry(key)
+
+
     def _etcd_operate(self, op, *args, **kwargs):
         while True:
             try:

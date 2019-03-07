@@ -815,7 +815,6 @@ pyDatalog.create_terms('PORT_NAME, XLATE_TYPE')
 pyDatalog.create_terms('remote_lsp')
 pyDatalog.create_terms('active_lsp')
 pyDatalog.create_terms('remote_chassis')
-pyDatalog.create_terms('local_chassis')
 pyDatalog.create_terms('remote_unable_chassis')
 pyDatalog.create_terms('local_lsp, local_bond_lsp')
 pyDatalog.create_terms('lsp_link_lrp')
@@ -860,11 +859,6 @@ def init_entity_clause(options):
         chassis_array(PHY_CHASSIS, UUID_CHASSIS, State2) &
         (PHY_CHASSIS_WITH_OFPORT == PHY_CHASSIS + [OFPORT]) &
         (State == State1 + State2)
-        )
-
-    local_chassis(PHY_CHASSIS, State) <= (
-        local_system_id(UUID_CHASSIS) &
-        chassis_array(PHY_CHASSIS, UUID_CHASSIS, State)
         )
 
     remote_lsp(LSP, LS, PHY_CHASSIS, State) <= (

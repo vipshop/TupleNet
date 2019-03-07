@@ -387,7 +387,6 @@ def build_br_integration(br = 'br-int'):
         logger.error("failed to create %s", br)
         raise OVSToolErr("failed to create integration bridge")
 
-    clean_ovs_flows()
     return _get_br_integration_mac(br)
 
 def set_tunnel_tlv(vipclass = 0xffee, br = 'br-int'):
