@@ -139,14 +139,8 @@ def execute_pushed_cmd(cmd_set, entity_zoo):
                            path, value_set, err)
             continue
 
-def rebuild_chassis_tunnel():
+def rebuild_chassis_tunnel(port_configs):
     global had_clean_tunnel_ports
-    tunnel.tunnel_port_oper(IP, UUID_CHASSIS, State)
-    ips = IP.data
-    uuids = UUID_CHASSIS.data
-    states = State.data
-
-    port_configs = zip(ips, uuids, states)
     # no need to care about same IP but different operation, only the top tick
     # chassis IP was grep out
     for ip, uuid, state in port_configs:
@@ -205,17 +199,7 @@ def update_entity_from_remote(entity_zoo, extra):
         execute_pushed_cmd(add_pool['cmd'], entity_zoo)
 update_entity_from_remote.accept_diff = False
 
-def config_tunnel_bfd():
-    if is_gateway_chassis():
-        # no need to config bfd on a gateway tunnel port. It was configed
-        # enable-bfd after creating
-        return
-
-    ecmp.ecmp_bfd_port(PORT_NAME, State)
-    port_names = PORT_NAME.data
-    states = State.data
-    port_configs = zip(port_names, states)
-
+def config_tunnel_bfd(port_configs):
     # NOTE: remote chassis reboot will update the tick and ecmp_bfd_port
     # generate two records like:
     #    port tupleNet-3232261123 --> bfd_to_true
@@ -245,6 +229,8 @@ def config_tunnel_bfd():
 
 def update_ovs_side(entity_zoo):
     global had_clean_ovs_flows
+    bfd_port_configs = []
+    tunnel_port_configs = []
     # we must lock the whole process of generating flow and sweepping zoo
     # otherwise we may mark some new entities to State_NO, without generating
     # any ovs flows
@@ -259,9 +245,13 @@ def update_ovs_side(entity_zoo):
             static_lflows = zip(Table.data, Priority.data, Match.data,
                                 Action.data, [1]*len(Table.data))
             lflows += static_lflows
+        tunnel.tunnel_port_oper(IP, UUID_CHASSIS, State)
+        tunnel_port_configs = zip(IP.data, UUID_CHASSIS.data, State.data)
+        if not is_gateway_chassis():
+            ecmp.ecmp_bfd_port(PORT_NAME, State)
+            bfd_port_configs = zip(PORT_NAME.data, State.data)
+
         cost_time = time.time() - start_time
-        config_tunnel_bfd()
-        rebuild_chassis_tunnel()
         entity_zoo.sweep_zoo()
 
     ovs_flows_add, ovs_flows_del = convert_tuple2flow(lflows)
@@ -277,6 +267,9 @@ def update_ovs_side(entity_zoo):
         cm.commit_flows(ovs_flows_add, ovs_flows_del)
     logger.info('insert flow number:%d, del flow number:%d',
                 len(ovs_flows_add), len(ovs_flows_del))
+
+    rebuild_chassis_tunnel(tunnel_port_configs)
+    config_tunnel_bfd(bfd_port_configs)
 
 def update_logical_view(entity_zoo, extra):
     cnt_upload = 0
@@ -295,9 +288,19 @@ def update_logical_view(entity_zoo, extra):
         return
 
     update_ovs_side(entity_zoo)
+    # update chassis information to remote if tuplenet had been install ovsflow
+    if update_logical_view.updated_chassis is False:
+        ret = wmaster.update_chassis(extra['consume_ip'])
+        if ret == 1:
+            update_logical_view.updated_chassis = True
+        else:
+            logger.warning("failed to update chassis information to remote etcd")
+        cnt_upload += ret
+
     # call this function again immediately because tuplenet update the lsp
     # so we should read the change of etcd as soon as possible
     if cnt_upload > 0:
         update_logical_view(entity_zoo, extra)
 
 update_logical_view.cnt = 0
+update_logical_view.updated_chassis = False

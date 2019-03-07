@@ -147,7 +147,7 @@ def init_env(options):
         logger.error("hit error in init_env, err:%s", err)
         killme()
 
-def update_chassis(interface_list):
+def config_consume_ip(interface_list):
     if re.match(r"^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$", interface_list[0]):
         host_ip = interface_list[0]
     else:
@@ -156,13 +156,7 @@ def update_chassis(interface_list):
         logger.error('cannot get a valid ip for ovs tunnel')
         killme()
     logger.info('consume %s as tunnel ip', host_ip)
-    wmaster = extra['lm']
-    key = 'chassis/{}'.format(extra['system_id'])
-    value = 'ip={},tick={}'.format(host_ip, int(time.time()))
-    ret = wmaster.put_entity_view(key, value)
-    if ret == 0:
-        raise Exception("error in updating chassis")
-    logger.info("update local system-id %s to remote etcd", extra['system_id'])
+    extra['consume_ip'] = host_ip
 
 def run_monitor_thread():
     extra['lock'] = threading.Lock()
@@ -315,7 +309,7 @@ def main():
     run_monitor_thread()
     run_arp_update_thread()
     run_debug_thread()
-    update_chassis(interface_list)
+    config_consume_ip(interface_list)
     run_main(options.interval)
 
 
