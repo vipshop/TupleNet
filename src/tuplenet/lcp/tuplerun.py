@@ -52,7 +52,7 @@ def clean_env(extra, ret):
         extra['lm'].stop_all_watches()
     pipe.destory_runtime_files()
 
-def get_if_ip(ifname_list = ['eth0', 'br0']):
+def _interface_ip(ifname_list = ['eth0', 'br0']):
     for ifname in ifname_list:
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -151,7 +151,7 @@ def config_consume_ip(interface_list):
     if re.match(r"^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$", interface_list[0]):
         host_ip = interface_list[0]
     else:
-        host_ip = get_if_ip(interface_list)
+        host_ip = _interface_ip(interface_list)
     if host_ip is None:
         logger.error('cannot get a valid ip for ovs tunnel')
         killme()

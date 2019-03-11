@@ -37,6 +37,7 @@ tuplenet_boot()
     local sim_id=$1
     local ip=$2
     ovs_setenv $sim_id
+    tuplenet_setenv $sim_id
     if [ "$DISABLE_DUMMY" == 1 ]; then
         :
     else

@@ -289,8 +289,8 @@ def test_rand_entity(entity_set, rand_ls_num, rand_chassis_num, rand_lsp_num):
         logger.info('tunnel_port_oper cost time:%s, num:%d',
                     time.time()-start_time, len(tmp))
         start_time = time.time()
-        active_lsp(A,B,C,State);tmp=A.data;
-        logger.info('active_lsp cost time:%s', time.time()-start_time)
+        ecmp.ecmp_bfd_port(A,B); tmp=A.data
+        logger.info('bfd cost time:%s', time.time()-start_time)
 
         logger.info('\n\n')
 
@@ -301,9 +301,10 @@ extra['system_id'] = 'chassis-local'
 extra['options'] = {}
 extra['options']['ENABLE_REDIRECT'] = ''
 extra['options']['ENABLE_PERFORMANCE_TESTING'] = ''
-extra['options']['ONDEMAND'] = ''
-extra['options']['ENABLE_UNTUNNEL'] = ''
+extra['options']['GATEWAY'] = ''
+#extra['options']['ONDEMAND'] = ''
+#extra['options']['ENABLE_UNTUNNEL'] = ''
 extra['options']['br-int_mac'] = '00:00:00:11:11:11'
 entity_set = entity_zoo.entity_set
 lflow.init_build_flows_clause(extra['options'])
-test_rand_entity(entity_set, 20, 500, 5000)
+test_rand_entity(entity_set, 200, 500, 5000)

@@ -20,6 +20,7 @@ pyDatalog.create_terms('lrp_ip_unsnat_stage1, lrp_ip_unsnat_stage2')
 pyDatalog.create_terms('lrp_ip_dnat_stage1, lrp_ip_dnat_stage2')
 pyDatalog.create_terms('lrp_ip_route')
 pyDatalog.create_terms('lrp_ecmp_judge')
+pyDatalog.create_terms('_live_lsp_link_lrp')
 
 # NOTE: value of priority is in [0,65535]
 # ---------------------------------------------
@@ -47,11 +48,31 @@ def init_lrp_ingress_clause(options):
 
     init_ecmp_clause(options)
 
+    if options.has_key('GATEWAY'):
+        _live_lsp_link_lrp(LSP, LS, UUID_LS, LRP, LR,
+                           UUID_LR, None, State) <= (
+            lsp_link_lrp(LSP, LS, UUID_LS, LRP, LR,
+                         UUID_LR, None, State)
+        )
+        _live_lsp_link_lrp(LSP, LS, UUID_LS, LRP, LR, UUID_LR,
+                           UUID_LR_CHASSIS, State) <= (
+            lsp_link_lrp(LSP, LS, UUID_LS, LRP, LR,
+                         UUID_LR, UUID_LR_CHASSIS, State1) &
+            chassis_array(PHY_CHASSIS, UUID_LR_CHASSIS, State2) &
+            (State == State1 + State2)
+        )
+    else:
+        _live_lsp_link_lrp(LSP, LS, UUID_LS, LRP, LR,
+                           UUID_LR, UUID_LR_CHASSIS, State) <= (
+            lsp_link_lrp(LSP, LS, UUID_LS, LRP, LR,
+                         UUID_LR, UUID_LR_CHASSIS, State)
+        )
+
     # response ICMP packet if receiving ICMP request
     lrp_pkt_response(LR, Priority, Match, Action, State) <= (
         (Priority == 3) &
-        lsp_link_lrp(LSP, LS, UUID_LS, LRP, LR,
-                     UUID_LR, UUID_LR_CHASSIS, State) & (State != 0) &
+        _live_lsp_link_lrp(LSP, LS, UUID_LS, LRP, LR,
+                           UUID_LR, UUID_LR_CHASSIS, State) & (State != 0) &
         match.icmp_proto(Match1) &
         match.icmp_type(8, Match2) &
         match.icmp_code(0, Match3) &
@@ -67,6 +88,7 @@ def init_lrp_ingress_clause(options):
         (Action == Action1 + Action2 + Action3 + Action4 +
                    Action5 + Action6)
         )
+
 
     lrp_pkt_response(LR, Priority, Match, Action, State) <= (
         (Priority == 0) &

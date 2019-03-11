@@ -109,7 +109,8 @@ class ILKEntity(object):
 
 
 pyDatalog.create_terms('lsp_array, exchange_lsp_array')
-pyDatalog.create_terms('lrp_array, ls_array, lr_array, chassis_array')
+pyDatalog.create_terms('lrp_array, ls_array, chassis_array')
+pyDatalog.create_terms('_lr_array, lr_array')
 pyDatalog.create_terms('lroute_array, Route, lnat_array')
 pyDatalog.create_terms('lroute_lrp')
 pyDatalog.create_terms('ovsport, ovsport_chassis')
@@ -264,8 +265,8 @@ LR_UUID = 0
 LR_CHASSIS_UUID = 1
 LR_ID = 2
 LR_State = 3
-+lr_array(0,0,0)
--lr_array(0,0,0)
++_lr_array(0,0,0,0)
+-_lr_array(0,0,0,0)
 class LogicalRouter(LogicalEntity):
     property_keys = [LOGICAL_ENTITY_ID, 'id', 'chassis']
     entity_type = LOGICAL_ENTITY_TYPE_LR
@@ -281,10 +282,12 @@ class LogicalRouter(LogicalEntity):
         self.lr = [self.uuid, self.chassis, self.lrID, self.state]
 
     def del_clause(self):
-        -lr_array(self.lr, self.lr[LR_UUID], self.lr[LR_State])
+        -_lr_array(self.lr, self.lr[LR_UUID],
+                   self.lr[LR_CHASSIS_UUID],self.lr[LR_State])
 
     def add_clause(self):
-        +lr_array(self.lr, self.lr[LR_UUID], self.lr[LR_State])
+        +_lr_array(self.lr, self.lr[LR_UUID],
+                   self.lr[LR_CHASSIS_UUID],self.lr[LR_State])
 
     def is_same(self, uuid, lrID, chassis):
         return self.uuid == uuid and self.lrID == int(lrID) and \
@@ -835,8 +838,7 @@ def init_entity_clause(options):
         )
 
     local_lsp(LSP, LS, State) <= (
-        (UUID_LR_CHASSIS == None) &
-        lsp_link_lrp(LSP, LS, UUID_LS, LRP, LR, UUID_LR, UUID_LR_CHASSIS, State)
+        lsp_link_lrp(LSP, LS, UUID_LS, LRP, LR, UUID_LR, None, State)
         )
     local_lsp(LSP, LS, State) <= (
         local_system_id(UUID_LR_CHASSIS) &
@@ -874,6 +876,31 @@ def init_entity_clause(options):
         (State == State1 + State2)
         )
 
+    lr_array(LR, UUID_LR, State) <= (
+        _lr_array(LR, UUID_LR, None, State)
+        )
+    # figure out a lr which pin on a chassis,
+    # do NOT contain lr which pin on local host
+    # NOTE: if admin delete a chassis, all tuplenet will sync this action,
+    # all tuplenets delete those flows except that chassis, it means this
+    # tuplenet(del-chassis) should work as usual(not response icmp request).
+    # Why we do it? Other tuplenets may still forward traffic to host(del-chassis),
+    # in a while so host(del-chassis) should work as usual. On the another hand,
+    # outside phy-switch may consume icmp request to query the status of this
+    # LR(del-chassis). TupleNet should stop sending icmp feedback.
+    lr_array(LR, UUID_LR, State) <= (
+        _lr_array(LR, UUID_LR, UUID_LR_CHASSIS, State1) &
+        (UUID_LR_CHASSIS != None) &
+        # do NOT contain lr which pin on local host
+        (local_system_id(UUID_CHASSIS)) & (UUID_LR_CHASSIS != UUID_CHASSIS) &
+        chassis_array(PHY_CHASSIS, UUID_LR_CHASSIS, State2) &
+        (State == State1 + State2)
+        )
+    # figure out a lr which pin on local host
+    lr_array(LR, UUID_LR, State) <= (
+        local_system_id(UUID_LR_CHASSIS) &
+        _lr_array(LR, UUID_LR, UUID_LR_CHASSIS, State)
+        )
 
     lsp_link_lrp(LSP, LS, UUID_LS, LRP, LR, UUID_LR, UUID_LR_CHASSIS, State) <= (
         lrp_array(UUID_LRP, LRP, UUID_LR, UUID_LSP, State1) &
