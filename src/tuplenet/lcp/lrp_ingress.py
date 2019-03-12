@@ -148,13 +148,9 @@ def init_lrp_ingress_clause(options):
 
     #static route
     lrp_ip_route(LR, Priority, Match, Action, State) <= (
-        lsp_link_lrp(LSP, LS, UUID_LS, LRP, LR,
-                     UUID_LR, UUID_LR_CHASSIS, State1) &
-        (lroute_array(Route, UUID_LR, State2)) &
+        lroute_array(Route, UUID_LR, State1) &
+        next_hop_lr(Route[LSR_OUTPORT], LRP, LR, LR_NEXT, State2) &
         (State == State1 + State2) & (State != 0) &
-        (UUID_LR == LR[LR_UUID]) &
-        # only match the first outport
-        (LRP[LRP_UUID] == Route[LSR_OUTPORT]) &
         (Priority == _cal_priority(Route[LSR_PREFIX], 1, Route[LSR_ILK_IDX])) &
         match.ip_proto(Match1) &
         match.ip_dst_prefix(Route[LSR_IP],
