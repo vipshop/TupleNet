@@ -212,6 +212,7 @@ def remove_tunnel_by_name(portname):
         ovs_vsctl('del-port', 'br-int', portname)
     except Exception as err:
         logger.info("cannot delete tunnel port:%s", err)
+    logger.info("delete ovs tunnel port %s", portname)
     return
 
 def get_tunnel_chassis_id(portname):
@@ -241,6 +242,7 @@ def create_tunnel(ip, uuid):
            portname, 'type=geneve', 'options:remote_ip={}'.format(ip),
            'options:key=flow', 'options:csum=true',
            'external_ids:chassis-id={}'.format(uuid)]
+    logger.info("adding ovs tunnel port %s", portname)
     try:
         ovs_vsctl(*cmd)
     except Exception as err:
@@ -256,6 +258,7 @@ def create_flowbased_tunnel(chassis_id):
            portname, 'type=geneve', 'options:remote_ip=flow',
            'options:key=flow', 'options:csum=true',
            'external_ids:chassis-id={}'.format(chassis_id)]
+    logger.info("adding  ovs tunnel port %s", portname)
     try:
         ovs_vsctl(*cmd)
     except Exception as err:

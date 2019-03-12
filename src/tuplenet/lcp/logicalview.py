@@ -804,7 +804,7 @@ entity_zoo = LogicalEntityZoo()
 def get_zoo():
     return entity_zoo
 
-pyDatalog.create_terms('LSP, LS, LRP, LNAT, LR, PHY_CHASSIS')
+pyDatalog.create_terms('LSP, LS, LRP, LNAT, LR, LR_NEXT, PHY_CHASSIS')
 pyDatalog.create_terms('UUID_LS, UUID_LR, UUID_LSP, UUID_LRP, UUID_CHASSIS')
 pyDatalog.create_terms('UUID_LS1, UUID_LR1, UUID_LSP1, UUID_LRP1, UUID_CHASSIS1')
 pyDatalog.create_terms('UUID_LS2, UUID_LR2, UUID_LSP2, UUID_LRP2,UUID_CHASSIS2')
@@ -823,6 +823,7 @@ pyDatalog.create_terms('local_lsp, local_bond_lsp')
 pyDatalog.create_terms('lsp_link_lrp')
 pyDatalog.create_terms('lnat_data')
 pyDatalog.create_terms('local_system_id')
+pyDatalog.create_terms('next_hop_lr')
 pyDatalog.create_terms('next_hop_ovsport')
 
 def init_entity_clause(options):
@@ -911,14 +912,24 @@ def init_entity_clause(options):
         (State == State1 + State2 + State3 +State4)
         )
 
-    next_hop_ovsport(UUID_LRP, OFPORT, State) <= (
+    next_hop_lr(UUID_LRP, LRP, LR, LR_NEXT, State) <= (
         lrp_array(UUID_LRP, LRP, UUID_LR, UUID_LSP, State1) &
-        exchange_lsp_array(UUID_LSP1, LSP1, UUID_LS, UUID_CHASSIS1, UUID_LRP, State2) &
-        exchange_lsp_array(UUID_LSP2, LSP2, UUID_LS, UUID_CHASSIS2, UUID_LRP2, State3) &
-        lrp_array(UUID_LRP2, LRP2, UUID_LR2, UUID_LSP2, State4) & (UUID_LR != UUID_LR2) &
-        lr_array(LR2, UUID_LR2, State5) &
-        ovsport_chassis(PORT_NAME, LR2[LR_CHASSIS_UUID], OFPORT, State6) & (OFPORT > 0) &
+        exchange_lsp_array(UUID_LSP1, LSP1, UUID_LS,
+                           UUID_CHASSIS1, UUID_LRP, State2) &
+        exchange_lsp_array(UUID_LSP2, LSP2, UUID_LS,
+                           UUID_CHASSIS2, UUID_LRP2, State3) &
+        lrp_array(UUID_LRP2, LRP2, UUID_LR2, UUID_LSP2, State4) &
+        (UUID_LR != UUID_LR2) &
+        lr_array(LR_NEXT, UUID_LR2, State5) &
+        lr_array(LR, UUID_LR, State6) &
         (State == State1 + State2 + State3 + State4 + State5 + State6)
+        )
+
+    next_hop_ovsport(UUID_LRP, OFPORT, State) <= (
+        next_hop_lr(UUID_LRP, LRP, LR, LR_NEXT, State1) &
+        ovsport_chassis(PORT_NAME, LR_NEXT[LR_CHASSIS_UUID],
+                        OFPORT, State2) & (OFPORT > 0) &
+        (State == State1 + State2)
         )
 
     if not get_extra()['options'].has_key('ENABLE_PERFORMANCE_TESTING'):
