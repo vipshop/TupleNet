@@ -247,10 +247,6 @@ def create_tunnel(ip, uuid):
         logger.error('cannot create tunnle, cmd:%s, err:%s', cmd, err)
         return portname
 
-    # if this host is a gateway, then we should enable bfd for each tunnle port
-    if is_gateway_chassis():
-        logger.info("local host is gateway, enable bfd on %s", portname)
-        config_ovsport_bfd(portname, 'enable=true')
     return portname
 
 def create_flowbased_tunnel(chassis_id):

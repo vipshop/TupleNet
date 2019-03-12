@@ -458,7 +458,7 @@ def _init_ecmp_road(central_lr, vip, vip_prefix, virt_ip, virt_prefix,
 
     # create lsr command
     outport = "{}_to_{}".format(edge_lr_name, out_ls_name)
-    tp_cmd_list.append(_cmd_new_lsr(edge_lr_name, vip, vip_prefix,
+    tp_cmd_list.append(_cmd_new_lsr(edge_lr_name, '0.0.0.0', 0,
                                     ext_gw, outport))
 
     outport = "{}_to_{}".format(edge_lr_name, inner_ls_name)

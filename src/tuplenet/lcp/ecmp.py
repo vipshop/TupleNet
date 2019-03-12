@@ -10,6 +10,7 @@ pyDatalog.create_terms('Action1, Action2, Action3, Action4, Action5')
 pyDatalog.create_terms('Action6, Action7, Action8, Action9, Action10')
 pyDatalog.create_terms('Match1, Match2, Match3, Match4, Match5')
 pyDatalog.create_terms('Route1, Route2, OFPORT1, OFPORT2')
+pyDatalog.create_terms('PHY_CHASSIS1, PHY_CHASSIS2')
 pyDatalog.create_terms('A,B,C,D,E,F,G,H,X,Y,Z')
 pyDatalog.create_terms('ecmp_aggregate_outport, ecmp_aggregate_outport_readd')
 pyDatalog.create_terms('ecmp_static_route, ecmp_static_route_judge, ecmp_bfd_port')
@@ -152,12 +153,40 @@ def init_ecmp_clause(options):
         action.resubmit_next(Action)
         )
 
-    ecmp_bfd_port(PORT_NAME, State) <= (
-        lroute_array(Route, UUID_LR, State1) &
-        next_hop_ovsport(Route[LSR_OUTPORT], OFPORT, State2) &
-        # we only enable/disable ovsport that exist
-        ovsport_chassis(PORT_NAME, UUID_CHASSIS, OFPORT, State3) & (State3 >= 0) &
-        chassis_array(PHY_CHASSIS, UUID_CHASSIS, State4) &
-        (State == State1 + State2 + State3 + State4)
-        )
+    if options.has_key('GATEWAY'):
+        # gateway chassis should set all tunnel port's bfd to true, unless the
+        # chassis was deleted
+        ecmp_bfd_port(PORT_NAME, State) <= (
+            ovsport_chassis(PORT_NAME, UUID_CHASSIS, OFPORT, State1) &
+            # we only enable ovsport that exist
+            (State1 >= 0) & (UUID_CHASSIS != 'flow_base_tunnel') &
+            chassis_array(PHY_CHASSIS, UUID_CHASSIS, State2) &
+            (State == State1 + State2) & (State != 0)
+            )
+        # disable all tunnel port bfd if we found our chassis was deleted
+        ecmp_bfd_port(PORT_NAME, State) <= (
+            local_system_id(UUID_CHASSIS) &
+            # our chassis was delete
+            # NOTE: make sure the chassis_array is the lowest clause, because
+            # we use State_DEL to grep the chassis_array
+            chassis_array(PHY_CHASSIS1, UUID_CHASSIS, State_DEL) &
+            # prevent event like chassis tick update,
+            # ecmp_bfd_port will grep out PORT_NAME with state above 0.
+            # In the same time, it also grep out PORT_NAME with state has negative
+            # value. But config_tunnel_bfd help us eliminate negative part
+            chassis_array(PHY_CHASSIS2, UUID_CHASSIS, State) &
+            # figure out all tunnel port
+            ovsport_chassis(PORT_NAME, UUID_CHASSIS1, OFPORT, State1) & (State1 >= 0) &
+            (UUID_CHASSIS1 != 'flow_base_tunnel') &
+            (State1 >= 0)
+            )
+    else:
+        ecmp_bfd_port(PORT_NAME, State) <= (
+            lroute_array(Route, UUID_LR, State1) &
+            next_hop_ovsport(Route[LSR_OUTPORT], OFPORT, State2) &
+            # we only enable/disable ovsport that exist
+            ovsport_chassis(PORT_NAME, UUID_CHASSIS, OFPORT, State3) & (State3 >= 0) &
+            chassis_array(PHY_CHASSIS, UUID_CHASSIS, State4) &
+            (State == State1 + State2 + State3 + State4)
+            )
 

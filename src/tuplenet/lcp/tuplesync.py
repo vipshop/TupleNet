@@ -247,9 +247,8 @@ def update_ovs_side(entity_zoo):
             lflows += static_lflows
         tunnel.tunnel_port_oper(IP, UUID_CHASSIS, State)
         tunnel_port_configs = zip(IP.data, UUID_CHASSIS.data, State.data)
-        if not is_gateway_chassis():
-            ecmp.ecmp_bfd_port(PORT_NAME, State)
-            bfd_port_configs = zip(PORT_NAME.data, State.data)
+        ecmp.ecmp_bfd_port(PORT_NAME, State)
+        bfd_port_configs = zip(PORT_NAME.data, State.data)
 
         cost_time = time.time() - start_time
         entity_zoo.sweep_zoo()
@@ -258,7 +257,7 @@ def update_ovs_side(entity_zoo):
     # on testing mode, it avoids similar flow replacing the others
     if os.environ.has_key('RUNTEST'):
         ovs_flows_add.sort()
-    logger.info("pydatalog cost %fs in generating flows", cost_time)
+    logger.info("pydatalog cost %fs in computing flows and config", cost_time)
     if not had_clean_ovs_flows:
         had_clean_ovs_flows = True
         ovs_flows_add += _get_ovs_arp_ip_mac_from_file()
