@@ -932,6 +932,7 @@ def init_entity_clause(options):
         (State == State1 + State2)
         )
 
+    # TODO: should remove this if-else statement
     if not get_extra()['options'].has_key('ENABLE_PERFORMANCE_TESTING'):
         lnat_data(LNAT, LR, XLATE_TYPE, UUID_LR, State) <= (
             lr_array(LR, UUID_LR, State1) &

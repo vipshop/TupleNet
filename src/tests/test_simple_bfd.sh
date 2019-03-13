@@ -194,6 +194,8 @@ tpctl ch del hv3 || exit_test
 wait_for_flows_unchange
 is_tunnel_bfd_disable hv3 hv1 || exit_test
 is_tunnel_bfd_disable hv3 hv2 || exit_test
+is_tunnel_bfd_enable hv1 hv2 || exit_test
+is_tunnel_bfd_enable hv2 hv1 || exit_test
 ! is_port_exist hv1 tupleNet-3232261123 || exit_test
 ! is_port_exist hv2 tupleNet-3232261123 || exit_test
 
@@ -204,6 +206,37 @@ is_tunnel_bfd_enable hv3 hv1 || exit_test
 is_tunnel_bfd_enable hv3 hv2 || exit_test
 is_tunnel_bfd_enable hv1 hv3 || exit_test
 is_tunnel_bfd_enable hv2 hv3 || exit_test
+is_tunnel_bfd_enable hv1 hv2 || exit_test
+is_tunnel_bfd_enable hv2 hv1 || exit_test
 
+# delete the hv3 again and bring it back without rebooting hv3's tuplenet
+tpctl ch del hv3 || exit_test
 wait_for_flows_unchange
+is_tunnel_bfd_disable hv3 hv1 || exit_test
+is_tunnel_bfd_disable hv3 hv2 || exit_test
+is_tunnel_bfd_enable hv1 hv2 || exit_test
+is_tunnel_bfd_enable hv2 hv1 || exit_test
+! is_port_exist hv1 tupleNet-3232261123 || exit_test
+! is_port_exist hv2 tupleNet-3232261123 || exit_test
+etcd_chassis_add hv3 192.168.100.3 10
+wait_for_flows_unchange
+is_tunnel_bfd_enable hv3 hv1 || exit_test
+is_tunnel_bfd_enable hv3 hv2 || exit_test
+is_tunnel_bfd_enable hv1 hv3 || exit_test
+is_tunnel_bfd_enable hv2 hv3 || exit_test
+is_tunnel_bfd_enable hv1 hv2 || exit_test
+is_tunnel_bfd_enable hv2 hv1 || exit_test
+
+# reboot the hv3, all bfd state shoud be true
+pmsg "restart the hv3"
+kill_tuplenet_daemon hv3 -TERM
+sleep 2
+ONDEMAND=0 GATEWAY=1 tuplenet_boot hv3 192.168.100.3
+wait_for_flows_unchange
+is_tunnel_bfd_enable hv3 hv1 || exit_test
+is_tunnel_bfd_enable hv3 hv2 || exit_test
+is_tunnel_bfd_enable hv1 hv3 || exit_test
+is_tunnel_bfd_enable hv2 hv3 || exit_test
+is_tunnel_bfd_enable hv1 hv2 || exit_test
+is_tunnel_bfd_enable hv2 hv1 || exit_test
 pass_test

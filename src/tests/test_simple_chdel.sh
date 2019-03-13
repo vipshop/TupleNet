@@ -142,8 +142,8 @@ verify_pkt $expect_pkt $real_pkt || exit_test
 kill_tuplenet_daemon hv3 -TERM
 GATEWAY=1 ONDEMAND=0 tuplenet_boot hv3 192.168.100.4
 wait_for_flows_unchange # waiting for install flows
-sleep 6
- 
+sleep 15 # bfd sync time
+
 # send icmp from lsp-portD(on hv2) to ext1 through hv3
 dst_mac=`get_ovs_iface_mac ext1 br0`
 dst_mac=${src_mac//:} # convert xx:xx:xx:xx:xx:xx -> xxxxxxxxxxxx
@@ -173,5 +173,42 @@ ttl=02
 expect_pkt=`build_icmp_request f201c0a8643d $dst_mac $ip_src $ip_dst $ttl b176 8510`
 real_pkt=`get_tx_last_pkt ext1 br0`
 verify_pkt $expect_pkt $real_pkt || exit_test
+
+# delete the hv3 but readd it back
+tpctl ch del hv3 || exit_test
+wait_for_flows_unchange
+etcd_chassis_add hv3 192.168.100.4 10
+wait_for_flows_unchange
+sleep 15 # bfd sync time
+# send icmp from lsp-portD(on hv2) to ext1 through hv3
+dst_mac=`get_ovs_iface_mac ext1 br0`
+dst_mac=${src_mac//:} # convert xx:xx:xx:xx:xx:xx -> xxxxxxxxxxxx
+# NOTE: the hash_fn in hv2 is nw_src, NOT nw_dst
+ip_src=`ip_to_hex 10 10 2 4`
+ip_dst=`ip_to_hex 192 168 100 6`
+ttl=04
+packet=`build_icmp_request 000006080906 000006080602 $ip_src $ip_dst $ttl af76 8510`
+inject_pkt hv2 lsp-portD "$packet" || exit_test
+wait_for_packet # wait for packet
+ttl=02
+expect_pkt=`build_icmp_request f201c0a8643d $dst_mac $ip_src $ip_dst $ttl b176 8510`
+real_pkt=`get_tx_last_pkt ext1 br0`
+verify_pkt $expect_pkt $real_pkt || exit_test
+
+# send icmp from lsp-portA(on hv1) to ext1 through hv3.(hv3 is back now)
+dst_mac=`get_ovs_iface_mac ext1 br0`
+dst_mac=${src_mac//:} # convert xx:xx:xx:xx:xx:xx -> xxxxxxxxxxxx
+# NOTE: the hash_fn in hv2 is nw_src, NOT nw_dst
+ip_src=`ip_to_hex 10 10 1 2`
+ip_dst=`ip_to_hex 192 168 100 6`
+ttl=04
+packet=`build_icmp_request 000006080701 000006080601 $ip_src $ip_dst $ttl af76 8510`
+inject_pkt hv1 lsp-portA "$packet" || exit_test
+wait_for_packet # wait for packet
+ttl=02
+expect_pkt=`build_icmp_request f201c0a8643d $dst_mac $ip_src $ip_dst $ttl b176 8510`
+real_pkt=`get_tx_last_pkt ext1 br0`
+verify_pkt $expect_pkt $real_pkt || exit_test
+
 
 pass_test
