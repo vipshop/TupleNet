@@ -48,8 +48,8 @@ def init_lrp_egress_clause(options):
         )
 
     opposite_side_has_patch_port(LR, LRP, State) <= (
-        local_lsp(LSP, LS, State2) &
-        (LSP[LSP_MAC] == 'ff:ff:ff:ff:ff:ee') &
+        local_bond_lsp(LSP_WITH_OFPORT, LS, State2) &
+        (LSP_WITH_OFPORT[LSP_MAC] == 'ff:ff:ff:ff:ff:ee') &
         lsp_link_lrp(LSP1, LS, UUID_LS, LRP, LR,
                      UUID_LR, UUID_LR_CHASSIS, State1) &
         # NOTE only consider local_lsp, it means a gateway's oppsite

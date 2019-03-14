@@ -166,19 +166,19 @@ def init_ecmp_clause(options):
         # disable all tunnel port bfd if we found our chassis was deleted
         ecmp_bfd_port(PORT_NAME, State) <= (
             local_system_id(UUID_CHASSIS) &
-            # our chassis was delete
-            # NOTE: make sure the chassis_array is the lowest clause, because
-            # we use State_DEL to grep the chassis_array
-            chassis_array(PHY_CHASSIS1, UUID_CHASSIS, State_DEL) &
+            chassis_array(PHY_CHASSIS1, UUID_CHASSIS, State1) &
             # prevent event like chassis tick update,
             # ecmp_bfd_port will grep out PORT_NAME with state above 0.
             # In the same time, it also grep out PORT_NAME with state has negative
             # value. But config_tunnel_bfd help us eliminate negative part
-            chassis_array(PHY_CHASSIS2, UUID_CHASSIS, State) &
+            # NOTE: it can grep out (State1=1) (State2=1) (State=1),
+            # (State1=1) (State2=-1)(State=-1),(State1=-1) (State2=-1)(State=-1)
+            # but config_tunnel_bfd will keep (State=1) only
+            chassis_array(PHY_CHASSIS2, UUID_CHASSIS, State2) &
+            (State == State1 + State2) & (State != 0) &
             # figure out all tunnel port
-            ovsport_chassis(PORT_NAME, UUID_CHASSIS1, OFPORT, State1) & (State1 >= 0) &
-            (UUID_CHASSIS1 != 'flow_base_tunnel') &
-            (State1 >= 0)
+            ovsport_chassis(PORT_NAME, UUID_CHASSIS1, OFPORT, State3) & (State3 >= 0) &
+            (UUID_CHASSIS1 != 'flow_base_tunnel')
             )
     else:
         ecmp_bfd_port(PORT_NAME, State) <= (

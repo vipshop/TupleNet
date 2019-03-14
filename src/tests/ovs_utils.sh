@@ -613,6 +613,28 @@ wait_for_brint()
     pmsg "building br-int cost $cost_time second"
 }
 
+wait_bfd_state_up()
+{
+    local sim_id=$1
+    local peer_chassis=$2
+    ovs_setenv $sim_id
+    iface=`ovs-vsctl list interface|grep -E "name   |external_ids"|grep "chassis-id" -A 1|grep $peer_chassis -A 1|tail -n1|awk '{print \$3}'|sed s/\"//g`
+
+    i=0
+    while [ $i -le 10 ]; do
+        i=$((i+1))
+        config=`ovs-vsctl get Interface $iface bfd_status:state`
+        if [ "$config" != "up" ]; then
+            pmsg "bfd state:$config, iface=$iface"
+            sleep 3
+        else
+            return 0
+        fi
+    done
+    pmsg "exceed 30s, bfd state is not in up state"
+    return 1
+}
+
 is_port_exist()
 {
     sim_id=$1

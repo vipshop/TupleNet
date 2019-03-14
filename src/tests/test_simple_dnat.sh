@@ -125,6 +125,8 @@ verify_has_str "$ret" "html" || exit_test
 ret="`ip netns exec ${LS_B} curl --local-port 66 -m 2 http://172.20.12.18:9999/`"
 verify_has_str "$ret" "html" || exit_test
 
+sleep 3
+
 pkt_dump="`tcpdump -r $tcpdump_out1 -nnevvv`"
 verify_has_str "$pkt_dump" "proto TCP" || exit_test
 pkt_dump="`tcpdump -r $tcpdump_out2 -nnevvv`"
