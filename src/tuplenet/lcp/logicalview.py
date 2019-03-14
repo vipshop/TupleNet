@@ -832,8 +832,8 @@ def init_entity_clause(options):
         ovsport(PORT_NAME, UUID_LSP, OFPORT, State1) &
         (OFPORT > 0) &
         ls_array(LS, UUID_LS, State2) &
-        lsp_array(UUID_LSP, LSP, UUID_LS, UUID_CHASSIS, UUID_LRP, State3) &
         local_system_id(UUID_CHASSIS) &
+        lsp_array(UUID_LSP, LSP, UUID_LS, UUID_CHASSIS, UUID_LRP, State3) &
         (LSP_WITH_OFPORT == (LSP + [OFPORT])) &
         (State == State1 + State2 + State3)
         )
@@ -913,7 +913,7 @@ def init_entity_clause(options):
         )
 
     next_hop_lr(UUID_LRP, LRP, LR, LR_NEXT, State) <= (
-        lrp_array(UUID_LRP, LRP, UUID_LR, UUID_LSP, State1) &
+        lrp_array(UUID_LRP, LRP, UUID_LR, UUID_LSP1, State1) &
         exchange_lsp_array(UUID_LSP1, LSP1, UUID_LS,
                            UUID_CHASSIS1, UUID_LRP, State2) &
         exchange_lsp_array(UUID_LSP2, LSP2, UUID_LS,

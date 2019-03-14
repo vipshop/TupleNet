@@ -138,16 +138,17 @@ real_pkt=`get_tx_last_pkt ext1 br0`
 verify_pkt $expect_pkt $real_pkt || exit_test
 
 
-#reboot the hv3, then all work as usual
+# reboot the hv3, then all work as usual
 kill_tuplenet_daemon hv3 -TERM
 GATEWAY=1 ONDEMAND=0 tuplenet_boot hv3 192.168.100.4
+tuplenet_boot hv2 192.168.100.3
 wait_for_flows_unchange # waiting for install flows
-sleep 15 # bfd sync time
+wait_bfd_state_up hv3 hv2  || exit_test # bfd sync time
+wait_bfd_state_up hv3 hv1  || exit_test
 
 # send icmp from lsp-portD(on hv2) to ext1 through hv3
 dst_mac=`get_ovs_iface_mac ext1 br0`
 dst_mac=${src_mac//:} # convert xx:xx:xx:xx:xx:xx -> xxxxxxxxxxxx
-# NOTE: the hash_fn in hv2 is nw_src, NOT nw_dst
 ip_src=`ip_to_hex 10 10 2 4`
 ip_dst=`ip_to_hex 192 168 100 6`
 ttl=04
@@ -162,7 +163,6 @@ verify_pkt $expect_pkt $real_pkt || exit_test
 # send icmp from lsp-portA(on hv1) to ext1 through hv3.(hv3 is back now)
 dst_mac=`get_ovs_iface_mac ext1 br0`
 dst_mac=${src_mac//:} # convert xx:xx:xx:xx:xx:xx -> xxxxxxxxxxxx
-# NOTE: the hash_fn in hv2 is nw_src, NOT nw_dst
 ip_src=`ip_to_hex 10 10 1 2`
 ip_dst=`ip_to_hex 192 168 100 6`
 ttl=04
@@ -179,11 +179,11 @@ tpctl ch del hv3 || exit_test
 wait_for_flows_unchange
 etcd_chassis_add hv3 192.168.100.4 10
 wait_for_flows_unchange
-sleep 15 # bfd sync time
+wait_bfd_state_up hv3 hv2 || exit_test # bfd sync time
+wait_bfd_state_up hv3 hv1 || exit_test
 # send icmp from lsp-portD(on hv2) to ext1 through hv3
 dst_mac=`get_ovs_iface_mac ext1 br0`
 dst_mac=${src_mac//:} # convert xx:xx:xx:xx:xx:xx -> xxxxxxxxxxxx
-# NOTE: the hash_fn in hv2 is nw_src, NOT nw_dst
 ip_src=`ip_to_hex 10 10 2 4`
 ip_dst=`ip_to_hex 192 168 100 6`
 ttl=04
@@ -198,7 +198,6 @@ verify_pkt $expect_pkt $real_pkt || exit_test
 # send icmp from lsp-portA(on hv1) to ext1 through hv3.(hv3 is back now)
 dst_mac=`get_ovs_iface_mac ext1 br0`
 dst_mac=${src_mac//:} # convert xx:xx:xx:xx:xx:xx -> xxxxxxxxxxxx
-# NOTE: the hash_fn in hv2 is nw_src, NOT nw_dst
 ip_src=`ip_to_hex 10 10 1 2`
 ip_dst=`ip_to_hex 192 168 100 6`
 ttl=04
@@ -209,6 +208,5 @@ ttl=02
 expect_pkt=`build_icmp_request f201c0a8643d $dst_mac $ip_src $ip_dst $ttl b176 8510`
 real_pkt=`get_tx_last_pkt ext1 br0`
 verify_pkt $expect_pkt $real_pkt || exit_test
-
 
 pass_test

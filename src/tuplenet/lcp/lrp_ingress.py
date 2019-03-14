@@ -21,6 +21,7 @@ pyDatalog.create_terms('lrp_ip_dnat_stage1, lrp_ip_dnat_stage2')
 pyDatalog.create_terms('lrp_ip_route')
 pyDatalog.create_terms('lrp_ecmp_judge')
 pyDatalog.create_terms('_live_lsp_link_lrp')
+pyDatalog.create_terms('static_route_changed')
 
 # NOTE: value of priority is in [0,65535]
 # ---------------------------------------------
@@ -146,11 +147,27 @@ def init_lrp_ingress_clause(options):
         (Action == Action1 + Action2 + Action3 + Action4 + Action5)
         )
 
-    #static route
-    lrp_ip_route(LR, Priority, Match, Action, State) <= (
+
+    if options.has_key('GATEWAY'):
+        static_route_changed(Route, LR, LRP, State) <= (
+            local_system_id(UUID_CHASSIS) &
+            lroute_array(Route, UUID_LR, State1) &
+            lsp_link_lrp(LSP, LS, UUID_LS, LRP, LR,
+                         UUID_LR, UUID_CHASSIS, State2) &
+            (Route[LSR_OUTPORT] == LRP[LRP_UUID]) &
+            local_bond_lsp(LSP1, LS, State3) &
+            (LSP1[LSP_MAC] == 'ff:ff:ff:ff:ff:ee') &
+            (State == State1 + State2 + State3) & (State != 0)
+            )
+    static_route_changed(Route, LR, LRP, State) <= (
         lroute_array(Route, UUID_LR, State1) &
         next_hop_lr(Route[LSR_OUTPORT], LRP, LR, LR_NEXT, State2) &
-        (State == State1 + State2) & (State != 0) &
+        (State == State1 + State2) & (State != 0)
+        )
+
+    #static route
+    lrp_ip_route(LR, Priority, Match, Action, State) <= (
+        static_route_changed(Route, LR, LRP, State) &
         (Priority == _cal_priority(Route[LSR_PREFIX], 1, Route[LSR_ILK_IDX])) &
         match.ip_proto(Match1) &
         match.ip_dst_prefix(Route[LSR_IP],
