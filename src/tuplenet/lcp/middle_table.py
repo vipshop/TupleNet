@@ -61,6 +61,7 @@ pyDatalog.create_terms('A, B, C, X, Y, Z, UUID_CHASSIS')
 (gateway_ofport[X] == Y) <= (_gateway_ofport[X] == Y)
 (gateway_ofport[X] == Y) <= (_gateway_ofport_readd[X] == Y)
 
+# it may output same flows, because we have adding and readding
 redirect_other_chassis(Priority, Match, Action, State) <= (
     (Priority == 1) &
     (gateway_ofport[X] == OFPORT) &

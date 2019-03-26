@@ -21,7 +21,7 @@ class OVSToolErr(Exception):
     pass
 
 def call_popen(cmd, commu=None, shell=False):
-    child = subprocess.Popen(cmd, shell, stdout=subprocess.PIPE,
+    child = subprocess.Popen(cmd, shell=shell, stdout=subprocess.PIPE,
                              stdin=subprocess.PIPE, stderr=subprocess.PIPE)
     if commu is None:
         output = child.communicate()
@@ -192,7 +192,7 @@ def system_id():
              "table":"Open_vSwitch","columns":["external_ids"], \
              "where":[]}]']
     try:
-        json_str = call_popen(cmd, shell=True)
+        json_str = call_popen(cmd, shell=False)
     except Exception:
         logger.error('failed to get system-id')
         return

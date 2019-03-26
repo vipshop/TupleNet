@@ -82,7 +82,7 @@ def tpctl_execute(cmd_list):
         cmd = cmd.split()
         cmd.insert(1, prefix_cmd)
         cmd.insert(1, endpoint_cmd)
-        cm.call_popen(cmd, commu='yes\n', shell=True)
+        cm.call_popen(cmd, commu='yes\n', shell=False)
 
 
 class TPObject:

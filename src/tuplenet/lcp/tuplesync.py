@@ -20,7 +20,7 @@ had_clean_ovs_flows = False
 MAC_IP_BIND_FILE = os.path.join(get_extra()['options']['TUPLENET_RUNDIR'],
                                 'mac_ip_bind.data')
 pyDatalog.create_terms('Table, Priority, Match, Action, State')
-pyDatalog.create_terms('PORT_NAME, IP, UUID_CHASSIS')
+pyDatalog.create_terms('PORT_NAME, IP, UUID_CHASSIS, X, Y')
 
 def update_lsp_chassis(entity_set, system_id):
     lsp_chassis_changed = []
@@ -270,6 +270,21 @@ def update_ovs_side(entity_zoo):
     rebuild_chassis_tunnel(tunnel_port_configs)
     config_tunnel_bfd(bfd_port_configs)
 
+# etcd side may get two or more chassis which has same IP.
+# (A vm may be rebuild then it has different chassis-id but original IP.)
+# Tick is the register time for chassis. this function grep out
+# the lastest registed chassis by IP. Shoud update chassis if it
+# has no record or the record is not current chassis.
+def _is_new_chassis(consume_ip, chassis_id):
+    try:
+        (tunnel.latest_chassis[consume_ip] == Y)
+        remote_chassis = Y.data[0][0]
+        return False if remote_chassis == chassis_id else True
+    except:
+        return True
+
+# NOTE: we do NOT udpate chassis, unless we found the chassis record
+# is not right
 def update_logical_view(entity_zoo, extra):
     cnt_upload = 0
     wmaster = extra['lm']
@@ -288,7 +303,8 @@ def update_logical_view(entity_zoo, extra):
 
     update_ovs_side(entity_zoo)
     # update chassis information to remote if tuplenet had been install ovsflow
-    if update_logical_view.updated_chassis is False:
+    if update_logical_view.updated_chassis is False and \
+       _is_new_chassis(extra['consume_ip'], extra['system_id']):
         ret = wmaster.update_chassis(extra['consume_ip'])
         if ret == 1:
             update_logical_view.updated_chassis = True
