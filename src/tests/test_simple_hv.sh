@@ -35,6 +35,18 @@ etcd_ls_link_lr LS-B LR-A 10.10.2.1 24 00:00:06:08:06:02
 etcd_lsp_add LS-A lsp-portA 10.10.1.2 00:00:06:08:06:03
 etcd_lsp_add LS-B lsp-portB 10.10.2.3 00:00:06:08:06:04
 etcd_lsp_add LS-B lsp-portC 10.10.2.4 00:00:06:08:06:05
+wait_for_flows_unchange
+
+# reboot tuplenet would not update chassis tick.
+prev_tick="`etcd_get_chassis_tick hv1`"
+kill_tuplenet_daemon hv1 -TERM
+sleep 2
+tuplenet_boot hv1 192.168.100.1
+tick="`etcd_get_chassis_tick hv1`"
+if [ $tick != $prev_tick ]; then
+    echo "hv1 prev tick:$prev_tick, current tick:$tick"
+    exit_test
+fi
 
 wait_for_flows_unchange
 

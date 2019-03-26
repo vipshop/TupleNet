@@ -84,6 +84,7 @@ def init_ecmp_clause(options):
         (Y == OFPORT)
         )
 
+    # adding and readding may generate same flow, it is ok.
     ecmp_static_route(LR, Priority, Match, Action, State) <= (
         lr_array(LR, UUID_LR, State1) &
         (ecmp_aggregate_outport[X] == Y) &
