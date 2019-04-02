@@ -113,7 +113,7 @@ expect_pkt=${sha}${reply_ha}08060001080006040002${reply_ha}${tpa}${sha}${spa}
 real_pkt=`get_tx_last_pkt ext1 br0`
 verify_pkt "$expect_pkt" "$real_pkt" || exit_test
 
-# stop tuplenet hv3, add now we and add a new lsp to test if ext1 can send
+# stop tuplenet hv3, add now we add a new lsp to test if ext1 can send
 # packet to this new lsp through hv3.(hv3 doesn't know where is new lsp is, so
 # it tries to redirect to other edge(edge1 hv2))
 kill_tuplenet_daemon hv3 -TERM
@@ -141,6 +141,21 @@ if [ "$num" != 1 ]; then
     echo "error tcpdump:$pkt_dump"
     exit_test
 fi
+
+ovs_verify_drop_pkt_num hv3 0 || exit_test
+ovs_verify_drop_pkt_num hv2 0 || exit_test
+# send a unknow packet through hv3.(hv3 doesn't know the dst so it redirect hv2
+# but hv2 still have no idea, hv2 will drop it finally.)
+src_mac=`get_ovs_iface_mac ext1 br0`
+src_mac=${src_mac//:} # convert xx:xx:xx:xx:xx:xx -> xxxxxxxxxxxx
+ip_src=`ip_to_hex 172 20 11 7`
+ip_dst=`ip_to_hex 10 10 1 80`
+ttl=09
+packet=`build_icmp_request $src_mac 000006080608 $ip_src $ip_dst $ttl af85 8510`
+inject_pkt ext1 br0 "$packet" || exit_test
+wait_for_packet # wait for packet
+ovs_verify_drop_pkt_num hv3 0 || exit_test
+ovs_verify_drop_pkt_num hv2 1 || exit_test
 
 
 # send arp from ext1 to edge2(hv3) again to test if dead-tuplenet break ovs

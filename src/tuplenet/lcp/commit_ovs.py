@@ -96,8 +96,11 @@ def update_ovsport(record, entity_zoo):
 
     ofport = record[2]
     name = record[3]
-    external_ids = record[4]
-    external_ids = parse_map(external_ids)
+    external_ids = parse_map(record[4])
+    if ofport < 0:
+        logger.info("do not accept ovsport %s which has negative ofport %d", name, ofport)
+        return
+
     if external_ids.has_key('iface-id'):
         uuid = external_ids['iface-id']
         is_remote = False
