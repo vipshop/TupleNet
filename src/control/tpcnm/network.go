@@ -35,18 +35,6 @@ type deleteNetworkResp struct {
 	Err string `json:",omitempty"`
 }
 
-// user of this function shall ensure the ip is valid
-func macFromIP(ip string) string {
-	parts := strings.Split(ip, ".")
-
-	a, _ := strconv.ParseUint(parts[0], 10, 8)
-	b, _ := strconv.ParseUint(parts[1], 10, 8)
-	c, _ := strconv.ParseUint(parts[2], 10, 8)
-	d, _ := strconv.ParseUint(parts[3], 10, 8)
-
-	return fmt.Sprintf("f2:01:%02x:%02x:%02x:%02x", a, b, c, d)
-}
-
 func portNameByPeer(name string) string {
 	return "to_" + name
 }
@@ -108,7 +96,7 @@ func createNetwork(w http.ResponseWriter, r *http.Request) {
 			goto Done
 		}
 
-		mac = macFromIP(cidrParts[0])
+		mac = etcd3.MacFromIP(cidrParts[0])
 		rport = router.CreatePort(portNameByPeer(req.NetworkID), cidrParts[0], uint8(prefix), mac)
 		sport = sw.CreatePort(portNameByPeer(router.Name), cidrParts[0], mac)
 		rport.Link(sport)

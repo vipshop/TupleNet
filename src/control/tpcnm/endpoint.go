@@ -124,7 +124,7 @@ func createEndpoint(w http.ResponseWriter, r *http.Request) {
 	cidrParts = strings.SplitN(cidr, "/", 2)
 
 	if mac, found = req.Interface[interfaceMac]; !found || mac == "" {
-		mac = macFromIP(cidrParts[0])
+		mac = etcd3.MacFromIP(cidrParts[0])
 	}
 
 	swtch, err = controller.GetSwitch(req.NetworkID)

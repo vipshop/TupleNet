@@ -33,6 +33,19 @@ func (ptr *IDMap) NextID() (uint32, error) {
 	return 0, errors.New("device id exhausted")
 }
 
+// NextID return a available id from an specified id
+func (ptr *IDMap) NextIDFrom(idx uint16) (uint32, error) {
+	// loop to find a available ID
+	for i := idx; i <= roaring.MaxUint16; i++ {
+		id := uint32(i)
+		if found := ptr.CheckedAdd(id); found {
+			return id, nil
+		}
+	}
+
+	return 0, errors.New("device id exhausted")
+}
+
 func (ptr *IDMap) Occupy(x uint32) bool {
 	return ptr.CheckedAdd(x)
 }
@@ -61,7 +74,6 @@ func (ptr *IDMap) String() string {
 	return value
 }
 
-
 // the function assume ip address in xxx.xxx.xxx.xxx pattern
 func IPv4ToU32(ip string) uint32 {
 	parts := strings.Split(ip, ".")
@@ -73,4 +85,12 @@ func IPv4ToU32(ip string) uint32 {
 	r := a<<24 | b<<16 | c<<8 | d
 
 	return uint32(r)
+}
+
+func U32ToIPv4(ipInt int64) string {
+	b0 := strconv.FormatInt((ipInt>>24)&0xff, 10)
+	b1 := strconv.FormatInt((ipInt>>16)&0xff, 10)
+	b2 := strconv.FormatInt((ipInt>>8)&0xff, 10)
+	b3 := strconv.FormatInt((ipInt & 0xff), 10)
+	return b0 + "." + b1 + "." + b2 + "." + b3
 }
