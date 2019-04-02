@@ -663,7 +663,7 @@ run_controller()
             }
             const struct ofp_header *oh = msg->data;
             enum ofptype type;
-            VLOG_INFO("controller receive msg");
+            VLOG_INFO_RL(&rl, "controller receive msg");
             ofptype_decode(&type, oh);
             tunnel_recv(oh, type);
             ofpbuf_delete(msg);
