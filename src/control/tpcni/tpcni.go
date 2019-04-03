@@ -79,28 +79,23 @@ func addOvsPort(portName, ifaceID string) error {
 }
 
 func findOvsportByIfaceID(ifaceID string) (string, error) {
-	output, err := ovsvsctl("--columns=name", "find", "interface",
-		fmt.Sprintf("external_ids={iface-id=%s}", ifaceID))
+	output, err := ovsvsctl("--no-heading", "--columns=name", "find", "interface",
+		fmt.Sprintf("external_ids:iface-id=%s", ifaceID))
 	if err != nil {
 		return "", fmt.Errorf("failed to get ovsport by iface-id:%s: %v", ifaceID, err)
 	}
-	if !strings.Contains(output, "name") {
+	name := strings.Replace(output, "\"", "", -1)
+	if name == "" {
 		return "", errors.Wrap(ErrOVSPortNotFound,
 			fmt.Sprintf("no iface record has iface-id:%s", ifaceID))
 	}
-	output = strings.Replace(output, "\"", "", -1)
-	result := strings.Split(output, ":")
-	if len(result) != 2 {
-		return "", fmt.Errorf("error ovs output:%s", output)
-	}
-	return strings.TrimSpace(result[1]), nil
+	return strings.TrimSpace(name), nil
 }
 
 func delOvsPortByIfaceID(ifaceID string) error {
 	portName, err := findOvsportByIfaceID(ifaceID)
 	if err != nil {
-		return fmt.Errorf("failed to delete ovsport by iface-id:%s: %v",
-			ifaceID, err)
+		return errors.Wrap(err, fmt.Sprintf("failed to delete ovsport by iface-id:%s", ifaceID))
 	}
 	return delOvsPort(portName)
 }
@@ -322,8 +317,8 @@ DELETE_VETH:
 	}
 
 	err = delOvsPortByIfaceID(portName)
-	if err != nil && errors.Cause(err) == ErrOVSPortNotFound {
-		fmt.Errorf("failed to delete logical port %s peer ovs-port: %v", portName, err)
+	if err != nil && errors.Cause(err) != ErrOVSPortNotFound {
+		return fmt.Errorf("failed to delete logical port %s peer ovs-port: %v", portName, err)
 	}
 	return nil
 }
