@@ -8,7 +8,6 @@ import (
 	"strings"
 )
 
-
 // MarshalTuplenet serializes a struct into a string of the form: a=b,c=d,e=f
 // field type of int, uint, float and string is supported
 func MarshalTuplenet(ptr interface{}) string {
@@ -57,7 +56,6 @@ func MarshalTuplenet(ptr interface{}) string {
 
 	return strings.Join(kvs, ",")
 }
-
 
 // UnmarshalTuplenet deserializes from a string of the form: a=b,c=d,e=f into a struct
 // field type of int, uint, float and string is supported
@@ -123,4 +121,16 @@ func UnmarshalTuplenet(ptr interface{}, text string) (err error) {
 	}
 
 	return
+}
+
+// user of this function shall ensure the ip is valid
+func MacFromIP(ip string) string {
+	parts := strings.Split(ip, ".")
+
+	a, _ := strconv.ParseUint(parts[0], 10, 8)
+	b, _ := strconv.ParseUint(parts[1], 10, 8)
+	c, _ := strconv.ParseUint(parts[2], 10, 8)
+	d, _ := strconv.ParseUint(parts[3], 10, 8)
+
+	return fmt.Sprintf("f2:01:%02x:%02x:%02x:%02x", a, b, c, d)
 }

@@ -251,7 +251,7 @@ func addRouterPort(ctx *cli.Context) error {
 
 	ip, prefix := parseCIDR(cidr)
 	if mac == "" {
-		mac = macFromIP(ip)
+		mac = etcd3.MacFromIP(ip)
 	} else {
 		validateMAC(mac)
 	}
@@ -317,7 +317,7 @@ func linkSwitch(ctx *cli.Context) error {
 
 	ip, prefix := parseCIDR(cidr)
 	if mac == "" {
-		mac = macFromIP(ip)
+		mac = etcd3.MacFromIP(ip)
 	} else {
 		validateMAC(mac)
 	}

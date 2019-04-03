@@ -22,7 +22,6 @@ const (
 	deviceIDsPath         = "/globals/device_ids"
 	requestTimeoutSeconds = 3
 
-
 	switchRootPath       = "/entity_view/LS/"
 	switchIPBookRootPath = "/ip_book/LS/"
 
@@ -93,10 +92,10 @@ func NewController(serverAddresses []string, prefix string, loggingOn bool) (*Co
 			return nil, errors.Errorf("db accessed by higher version controller: %s, local: %s",
 				v, currentVersion)
 		} else if currentVersion > v {
-			err = controller.txn([]Cmp{Compare(Value(versionPath), "=", v)},[]Op{OpPut(versionPath, currentVersion)})
-					if err != nil {
-					return nil, errors.Wrap(err, "unable to update version key")
-				}
+			err = controller.txn([]Cmp{Compare(Value(versionPath), "=", v)}, []Op{OpPut(versionPath, currentVersion)})
+			if err != nil {
+				return nil, errors.Wrap(err, "unable to update version key")
+			}
 		}
 	}
 
@@ -359,7 +358,7 @@ func (ptr *Controller) GetChassises() ([]*Chassis, error) {
 func (ptr *Controller) RebuildIPBooks() (err error) {
 	defer func() {
 		if err != nil { // give error a context
-			err = errors.Wrap(err,"unable to rebuild IP book")
+			err = errors.Wrap(err, "unable to rebuild IP book")
 		}
 	}()
 
@@ -485,6 +484,104 @@ func (ptr *Controller) getIDMap(key string) (*bookkeeping.IDMap, string, error) 
 		return nil, "", err
 	}
 	return bookkeeping.NewIDMap(value), value, nil
+}
+
+// allocate an IP address for switch port
+func (ptr *Controller) allocSwitchPortIP(
+	switchName string,
+	cip string,
+	cprefix uint8) (ip string, oldVal string, newVal string, err error) {
+
+	ip = ""
+	oldVal = ""
+	newVal = ""
+	_, err = ptr.GetSwitch(switchName)
+	if err != nil {
+		err = errors.Errorf("failed to find switch %s: %v", switchName, err)
+		return
+	}
+
+	ipMap, _, err := ptr.getIDMap(switchIPBookPath(switchName))
+	if err != nil {
+		err = errors.Errorf("failed to fetch %s's IPBook: %v", switchName, err)
+		return
+	}
+
+	oldVal = ipMap.String()
+	cipInt := bookkeeping.IPv4ToU32(cip)
+	cipInt = (cipInt >> (32 - cprefix)) << (32 - cprefix)
+	// make sure the max would not above 0xffff
+	max := uint32((((1 << (32 - cprefix)) - 1) | cipInt) & 0xffff)
+	nextID, err := ipMap.NextIDFrom(uint16(cipInt) + 2) // skip IP like 10.10.1.0 and 10.10.1.1
+	if err != nil {
+		err = errors.Errorf("failed to allocate new ID, all were occupied")
+		return
+	}
+	ptr.logger.Debugf("max:0x%x, nextID:0x%x", max, nextID)
+	if nextID >= max {
+		err = errors.Errorf("failed to allocate new IP, all IP were occupied")
+		return
+	}
+
+	ipInt := cipInt | nextID
+	ip = bookkeeping.U32ToIPv4(int64(ipInt))
+	ptr.logger.Debugf("allocate a new IP:%s", ip)
+	return ip, oldVal, ipMap.String(), nil
+}
+
+func (ptr *Controller) SaveSwitchPort(
+	sp *SwitchPort, cip string, cprefix uint8) error {
+	var prevIP string = ""
+	for {
+		var (
+			cmps []Cmp
+			ops  []Op
+			k, v string
+		)
+
+		ip, oldVal, newVal, err := ptr.allocSwitchPortIP(sp.Owner.Name,
+			cip, cprefix)
+		if err != nil {
+			return err
+		}
+
+		sp.IP = ip
+		sp.MAC = MacFromIP(ip)
+		k = switchPortPath(sp.Owner.Name, sp.Name)
+		v = MarshalTuplenet(sp)
+		cmps = append(cmps, KeyMissing(k))
+		ops = append(ops, OpPut(k, v))
+		key := switchIPBookPath(sp.Owner.Name)
+		if ipMap, ov, err := ptr.getIDMap(key); err == nil {
+			if ov != "" {
+				cmps = append(cmps, Compare(Value(key), "=", oldVal))
+				ptr.logger.Debugf("try to update %s:%s -> %s", key,
+					ipMap.String(), newVal)
+			} else {
+				cmps = append(cmps, KeyMissing(key))
+				ptr.logger.Debugf("try to create %s:%s", key, newVal)
+			}
+		} else {
+			return errors.Wrap(err, "failed to get ipMap from etcd side")
+		}
+		ops = append(ops, OpPut(key, newVal))
+
+		if prevIP == ip {
+			return errors.Errorf("Error, re-generate same IP %s", ip)
+		}
+		prevIP = ip
+
+		ptr.logger.Debugf("-----start: save lsp transaction-----")
+		defer ptr.logger.Debugf("-----end: save lsp transaction-----")
+		err = ptr.txn(cmps, ops)
+		if err != nil {
+			ptr.logger.Debugf("remote side may be change, redo again")
+			continue
+		} else {
+			ptr.logger.Debugf("create a switch port %s[ip:%s]", sp.Name, sp.IP)
+			return nil
+		}
+	}
 }
 
 // Save devices into db.
@@ -617,7 +714,7 @@ func (ptr *Controller) Delete(recursive bool, devs ...interface{}) error {
 		})
 		cmps []Cmp
 		ops  []Op
-		keys    = make([]string, 0)
+		keys = make([]string, 0)
 	)
 
 	returnID := func(id uint32) error {
@@ -688,7 +785,7 @@ func (ptr *Controller) Delete(recursive bool, devs ...interface{}) error {
 		for _, k := range keys {
 			ptr.logger.Debugf("deleting: %s", k)
 			if recursive {
-				ops = append(ops, OpDelete(k +"/", WithPrefix()))
+				ops = append(ops, OpDelete(k+"/", WithPrefix()))
 			}
 			ops = append(ops, OpDelete(k))
 			cmps = append(cmps, KeyExists(k))

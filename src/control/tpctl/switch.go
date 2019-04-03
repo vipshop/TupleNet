@@ -136,7 +136,7 @@ func addSwitchPort(ctx *cli.Context) error {
 	validateIP(ip)
 
 	if mac == "" {
-		mac = macFromIP(ip)
+		mac = etcd3.MacFromIP(ip)
 	} else {
 		validateMAC(mac)
 	}
