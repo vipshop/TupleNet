@@ -98,6 +98,18 @@ test_bundle()
     done
 }
 
+check_ovsflow_unknow_dst_pkt ()
+{
+    sim_id=$1
+    ovs_setenv $sim_id
+    current_ovs_flows=`get_ovs_flows_sorted`
+    num="`echo "$current_ovs_flows" |grep controller|grep "(userdata=00.00.00.04" | wc -l`"
+    if [ "$num" != "0" ]; then
+        return 1
+    fi
+    return 0
+}
+
 # send arp packet to request feedback, it helps edge2 learn ext1 mac
 src_mac=`get_ovs_iface_mac ext1 br0`
 src_mac=${src_mac//:} # convert xx:xx:xx:xx:xx:xx -> xxxxxxxxxxxx
@@ -156,6 +168,9 @@ inject_pkt ext1 br0 "$packet" || exit_test
 wait_for_packet # wait for packet
 ovs_verify_drop_pkt_num hv3 0 || exit_test
 ovs_verify_drop_pkt_num hv2 1 || exit_test
+# hv3 and hv2 ONDEMAND=0, should not send any unknow-dst packet to controller
+check_ovsflow_unknow_dst_pkt hv3 || exit_test
+check_ovsflow_unknow_dst_pkt hv2 || exit_test
 
 
 # send arp from ext1 to edge2(hv3) again to test if dead-tuplenet break ovs
