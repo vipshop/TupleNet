@@ -109,12 +109,9 @@ verify_pkt "$expect_pkt" "$real_pkt" || exit_test
 etcd_lsr_add edge1 0.0.0.0 0 172.20.11.1 edge1_to_outside1
 # set static route on edge2
 etcd_lsr_add edge2 0.0.0.0 0 172.20.11.1 edge2_to_outside2
-patchport_add hv2 patchport-outside1 || exit_test
-patchport_add hv3 patchport-outside2 || exit_test
+tp_add_patchport hv2 outside1 patchport-outside1 || exit_test
+tp_add_patchport hv3 outside2 patchport-outside2 || exit_test
 
-# add patchport into etcd
-etcd_patchport_add outside1 patchport-outside1
-etcd_patchport_add outside2 patchport-outside2
 wait_for_flows_unchange
 
 ip_src=`ip_to_hex 10 10 2 3`

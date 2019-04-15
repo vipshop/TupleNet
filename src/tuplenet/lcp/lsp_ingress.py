@@ -185,11 +185,10 @@ def init_lsp_ingress_clause(options):
             )
 
     # deliver the packet which not match above flow to the patchport
-    # patch port's mac address should be ff:ff:ff:ff:ff:ee
+    # patch port's ip address should be 255.255.255.255
     lsp_lookup_dst_port(LS, Priority, Match, Action, State) <= (
         (Priority == 2) &
-        local_lsp(LSP, LS, State) & (State != 0) &
-        (LSP[LSP_MAC] == 'ff:ff:ff:ff:ff:ee') &
+        local_patchport(LSP, LS, State) & (State != 0) &
         match.match_none(Match) &
         action.load(LSP[LSP_PORTID],
                     NXM_Reg(REG_DST_IDX), Action1) &

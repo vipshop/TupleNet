@@ -11,6 +11,7 @@ import time
 from pyDatalog import pyDatalog
 from tp_utils.run_env import is_gateway_chassis, get_extra
 import tunnel
+import patchport
 
 logger = logging.getLogger(__name__)
 prev_zoo_ver = 0 # it should be 0 which same as entity_zoo's zoo_ver
@@ -20,7 +21,7 @@ had_clean_ovs_flows = False
 MAC_IP_BIND_FILE = os.path.join(get_extra()['options']['TUPLENET_RUNDIR'],
                                 'mac_ip_bind.data')
 pyDatalog.create_terms('Table, Priority, Match, Action, State')
-pyDatalog.create_terms('PORT_NAME, IP, UUID_CHASSIS, X, Y')
+pyDatalog.create_terms('PORT_NAME, IP, UUID_CHASSIS, X, Y, PEER_BR')
 
 def update_lsp_chassis(entity_set, system_id):
     lsp_chassis_changed = []
@@ -227,10 +228,18 @@ def config_tunnel_bfd(port_configs):
         logger.info("config %s bfd to %s", portname, state)
         cm.config_ovsport_bfd(portname, state)
 
+def rebuild_patchport(port_config):
+    for portname, peer_br, state in port_config:
+        if state < 0:
+            cm.delete_patchport(portname)
+        else:
+            cm.create_patchport(portname, peer_br)
+
 def update_ovs_side(entity_zoo):
     global had_clean_ovs_flows
     bfd_port_configs = []
     tunnel_port_configs = []
+    patchport_configs = []
     # we must lock the whole process of generating flow and sweepping zoo
     # otherwise we may mark some new entities to State_NO, without generating
     # any ovs flows
@@ -249,6 +258,8 @@ def update_ovs_side(entity_zoo):
         tunnel_port_configs = zip(IP.data, UUID_CHASSIS.data, State.data)
         ecmp.ecmp_bfd_port(PORT_NAME, State)
         bfd_port_configs = zip(PORT_NAME.data, State.data)
+        patchport.patchport_oper(PORT_NAME, PEER_BR, State)
+        patchport_configs = zip(PORT_NAME.data, PEER_BR.data, State.data)
 
         cost_time = time.time() - start_time
         entity_zoo.sweep_zoo()
@@ -269,6 +280,7 @@ def update_ovs_side(entity_zoo):
 
     rebuild_chassis_tunnel(tunnel_port_configs)
     config_tunnel_bfd(bfd_port_configs)
+    rebuild_patchport(patchport_configs)
 
 # etcd side may get two or more chassis which has same IP.
 # (A vm may be rebuild then it has different chassis-id but original IP.)

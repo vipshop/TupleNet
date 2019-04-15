@@ -39,32 +39,6 @@ def init_logger():
     logger.info("")
 
 
-def ovs_add_patch_port(patchport, br_int, br_phy):
-    peer = '{}-peer'.format(patchport)
-    cm.ovs_vsctl('add-port', br_phy, peer, '--', 'set',
-                 'Interface', peer, 'type=patch',
-                 'options:peer={}'.format(patchport))
-
-    cm.ovs_vsctl('add-port', br_int, patchport, '--', 'set',
-                 'Interface', patchport, 'type=patch',
-                 'external_ids:iface-id={}'.format(patchport),
-                 'options:peer={}'.format(peer))
-
-
-def ovs_del_patch_port(patchport, br_int, br_phy):
-    peer = cm.ovs_vsctl('get', 'Interface', patchport, 'options:peer')
-    peer = peer.encode('ascii','ignore').replace('"', '')
-
-    iface_id = cm.ovs_vsctl('get', 'Interface', patchport,
-                            'external_ids:iface-id')
-    iface_id = iface_id.encode('ascii','ignore').replace('"', '')
-    if iface_id != patchport:
-        raise TPToolErr("Error, patchport %s iface-id is not %s" %
-                        (patchport, patchport))
-
-    cm.ovs_vsctl('del-port', peer)
-    cm.ovs_vsctl('del-port', patchport)
-
 
 def ecmp_execute_cmds(cmd_tpctl_list, cmd_first = None, cmd_final = None):
     if cmd_first is not None:
@@ -297,9 +271,9 @@ def _cmd_new_lsr(lr_name, ip, prefix, next_hop, outport):
                     lr_name, lsr_name, ip, prefix, next_hop, outport)
     return cmd
 
-def _cmd_new_patchport(ls_name, portname):
-    cmd = "tpctl lsp add {} {} 255.255.255.255 ff:ff:ff:ff:ff:ee".format(
-                    ls_name, portname)
+def _cmd_new_patchport(ls_name, portname, chassis, peer_br):
+    cmd = "tpctl patchport add {} {} {} {}".format(
+                    ls_name, portname, chassis, peer_br)
     return cmd
 
 def _cmd_del_patchport(ls_name, portname):
@@ -377,7 +351,8 @@ def _add_ecmp_road(central_lr, inner_ls, edge, outside,
 
     #create patch port
     patchport = new_entity_name('lsp', out_ls_name + "-patchport")
-    tp_cmd_list.append(_cmd_new_patchport(out_ls_name, patchport))
+    tp_cmd_list.append(_cmd_new_patchport(out_ls_name, patchport,
+                                          system_id, HOST_BR_PHY))
 
     # create link command
     # lrp_cen_to_m is an exist lrp which link to a inner ls
@@ -418,7 +393,6 @@ def _add_ecmp_road(central_lr, inner_ls, edge, outside,
     is_execute = raw_input(("Please verify tpctl commands and press "
                             "yes to add an ecmp path:"))
     if is_execute == 'yes':
-        ovs_add_patch_port(patchport, HOST_BR_INT, HOST_BR_PHY)
         ecmp_execute_cmds(tp_cmd_list[:len(tp_cmd_list) - 1],
                           cmd_final=tp_cmd_list[-1])
         print("Done")
@@ -439,7 +413,8 @@ def _init_ecmp_road(central_lr, vip, vip_prefix, virt_ip, virt_prefix,
 
     #create patch port
     patchport = new_entity_name('lsp', out_ls_name + "-patchport")
-    tp_cmd_list.append(_cmd_new_patchport(out_ls_name, patchport))
+    tp_cmd_list.append(_cmd_new_patchport(out_ls_name, patchport,
+                                          system_id, HOST_BR_PHY))
 
     # create link command
     tp_cmd_list.append(_cmd_new_link(edge_lr_name, out_ls_name,
@@ -474,7 +449,6 @@ def _init_ecmp_road(central_lr, vip, vip_prefix, virt_ip, virt_prefix,
     is_execute = raw_input(("Please verify tpctl commands and press "
                             "yes to init an ecmp path:"))
     if is_execute == 'yes':
-        ovs_add_patch_port(patchport, HOST_BR_INT, HOST_BR_PHY)
         ecmp_execute_cmds(tp_cmd_list)
         print("Done")
     else:
@@ -547,7 +521,6 @@ def _remove_ecmp_road(out, edge, inner, central_lr):
                             "yes to remove a ecmp path:"))
     if is_execute == 'yes':
         ecmp_execute_cmds(tp_cmd_list[1:], cmd_first = tp_cmd_list[0])
-        ovs_del_patch_port(patchport.name, HOST_BR_INT, HOST_BR_PHY)
         print("Done")
     else:
         sys.exit(0)
@@ -657,7 +630,7 @@ def check_env(options):
         raise TPToolErr("phy_br should not be a tuplenet bridge")
     try:
         cm.ovs_vsctl('get', 'bridge', options.phy_br, 'datapath_id')
-    except TPToolErr:
+    except Exception:
         raise TPToolErr("please check if we have ovs bridge %s" % options.phy_br)
 
     chassis_set = entity_zoo.get('chassis')
@@ -668,14 +641,14 @@ def check_env(options):
 
     try:
         tpctl_execute(['tpctl --help'])
-    except TPToolErr as err:
+    except Exception as err:
         print(("failed to execute tpctl, please check if tpctl "
                 "had been installed"))
         raise err
 
     try:
         tpctl_execute(['tpctl lr show'])
-    except TPToolErr as err:
+    except Exception as err:
         print(("failed to execute tpctl lr show, please check etcd endpoints"))
         raise err
 

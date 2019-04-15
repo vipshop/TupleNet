@@ -269,12 +269,6 @@ etcd_lsp_del()
     etcddel LS/$ls_name/lsp/$lsp_name || return 1
 }
 
-etcd_patchport_add()
-{
-    ls_name=$1
-    lsp_name=$2
-    etcdput LS/$ls_name/lsp/$lsp_name ip=255.255.255.255,mac=ff:ff:ff:ff:ff:ee || return 1
-}
 
 etcd_ls_link_lr()
 {

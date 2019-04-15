@@ -36,12 +36,8 @@ start_tuplenet_daemon hv_new 172.20.11.9
 install_arp
 wait_for_brint # waiting for building br-int bridge
 
-patchport_add hv2 patchport-outside1 || exit_test
-patchport_add hv3 patchport-outside2 || exit_test
-
-# add patchport into etcd
-etcd_patchport_add outside1 patchport-outside1
-etcd_patchport_add outside2 patchport-outside2
+tp_add_patchport hv2 outside1 patchport-outside1 || exit_test
+tp_add_patchport hv3 outside2 patchport-outside2 || exit_test
 
 # link LS-A to LR-A
 etcd_ls_link_lr LS-A LR-A 10.10.1.1 24 00:00:06:08:06:01
@@ -312,10 +308,8 @@ etcd_lr_add edge4 hv5
 etcd_ls_add outside3
 etcd_ls_add outside4
 
-patchport_add hv4 patchport-outside3 || exit_test
-patchport_add hv5 patchport-outside4 || exit_test
-etcd_patchport_add outside3 patchport-outside3
-etcd_patchport_add outside4 patchport-outside4
+tp_add_patchport hv4 outside3 patchport-outside3 || exit_test
+tp_add_patchport hv5 outside4 patchport-outside4 || exit_test
 
 etcd_ls_link_lr m3 LR-A 100.10.10.4 24 00:00:06:09:06:01
 etcd_ls_link_lr m4 LR-A 100.10.10.5 24 00:00:06:09:06:02

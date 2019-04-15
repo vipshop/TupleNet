@@ -155,8 +155,7 @@ def init_lrp_ingress_clause(options):
             lsp_link_lrp(LSP, LS, UUID_LS, LRP, LR,
                          UUID_LR, UUID_CHASSIS, State2) &
             (Route[LSR_OUTPORT] == LRP[LRP_UUID]) &
-            local_bond_lsp(LSP1, LS, State3) &
-            (LSP1[LSP_MAC] == 'ff:ff:ff:ff:ff:ee') &
+            local_patchport(LSP1, LS, State3) &
             (State == State1 + State2 + State3) & (State != 0)
             )
     static_route_changed(Route, LR, LRP, State) <= (
