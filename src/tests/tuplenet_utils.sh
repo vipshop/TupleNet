@@ -29,7 +29,6 @@ kill_tuplenet_daemon()
     tuplenet_setenv $sim_id
     local pidfile="$TUPLENET_RUNDIR"/tuplerun.py.pid
     test -e "$pidfile" && kill $signal `cat $pidfile` # $2 was the signal
-    remove_arp_from_array $sim_id
 }
 
 tuplenet_boot()
@@ -63,13 +62,21 @@ start_tuplenet_daemon()
     if [ "$DISABLE_DUMMY" == 1 ]; then
         :
     else
-        local mac=`ovs-vsctl get Interface br0 mac_in_use | sed s/\"//g`
-        arp_table="$arp_table $sim_id,br0,$ip,$mac"
+        update_arp_table $sim_id $ip
     fi
 
     tuplenet_setenv $sim_id
     mkdir -p $TUPLENET_RUNDIR
     tuplenet_boot $sim_id $ip
+}
+
+update_arp_table()
+{
+    sim_id=$1
+    ip=$2
+    bridge="br0"
+    mac=`ovs-vsctl get Interface br0 mac_in_use | sed s/\"//g`
+    arp_table="$arp_table $sim_id,$bridge,$ip,$mac"
 }
 
 remove_arp_from_array()
@@ -99,6 +106,17 @@ install_arp()
                 ovs-appctl tnl/neigh/set $br2 $ip $mac > /dev/null
             fi
         done
+    done
+}
+
+flush_arp()
+{
+    hv_array="$1"
+    pmsg "flush $hv_array arp table"
+
+    for hv in $hv_array; do
+        ovs_setenv $hv
+        ovs-appctl tnl/neigh/flush
     done
 }
 
@@ -160,4 +178,15 @@ remove_ecmp_road()
     echo "yes" |  PATH=$PATH:$CONTROL_BIN_PATH/bin/  $PYTHON ../tuplenet/tools/edge-operate.py --endpoint $etcd_client_specs \
                        --prefix $tuplenet_prefix --op=remove \
                        --phy_br=br0 --vip=$vip || return 1
+}
+
+tp_add_patchport()
+{
+    sim_id=$1
+    chassis=$sim_id
+    lsname=$2
+    portname=$3
+    ovs_setenv $sim_id
+    tuplenet_setenv $sim_id
+    tpctl patchport add $lsname $portname $chassis br0 || return 1
 }

@@ -215,6 +215,19 @@ func main() {
 			},
 		},
 		{
+			Name:  "patchport",
+			Usage: "operate on logical switch patchport",
+			Subcommands: []cli.Command{
+				{
+					Name:      "add",
+					Aliases:   []string{"a"},
+					Usage:     "add a new logical switch patchport",
+					ArgsUsage: "SWITCH PORT IP CHASSIS PEER",
+					Action:    addPatchPort,
+				},
+			},
+		},
+		{
 			Name:  "ch",
 			Usage: "operate on chassis",
 			Subcommands: []cli.Command{
@@ -237,8 +250,8 @@ func main() {
 			Usage: "misc tools",
 			Subcommands: []cli.Command{
 				{
-					Name:  "sync-device-map",
-					Usage: "sync device id map within tuplenet",
+					Name:   "sync-device-map",
+					Usage:  "sync device id map within tuplenet",
 					Action: syncDeviceID,
 				},
 				{

@@ -204,26 +204,21 @@ real_path=`inject_trace_packet lsp-portA 00:00:06:08:07:01 10.10.1.2 00:00:06:08
 real_pkt=`get_tx_last_pkt hv1 lsp-portA`
 # we don't update expect_pkt, because we won't expect receiving icmp back
 verify_pkt $expect_pkt $real_pkt || exit_test
+# redirect feature will direct traffic to other chassis, so it would not drop this packet
+# then the last path(TABLE_DROP_PACKET) should be deleted
 expect_path="type:LS,pipeline:LS-A,from:lsp-portA,to:<UNKNOW>,stage:TABLE_LSP_TRACE_INGRESS_IN,chassis:hv1,output_iface_id:<UNK_PORT>
 type:LS,pipeline:LS-A,from:lsp-portA,to:LS-A_to_LR-A,stage:TABLE_LSP_TRACE_INGRESS_OUT,chassis:hv1,output_iface_id:<UNK_PORT>
 type:LS,pipeline:LS-A,from:lsp-portA,to:LS-A_to_LR-A,stage:TABLE_LSP_TRACE_EGRESS_IN,chassis:hv1,output_iface_id:<UNK_PORT>
 type:LS,pipeline:LS-A,from:lsp-portA,to:LS-A_to_LR-A,stage:TABLE_LSP_TRACE_EGRESS_OUT,chassis:hv1,output_iface_id:<UNK_PORT>
 type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:<UNKNOW>,stage:TABLE_LRP_TRACE_INGRESS_IN,chassis:hv1,output_iface_id:<UNK_PORT>
 type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:LR-A_to_m2,stage:TABLE_LRP_TRACE_INGRESS_OUT,chassis:hv1,output_iface_id:<UNK_PORT>
-type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:LR-A_to_m2,stage:TABLE_LRP_TRACE_EGRESS_IN,chassis:hv1,output_iface_id:<UNK_PORT>\n"
-
-# ondemand & redirect feature will direct traffic to other chassis, so it would not drop this packet
-# then the last path(TABLE_DROP_PACKET) should be deleted
-if [[ -z "$ONDEMAND" || "$ONDEMAND" == 1 ]]; then
-    last_path="type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:LR-A_to_m2,stage:TABLE_OUTPUT_PKT,chassis:hv1,output_iface_id:hv3
+type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:LR-A_to_m2,stage:TABLE_LRP_TRACE_EGRESS_IN,chassis:hv1,output_iface_id:<UNK_PORT>
+type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:LR-A_to_m2,stage:TABLE_OUTPUT_PKT,chassis:hv1,output_iface_id:hv3
 type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:LR-A_to_m2,stage:TABLE_LRP_TRACE_INGRESS_OUT,chassis:hv3,output_iface_id:<UNK_PORT>
 type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:LR-A_to_m2,stage:TABLE_LRP_TRACE_EGRESS_IN,chassis:hv3,output_iface_id:<UNK_PORT>
 type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:LR-A_to_m2,stage:TABLE_DROP_PACKET,chassis:hv3,output_iface_id:<UNK_PORT>"
-else
-    last_path="type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:LR-A_to_m2,stage:TABLE_DROP_PACKET,chassis:hv1,output_iface_id:<UNK_PORT>"
-fi
 
-expect_path=`echo -e "${expect_path}${last_path}"`
+
 verify_trace "$expect_path" "$real_path" || exit_test
 
 # create a lot of lsp to test if pkt-trace works well.

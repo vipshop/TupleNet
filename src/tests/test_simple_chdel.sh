@@ -143,8 +143,13 @@ kill_tuplenet_daemon hv3 -TERM
 GATEWAY=1 ONDEMAND=0 tuplenet_boot hv3 192.168.100.4
 tuplenet_boot hv2 192.168.100.3
 wait_for_flows_unchange # waiting for install flows
-wait_bfd_state_up hv3 hv2  || exit_test # bfd sync time
-wait_bfd_state_up hv3 hv1  || exit_test
+# NOTE: we have to disable bfd because the bfd issue would break the test.
+# the bfd issue( tunnel bfd interface can send/receive bfd packet but still in
+# down or init state)
+disable_bfd hv3 hv2 || exit_test
+disable_bfd hv3 hv1 || exit_test
+disable_bfd hv1 hv3 || exit_test
+disable_bfd hv2 hv3 || exit_test
 
 # send icmp from lsp-portD(on hv2) to ext1 through hv3
 dst_mac=`get_ovs_iface_mac ext1 br0`
@@ -179,8 +184,13 @@ tpctl ch del hv3 || exit_test
 wait_for_flows_unchange
 etcd_chassis_add hv3 192.168.100.4 10
 wait_for_flows_unchange
-wait_bfd_state_up hv3 hv2 || exit_test # bfd sync time
-wait_bfd_state_up hv3 hv1 || exit_test
+# NOTE: we have to disable bfd because the bfd issue would break the test.
+# the bfd issue( tunnel bfd interface can send/receive bfd packet but still in
+# down or init state)
+disable_bfd hv3 hv2 || exit_test
+disable_bfd hv3 hv1 || exit_test
+disable_bfd hv1 hv3 || exit_test
+disable_bfd hv2 hv3 || exit_test
 # send icmp from lsp-portD(on hv2) to ext1 through hv3
 dst_mac=`get_ovs_iface_mac ext1 br0`
 dst_mac=${src_mac//:} # convert xx:xx:xx:xx:xx:xx -> xxxxxxxxxxxx

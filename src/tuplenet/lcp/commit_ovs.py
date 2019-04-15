@@ -97,9 +97,13 @@ def update_ovsport(record, entity_zoo):
     ofport = record[2]
     name = record[3]
     external_ids = parse_map(record[4])
-    if ofport < 0:
-        logger.info("do not accept ovsport %s which has negative ofport %d", name, ofport)
-        return
+    port_type = record[5]
+
+    # adding an interal port may imply that an new bridge was created,
+    # we should update zoo's version to test if tuplenet should rebuild
+    # patchports.
+    if port_type == 'internal':
+        entity_zoo.update_version_force()
 
     if external_ids.has_key('iface-id'):
         uuid = external_ids['iface-id']
@@ -118,6 +122,9 @@ def update_ovsport(record, entity_zoo):
         logger.info("try to move port %s to sink uuid:%s", name, uuid)
         entity_zoo.move_entity2sink(entity_type, name)
     else:
+        if ofport < 0:
+            logger.info("do not accept ovsport %s which has negative ofport %d", name, ofport)
+            return
         logger.info("try to add ovsport entity %s ofport:%d, uuid:%s in zoo",
                     name, ofport, uuid)
         entity_zoo.add_entity(entity_type, name, uuid, ofport, is_remote)
@@ -127,7 +134,7 @@ def update_ovsport(record, entity_zoo):
 def monitor_ovsdb(entity_zoo, extra):
     pyDatalog.Logic(extra['logic'])
     cmd = ['ovsdb-client', 'monitor', 'Interface',
-           'ofport', 'name', 'external_ids', '--format=json']
+           'ofport', 'name', 'external_ids', 'type', '--format=json']
 
     logger.info("start ovsdb-client instance")
     try:
@@ -270,20 +277,71 @@ def create_flowbased_tunnel(chassis_id):
     return portname
 
 
-def create_patch_port(uuid, peer_bridge):
-    portname = 'patch-' + 'br-int' + peer_bridge + str(uuid)[0:8]
-    peername = 'patch-' + peer_bridge + 'br-int' + str(uuid)[0:8]
+def create_patchport(portname, peer_br, br = 'br-int'):
+    peer_portname = portname + "-peer"
+    try:
+        ovs_vsctl('br-exists', peer_br)
+    except:
+        logger.info("the bridge %s is not exist, would not create patchports",
+                    peer_br)
+        return
 
-    cmd = ['add-port', 'br-int', portname, '--', 'set', 'interface',
-           portname, 'type=patch',
-           'external_ids:iface-id={}'.format(uuid),
-           'options:peer={}'.format(peername)]
-    ovs_vsctl(*cmd)
-    cmd = ['add-port', peer_bridge, peername, '--', 'set', 'interface',
-           peername, 'type=patch',
-           'options:peer={}'.format(portname)]
-    ovs_vsctl(*cmd)
+    cmd = []
+    try:
+        ovs_vsctl('list', 'interface', portname)
+    except:
+        cmd += ['--', 'add-port', br, portname,
+                '--', 'set', 'interface', portname, 'type=patch',
+                'options:peer={}'.format(peer_portname),
+                'external_ids:iface-id={}'.format(portname)
+               ]
 
+    try:
+        ovs_vsctl('list', 'interface', peer_portname)
+    except:
+        cmd += ['--', 'add-port', peer_br, peer_portname,
+                '--', 'set', 'interface', peer_portname, 'type=patch',
+                'options:peer={}'.format(portname),
+                'external_ids:iface-id={}'.format(peer_portname)
+               ]
+    if len(cmd) == 0:
+        logger.info("the patchports had been created, skip..")
+        return
+
+    try:
+        ovs_vsctl(*cmd)
+    except Exception as err:
+        logger.warning("failed to create patchport, err:%s", err)
+    else:
+        logger.info("created patchport %s, %s", portname, peer_portname)
+
+
+def delete_patchport(portname):
+    try:
+        peer_portname = ovs_vsctl('get', 'interface', portname,
+                                  'options:peer').strip("\"")
+    except Exception as err:
+        logger.warning("failed to get %s peer patchport information, err:%s",
+                       portname, err)
+        return
+    try:
+        ovs_vsctl('del-port', portname)
+    except Exception as err:
+        logger.warning("failed to delete patchport %s, err:%s", portname, err)
+        return
+
+    try:
+        ovs_vsctl('list', 'interface', peer_portname)
+    except Exception as err:
+        logger.warning("failed to find patchport %s, err:%s",
+                       peer_portname, err)
+        return
+    try:
+        ovs_vsctl('del-port', peer_portname)
+    except Exception as err:
+        logger.warning("failed to delete patchport %s, err:%s", peer_portname, err)
+        return
+    logger.info("removed patchport %s %s", portname, peer_portname)
 
 def commit_replaceflows(replace_flows, br = 'br-int'):
     # commit_replaceflows is only consumed by update_logical_view in booting

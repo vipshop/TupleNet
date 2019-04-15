@@ -48,11 +48,10 @@ def init_lrp_egress_clause(options):
         )
 
     opposite_side_has_patch_port(LR, LRP, State) <= (
-        local_bond_lsp(LSP_WITH_OFPORT, LS, State2) &
-        (LSP_WITH_OFPORT[LSP_MAC] == 'ff:ff:ff:ff:ff:ee') &
+        local_patchport(LSP, LS, State1) &
         lsp_link_lrp(LSP1, LS, UUID_LS, LRP, LR,
-                     UUID_LR, UUID_LR_CHASSIS, State1) &
-        # NOTE only consider local_lsp, it means a gateway's oppsite
+                     UUID_LR, UUID_LR_CHASSIS, State2) &
+        # NOTE only consider local_patchport, it means a gateway's oppsite
         # LS has remote patchport cannot trigger this flow
         (State == State1 + State2)
         )

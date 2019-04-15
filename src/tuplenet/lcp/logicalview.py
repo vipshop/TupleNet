@@ -799,6 +799,10 @@ class LogicalEntityZoo():
                     logger.debug('eliminate %s from sink', entry)
                 group.pop(key)
 
+    def update_version_force(self):
+        with self.lock:
+            self.zoo_ver += 1
+
 
 entity_zoo = LogicalEntityZoo()
 def get_zoo():
@@ -811,7 +815,7 @@ pyDatalog.create_terms('UUID_LS2, UUID_LR2, UUID_LSP2, UUID_LRP2,UUID_CHASSIS2')
 pyDatalog.create_terms('UUID_LR_CHASSIS1, UUID_LR_CHASSIS2')
 pyDatalog.create_terms('LSP1, LSP2, LRP1, LRP2, LR1, LR2')
 pyDatalog.create_terms('UUID_LR_CHASSIS')
-pyDatalog.create_terms('LSP_WITH_OFPORT, PHY_CHASSIS_WITH_OFPORT, OFPORT')
+pyDatalog.create_terms('LSP_WITH_OFPORT, PHY_CHASSIS_WITH_OFPORT, OFPORT, OFPORT1')
 pyDatalog.create_terms('State, State1, State2, State3, State4, State5, State6')
 pyDatalog.create_terms('PORT_NAME, XLATE_TYPE')
 
@@ -825,6 +829,7 @@ pyDatalog.create_terms('lnat_data')
 pyDatalog.create_terms('local_system_id')
 pyDatalog.create_terms('next_hop_lr')
 pyDatalog.create_terms('next_hop_ovsport')
+pyDatalog.create_terms('local_patchport')
 
 def init_entity_clause(options):
 
@@ -837,6 +842,20 @@ def init_entity_clause(options):
         (LSP_WITH_OFPORT == (LSP + [OFPORT])) &
         (State == State1 + State2 + State3)
         )
+    local_bond_lsp(LSP_WITH_OFPORT, LS, State) <= (
+        local_patchport(LSP_WITH_OFPORT, LS, State))
+
+    local_patchport(LSP_WITH_OFPORT, LS, State) <= (
+        ovsport(PORT_NAME, UUID_LSP, OFPORT, State1) &
+        (OFPORT > 0) &
+        ls_array(LS, UUID_LS, State2) &
+        local_system_id(UUID_CHASSIS) &
+        exchange_lsp_array(UUID_LSP, LSP, UUID_LS, UUID_CHASSIS, UUID_LRP, State3) &
+        (LSP[LSP_IP] == '255.255.255.255') &
+        (State == State1 + State2 + State3) &
+        (LSP_WITH_OFPORT == (LSP + [OFPORT]))
+        )
+
 
     local_lsp(LSP, LS, State) <= (
         lsp_link_lrp(LSP, LS, UUID_LS, LRP, LR, UUID_LR, None, State)
@@ -949,6 +968,4 @@ def init_entity_clause(options):
             lnat_array(LNAT, UUID_LR, XLATE_TYPE, State2) &
             (State == State1 + State2)
         )
-
-
 
