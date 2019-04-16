@@ -297,12 +297,43 @@ NOTE: please decrease the mtu of container's ethX as well, the mtu of endpoints 
 
 ```
 
-# 5. Metrics and monitoring
+# 5. CNI in TupleNet
 
-**5.1 how to enable IPFIX in tuplenet node**
+#### TupleNet implement CNI interface which can be consumed by kubelet
+
+**5.1 config tpcni.conf**
+```
+cat <<EOF  > /etc/cni/net.d/tpcni.conf
+{
+        "cniVersion": "0.3.0",
+        "name": "tpcni-network",
+        "type": "tpcni",
+        "mtu": 1400,
+        "switchname": "LS_A",
+        "subnet": "10.20.1.1/24",
+        "etcd_cluster": "YOUR_ETCD_IP:PORT",
+        "data_store_prefix": "/tuplenet"
+}
+EOF
+```
+This config file tell tpcni that it should allocate ip from 10.20.1.1/24, and the created lsp was pinned on LS-A.(the IP 10.20.1.1 is default gw)
+
+**5.1 build link for tpcni**
+
+Once tpcni.conf was built the kubelet searchs tpcni in /opt/cni/bin. User must set link for tpcni in /opt/cni/bin
+```
+ln -s /usr/bin/tpcni /opt/cni/bin/tpcni
+```
+Now please try to restart kubelet and create a new POD.
+
+
+# 6. Metrics and monitoring
+
+**6.1 how to enable IPFIX in tuplenet node**
+
 Append IPFIX_COLLECTOR=IP:port and optional IPFIX_SAMPLING_RATE=x to environment variable. Domain ID will be the uint32 representation of the tuplenet node IP
 
-# 6. Enable UNTUNNEL mode
+# 7. Enable UNTUNNEL mode
 
 Once enable untunnel mode, the regular tuplenet's out-traffic(should forward to physical network) would not deliver to edge node. Instead, those traffic will be deliver to host tcpip stack through br-int port which is an internal port. It helps to improve latency and throughput.
 
