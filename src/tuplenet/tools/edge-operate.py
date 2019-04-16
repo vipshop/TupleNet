@@ -546,8 +546,6 @@ def remove_ecmp_road(vip):
     lrp = _find_lrp_by_vip(vip)
     for out,edge,inner in ls_lr_ls_list:
         if edge.name == lrp.parent:
-            if edge.chassis != system_id:
-                raise TPToolErr("you cannot remove a edge in other host")
             found = True
             _remove_ecmp_road(out, edge, inner, lr_central)
             break
@@ -633,11 +631,13 @@ def check_env(options):
     except Exception:
         raise TPToolErr("please check if we have ovs bridge %s" % options.phy_br)
 
-    chassis_set = entity_zoo.get('chassis')
-    if chassis_set is None:
-        raise TPToolErr("etcd side has no chassis list")
-    if not chassis_set.has_key(system_id):
-        raise TPToolErr("cannot found %s in chassis list" % system_id)
+    # remove operation do NOT need to check if etcd has chassis or local openvswitch has system-id
+    if options.op == 'init' or options.op == 'add':
+        chassis_set = entity_zoo.get('chassis')
+        if chassis_set is None:
+            raise TPToolErr("etcd side has no chassis list")
+        if not chassis_set.has_key(system_id):
+            raise TPToolErr("cannot found %s in chassis list" % system_id)
 
     try:
         tpctl_execute(['tpctl --help'])

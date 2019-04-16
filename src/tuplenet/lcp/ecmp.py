@@ -4,6 +4,7 @@ import match
 from logicalview import *
 from flow_common import *
 from reg import *
+import tpstatic as st
 
 pyDatalog.create_terms('Table, Priority, Match, Action')
 pyDatalog.create_terms('Action1, Action2, Action3, Action4, Action5')
@@ -142,7 +143,7 @@ def init_ecmp_clause(options):
         ecmp_static_route_judge(LR, Priority, Match, Action, State) <= (
             lr_array(LR, UUID_LR, State) & (State != 0) &
             (Priority == 1) &
-            match.reg_outport(0xffff, Match) &
+            match.reg_outport(st.TP_OFPORT_NONE, Match) &
             action.resubmit_table(TABLE_DROP_PACKET, Action)
             )
 
@@ -160,7 +161,7 @@ def init_ecmp_clause(options):
         ecmp_bfd_port(PORT_NAME, State) <= (
             ovsport_chassis(PORT_NAME, UUID_CHASSIS, OFPORT, State1) &
             # we only enable ovsport that exist
-            (State1 >= 0) & (UUID_CHASSIS != 'flow_base_tunnel') &
+            (State1 >= 0) & (UUID_CHASSIS != st.TP_FLOW_TUNNEL_NAME) &
             chassis_array(PHY_CHASSIS, UUID_CHASSIS, State2) &
             (State == State1 + State2) & (State != 0)
             )
@@ -179,7 +180,7 @@ def init_ecmp_clause(options):
             (State == State1 + State2) & (State != 0) &
             # figure out all tunnel port
             ovsport_chassis(PORT_NAME, UUID_CHASSIS1, OFPORT, State3) & (State3 >= 0) &
-            (UUID_CHASSIS1 != 'flow_base_tunnel')
+            (UUID_CHASSIS1 != st.TP_FLOW_TUNNEL_NAME)
             )
     else:
         ecmp_bfd_port(PORT_NAME, State) <= (
@@ -188,6 +189,7 @@ def init_ecmp_clause(options):
             # we only enable/disable ovsport that exist
             ovsport_chassis(PORT_NAME, UUID_CHASSIS, OFPORT, State3) & (State3 >= 0) &
             chassis_array(PHY_CHASSIS, UUID_CHASSIS, State4) &
+            (UUID_CHASSIS != st.TP_FLOW_TUNNEL_NAME) &
             (State == State1 + State2 + State3 + State4)
             )
 
