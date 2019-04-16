@@ -2,6 +2,7 @@ import logging
 from pyDatalog import pyDatalog
 import socket, struct
 import threading
+import tpstatic as st
 from tp_utils.run_env import get_extra
 
 logger = logging.getLogger(__name__)
@@ -451,8 +452,8 @@ PCH_IP = 1
 PCH_TICK = 2
 PCH_State = 3
 PCH_OFPORT = 4 # external data
-+chassis_array(['flow_base_tunnel', '', 0, 0],
-               'flow_base_tunnel', 0)
++chassis_array([st.TP_FLOW_TUNNEL_NAME, '', 0, 0],
+               st.TP_FLOW_TUNNEL_NAME, 0)
 class PhysicalChassis(LogicalEntity):
     property_keys = [LOGICAL_ENTITY_ID, 'ip', 'tick']
     entity_type = LOGICAL_ENTITY_TYPE_CHASSIS
@@ -951,21 +952,9 @@ def init_entity_clause(options):
         (State == State1 + State2)
         )
 
-    # TODO: should remove this if-else statement
-    if not get_extra()['options'].has_key('ENABLE_PERFORMANCE_TESTING'):
-        lnat_data(LNAT, LR, XLATE_TYPE, UUID_LR, State) <= (
-            lr_array(LR, UUID_LR, State1) &
-            # TODO local_system_id, UUID_CHASSIS here introduce
-            # performance regression
-            (UUID_CHASSIS == LR[LR_CHASSIS_UUID]) &
-            local_system_id(UUID_CHASSIS) &
-            lnat_array(LNAT, UUID_LR, XLATE_TYPE, State2) &
-            (State == State1 + State2)
-        )
-    else:
-        lnat_data(LNAT, LR, XLATE_TYPE, UUID_LR, State) <= (
-            lr_array(LR, UUID_LR, State1) &
-            lnat_array(LNAT, UUID_LR, XLATE_TYPE, State2) &
-            (State == State1 + State2)
-        )
+    lnat_data(LNAT, LR, XLATE_TYPE, UUID_LR, State) <= (
+        lr_array(LR, UUID_LR, State1) &
+        lnat_array(LNAT, UUID_LR, XLATE_TYPE, State2) &
+        (State == State1 + State2)
+    )
 

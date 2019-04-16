@@ -168,11 +168,10 @@ expect_pkt=`build_icmp_request 000006080601 000006080701 $ip_src $ip_dst $ttl b1
 real_pkt=`get_tx_last_pkt hv1 lsp-portA`
 verify_pkt $expect_pkt $real_pkt || exit_test
 
-# test if we cannot delete edge node in other hv
+# test if we can delete edge node in other hv
+remove_ecmp_road hv2 192.168.100.57/24 || exit_test
+! remove_ecmp_road hv4 192.168.100.57/24 || exit_test
 ! remove_ecmp_road hv2 192.168.100.57/24 || exit_test
-! remove_ecmp_road hv3 192.168.100.57/24 || exit_test
-# now we should delete the third ecmp road
-remove_ecmp_road hv4 192.168.100.57/24 || exit_test
 wait_for_flows_unchange # waiting for install flows
 # send icmp to edge2(hv4) from hv2 by lsp-portB
 ip_src=`ip_to_hex 10 10 2 2`

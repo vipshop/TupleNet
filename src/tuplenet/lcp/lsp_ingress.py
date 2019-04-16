@@ -4,6 +4,7 @@ import match
 from reg import *
 from logicalview import *
 from flow_common import *
+import tpstatic as st
 
 pyDatalog.create_terms('Table, Priority, Match, Action')
 pyDatalog.create_terms('Action1, Action2, Action3, Action4, Action5')
@@ -206,7 +207,7 @@ def init_lsp_ingress_clause(options):
             action.upload_unknow_dst(Action1) &
             # resubmit this packet to next stage, gateway host can
             # do delivering if gateway enable redirect feature
-            action.load(0xffff, NXM_Reg(REG_OUTPORT_IDX), Action2) &
+            action.load(st.TP_OFPORT_NONE, NXM_Reg(REG_OUTPORT_IDX), Action2) &
             action.load(1, NXM_Reg(REG5_IDX), Action3) &
             action.resubmit_next(Action4) &
             (Action == Action1 + Action2 + Action3 + Action4)
@@ -230,7 +231,7 @@ def init_lsp_ingress_clause(options):
             ls_array(LS, UUID_LS, State) & (State != 0) &
             match.reg_5(1, Match1) &
             match.reg_flag(FLAG_REDIRECT, Match2) &
-            match.reg_outport(0xffff, Match3) &
+            match.reg_outport(st.TP_OFPORT_NONE, Match3) &
             (Match == Match1 + Match2 + Match3) &
             action.resubmit_table(TABLE_DROP_PACKET, Action)
             )
@@ -241,7 +242,7 @@ def init_lsp_ingress_clause(options):
             (Priority == 3) &
             ls_array(LS, UUID_LS, State) & (State != 0) &
             match.reg_5(1, Match1) &
-            match.reg_outport(0xffff, Match2) &
+            match.reg_outport(st.TP_OFPORT_NONE, Match2) &
             (Match == Match1 + Match2) &
             action.resubmit_table(TABLE_REDIRECT_CHASSIS, Action)
             )
