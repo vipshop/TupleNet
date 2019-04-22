@@ -37,7 +37,7 @@ TupleNet和Flannel，Calico类似采用的基于数据库的架构方式。Tuple
 
 ## Why TupleNet
 ### 1. TupleNet 采用了及其简便的架构方式，没有中心控制节点，部署方便快捷
-TupleNet 是stateless的，它没有中控节点，TupleNet相互之间只需要通过etcd就可以相互构建完整的虚拟网络。其中TupleNet的重要节点（Edge TupleNet）是可以多套部署，所以在TupleNet的网络中是可以避免单点故障。
+TupleNet 是stateless的，它没有中控节点，TupleNet相互之间只需要通过etcd就可以相互构建完整的虚拟网络。其中TupleNet的重要节点（Edge TupleNet）是可以多套部署，所以在TupleNet的网络中是可以避免单点故障。TupleNet实现了CNI，和CNM接口，可以直接为k8s和docker的容器集群提供虚拟网络。
 
 ### 2. TupleNet 的redirecting特性可以支持让其他TupleNet节点作为中间节点转发数据报文，减少网络故障带来的影响
 在TupleNet网络中可能存在某个Edge节点不能和某些节点进行通信，开启了redirecting功能后Edge TupleNet节点发现和报文接收方之间存在网络问题（普通TupleNet节点和Edge TupleNet节点通过BFD进行健康探测）后可以将数据报文先转发到其他Edge节点，让这个Edge节点帮助转发数据报文。Redirecting可以减少网络故障带来的影响。
@@ -52,7 +52,7 @@ TupleNet 的所有ovs-flow都是在本地生成，不需要一个额外的contro
 ### 5. TupleNet支持虚拟路径的 + 物理节点的数据报文tracing，快速定位网络故障
 在实际网络中很可能会出现某个网络链路出现问题，或者人为导致TupleNet配置错误，这些情况都会导致在虚拟网络中出现网路不可达。TupleNet提供了Packet tracing功能，可以通过pkt-trace工具从指定logical port发送被标记好的报文，报文所经过的TupleNet节点和虚拟网络中的虚拟节点（logical switch，logical router，logical port）都会被完整记录下来。这些信息可以帮助运维人员快速定位故障。
 
-### 6. TupleNet支持多路径overlay & non-overlay 报文传递
+### 6. TupleNet支持Non-overlay DSR(Direct Server Return)报文传递
 在物理网络上架设TupleNet虚拟网络后，虚拟网络的节点需要和外界物理网络通信时候可以采用overlay & non-overlay 混杂传递报文（从TupleNet node到外部物理网络的报文不经过Geneve封装，直接传递给宿主机协议栈，由宿主机协议栈发送出去，避免解封报文带来的性能损耗。从物理网络到虚拟网络节点的报文仍然经过Edge节点转发）。可以大大提升overlay 虚拟网络的性能，以及减轻Edge节点压力。
 
 ## TupleNet目前支持以下特性：(TupleNet's features)
@@ -67,6 +67,7 @@ TupleNet 的所有ovs-flow都是在本地生成，不需要一个额外的contro
 - **Pkt-tracing，支持发送“染色”探测报文，并分析出所经过的整条链路  (it send out packet which can be traced and print the whole path)**
 - **SNAT，DNAT, floating-ip**
 - **HostSwitch IPFIX**
+- **CNI for K8S, CNM for Docker**
 
 **很快将会支持的特性 (Feature coming soon)**
 - - [ ]LoadBalance
@@ -100,5 +101,5 @@ TupleNet的主要逻辑都是由Python构建，只需要编译pkt_controller以�
 2. pip install tuplenet-xxx.whl(generate whl by running python setup.py  bdist_wheel in TupleNet folder)
 3. config & run tuplenet and enjoy it. For detail guide document, please visit [tutorials](/tutorials/README.md)
 
-### NOTE1: TupleNet还处于0.2.X的版本，还有很多不足也有很多工作要做。目前TupleNet使用在唯品会内网的测试开发云平台，经过小规模集群验证。如果你在使用中遇到问题，欢迎告诉我们。
+### NOTE1: TupleNet还处于0.3.X的版本，还有很多不足也有很多工作要做。目前TupleNet使用在唯品会内网的测试开发云平台，经过小规模集群验证。如果你在使用中遇到问题，欢迎告诉我们。
 ### NOTE2: You can download and consume latest pypy to speed up the control path to accerlate generating ovs-flow
