@@ -27,6 +27,14 @@ start_tuplenet_daemon ext1 192.168.100.6
 install_arp
 wait_for_brint # waiting for building br-int bridge
 
+sleep 5 # waiting for updating chassis to etcd by tuplenet
+
+# only get a central_lr, test if script can add ecmp road
+! add_ecmp_road hv2 192.168.100.51/24 || exit_test
+# adding a new ecmp road
+init_ecmp_road hv2 192.168.100.51/24 10.10.0.0/16 192.168.100.1 || exit_test
+# test if failed to add ecmp road in same hv
+! add_ecmp_road hv2 192.168.100.51/24 || exit_test
 # link LS-A to LR-A
 etcd_ls_link_lr LS-A LR-A 10.10.1.1 24 00:00:06:08:06:01
 # link LS-B to LR-A
@@ -35,14 +43,6 @@ port_add hv1 lsp-portA || exit_test
 etcd_lsp_add LS-A lsp-portA 10.10.1.2 00:00:06:08:07:01
 port_add hv1 lsp-portB || exit_test
 etcd_lsp_add LS-B lsp-portB 10.10.2.2 00:00:06:08:09:01
-wait_for_flows_unchange # waiting for install flows
-
-# only get a central_lr, 2 LS, test if script can add ecmp road
-! add_ecmp_road hv2 192.168.100.51/24 || exit_test
-# adding a new ecmp road
-init_ecmp_road hv2 192.168.100.51/24 10.10.0.0/16 192.168.100.1 || exit_test
-# test if failed to add ecmp road in same hv
-! add_ecmp_road hv2 192.168.100.51/24 || exit_test
 wait_for_flows_unchange # waiting for install flows
 
 # send icmp to edge1(hv2) from hv1

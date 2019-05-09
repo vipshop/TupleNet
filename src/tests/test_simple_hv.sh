@@ -42,11 +42,22 @@ prev_tick="`etcd_get_chassis_tick hv1`"
 kill_tuplenet_daemon hv1 -TERM
 sleep 2
 tuplenet_boot hv1 192.168.100.1
+sleep 3
 tick="`etcd_get_chassis_tick hv1`"
-if [ $tick != $prev_tick ]; then
+if [ "$tick" != "$prev_tick" ]; then
     echo "hv1 prev tick:$prev_tick, current tick:$tick"
     exit_test
 fi
+
+# tuplenet should not readd the chassis back
+tpctl ch del hv1
+sleep 3
+tick="`etcd_get_chassis_tick hv1`"
+if [ "$tick" != "" ]; then
+    echo "hv1 was readd back"
+    exit_test
+fi
+
 
 wait_for_flows_unchange
 

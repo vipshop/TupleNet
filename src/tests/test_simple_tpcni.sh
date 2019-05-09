@@ -8,7 +8,8 @@ env_init ${0##*/} # 0##*/ is the filename
 
 LS_A="LS-A"
 conf_path=${test_path}/mytpcni.conf
-subnet="10.10.1.1/28"
+subnet="10.10.1.0/28"
+default_gw="10.10.1.1/28"
 cat <<EOF  > $conf_path
 {
     "cniVersion": "0.3.0",
@@ -177,7 +178,7 @@ wait_for_flows_unchange
 
 gwip="10.10.1.1"
 ! local_docker exec ${container1} ping ${gwip} -c 1 -W 1 || exit_test
-tpctl lr link LR-central $LS_A $subnet
+tpctl lr link LR-central $LS_A $default_gw
 wait_for_flows_unchange
 local_docker exec ${container1} ping ${gwip} -c 1 -W 1 || exit_test
 local_docker exec ${container1} ping ${ip2} -c 1 -W 1 || exit_test

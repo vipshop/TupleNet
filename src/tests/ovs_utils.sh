@@ -575,6 +575,7 @@ wait_for_flows_unchange()
         current_flows_array="$current_flows $current_flows_array"
     done
 
+    i=0
     while [ "$current_flows_array" != "$prev_flows_array" ]
     do
         prev_flows_array=$current_flows_array
@@ -586,6 +587,10 @@ wait_for_flows_unchange()
             current_flows=`get_ovs_flows`
             current_flows_array="$current_flows $current_flows_array"
         done
+        i=$((i+1))
+        if [ $i -gt 20 ]; then
+            pmsg "cost to much time in waiting flows sync, exit"
+        fi
     done
     end_time=$(date +%s)
     cost_time=$((end_time - start_time))
