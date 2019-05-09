@@ -315,14 +315,18 @@ def update_logical_view(entity_zoo, extra):
 
     update_ovs_side(entity_zoo)
     # update chassis information to remote if tuplenet had been install ovsflow
-    if update_logical_view.updated_chassis is False and \
-       _is_new_chassis(extra['consume_ip'], extra['system_id']):
-        ret = wmaster.update_chassis(extra['consume_ip'])
-        if ret == 1:
+    if update_logical_view.updated_chassis is False:
+        if not _is_new_chassis(extra['consume_ip'], extra['system_id']):
+            # no need to update chassis, and set updated_chassis = True to
+            # avoid reupdate while this chassis was remove
             update_logical_view.updated_chassis = True
         else:
-            logger.warning("failed to update chassis information to remote etcd")
-        cnt_upload += ret
+            ret = wmaster.update_chassis(extra['consume_ip'])
+            if ret == 1:
+                update_logical_view.updated_chassis = True
+            else:
+                logger.warning("failed to update chassis information to remote etcd")
+            cnt_upload += ret
 
     # call this function again immediately because tuplenet update the lsp
     # so we should read the change of etcd as soon as possible

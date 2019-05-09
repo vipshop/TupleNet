@@ -322,6 +322,11 @@ def _gen_lrp_property(ip_int, prefix):
     mprefix = 32 - prefix
     max_ip_int = ((ip_int >> mprefix) << mprefix) + (0xffffffff >> prefix)
     min_ip_int = ((ip_int >> mprefix) << mprefix)
+
+    if lrp_set is None:
+        ip = socket.inet_ntoa(struct.pack('I',socket.htonl(max_ip_int - 1)))
+        return ip, prefix
+
     for ip_int in xrange(max_ip_int-1, min_ip_int, -1):
         conflict = False
         for lrp in lrp_set.values():
@@ -544,11 +549,12 @@ def remove_ecmp_road(vip):
 
     found = False
     lrp = _find_lrp_by_vip(vip)
-    for out,edge,inner in ls_lr_ls_list:
-        if edge.name == lrp.parent:
-            found = True
-            _remove_ecmp_road(out, edge, inner, lr_central)
-            break
+    if lrp is not None:
+        for out,edge,inner in ls_lr_ls_list:
+            if edge.name == lrp.parent:
+                found = True
+                _remove_ecmp_road(out, edge, inner, lr_central)
+                break
     if found is False:
         raise TPToolErr("failed to search ecmp path by using vip:%s" % vip)
 

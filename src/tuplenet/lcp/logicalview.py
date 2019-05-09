@@ -33,6 +33,13 @@ def _gen_mac_by_ip(ip_int):
                     ip_int & 0xff)
     return mac
 
+def ip2int(ip):
+    ip_int = struct.unpack("!L", socket.inet_aton(ip))[0]
+    convert = socket.inet_ntoa(struct.pack("!I", ip_int))
+    if ip != convert:
+        raise Exception("invalid ip:%s", ip)
+    return ip_int
+
 class LogicalEntity(object):
 
     def __init__(self):
@@ -145,7 +152,7 @@ class LogicalSwitchPort(LogicalEntity):
         super(LogicalSwitchPort, self).__init__()
         self.uuid = uuid
         self.ip = ip
-        self.ip_int = struct.unpack("!L", socket.inet_aton(ip))[0]
+        self.ip_int = ip2int(ip)
         self.mac = mac;
         self.mac_int = int(mac.translate(None, ":.- "), 16)
         self.chassis = chassis
@@ -156,19 +163,21 @@ class LogicalSwitchPort(LogicalEntity):
         self.ls_view_mac = '{}{}'.format(self.ls_uuid, self.mac)
         self.lsp_shop = lsp_array if peer is None else exchange_lsp_array
         # only regular lsp need to be touched
-        self.touched = False if peer is None else True
+        self.touched = self._should_touch()
 
     def _update_dup_data(self):
         self.lsp = [self.uuid, self.ip, self.ip_int, self.mac,
                     self.mac_int, self.chassis, self.ls_uuid,
                     self.peer, self.portID, self.state]
 
-    def _is_update_clause(self):
+    def _should_touch(self):
         if not get_extra()['options'].has_key('ONDEMAND'):
             return True
         if self.chassis == get_extra()['system_id']:
             return True
-        return self.touched
+        if self.peer is not None:
+            return True
+        return False
 
     # touch lsp, means we should generate flow and count this lsp in
     def touch(self):
@@ -180,14 +189,14 @@ class LogicalSwitchPort(LogicalEntity):
         self.add_clause()
 
     def del_clause(self):
-        if self._is_update_clause() is False:
+        if self.touched is False:
             return
         -self.lsp_shop(self.lsp[LSP_UUID], self.lsp,
                        self.lsp[LSP_LS_UUID], self.lsp[LSP_CHASSIS_UUID],
                        self.lsp[LSP_PEER], self.lsp[LSP_State])
 
     def add_clause(self):
-        if self._is_update_clause() is False:
+        if self.touched is False:
             return
         +self.lsp_shop(self.lsp[LSP_UUID], self.lsp,
                        self.lsp[LSP_LS_UUID], self.lsp[LSP_CHASSIS_UUID],
@@ -228,7 +237,7 @@ class LogicalRouterPort(LogicalEntity, ILKEntity):
         self.uuid = uuid
         self.prefix = max(min(int(prefix), 32), 0)
         self.ip = ip
-        self.ip_int = struct.unpack("!L", socket.inet_aton(ip))[0]
+        self.ip_int = ip2int(ip)
         self.mac = mac;
         self.mac_int = int(mac.translate(None, ":.- "), 16)
         self.lr_uuid = lr_uuid
@@ -323,10 +332,10 @@ class LogicalStaticRoute(LogicalEntity, ILKEntity):
         self.lr_uuid = lr_uuid
         self.prefix = max(min(int(prefix), 32), 0)
         self.ip = ip
-        self.ip_int = struct.unpack("!L", socket.inet_aton(ip))[0]
+        self.ip_int = ip2int(ip)
         self.ip_int = (self.ip_int >> (32 - self.prefix)) << (32 - self.prefix)
         self.next_hop = next_hop
-        self.next_hop_int = struct.unpack("!L", socket.inet_aton(next_hop))[0]
+        self.next_hop_int = ip2int(next_hop)
         self.outport = outport
         self.lr_view_lsr = "lsr{}{}{}{}{}".format(self.lr_uuid, self.ip,
                                                   self.prefix, self.next_hop,
@@ -379,10 +388,10 @@ class LogicalNetAddrXlate(LogicalEntity):
         self.uuid = uuid
         self.lr_uuid = lr_uuid
         self.ip = ip
-        self.ip_int = struct.unpack("!L", socket.inet_aton(ip))[0]
+        self.ip_int = ip2int(ip)
         self.prefix = int(prefix)
         self.xlate_ip = xlate_ip
-        self.xlate_ip_int = struct.unpack("!L", socket.inet_aton(xlate_ip))[0]
+        self.xlate_ip_int = ip2int(xlate_ip)
         self.xlate_mac = _gen_mac_by_ip(self.xlate_ip_int)
         self.xlate_mac_int = int(self.xlate_mac.translate(None, ":.- "), 16)
         self.xlate_type = xlate_type
@@ -462,21 +471,21 @@ class PhysicalChassis(LogicalEntity):
         super(PhysicalChassis, self).__init__()
         self.uuid = uuid
         self.ip = ip
-        self.ip_int = struct.unpack("!L", socket.inet_aton(ip))[0]
+        self.ip_int = ip2int(ip)
         # it tells which chassis(has same IP) is the latest one
         self.tick = int(tick)
         self.global_view_chassis = "chassis{}{}".format(self.ip, self.tick)
-        self.touched = False
+        self.touched = self._should_touch()
 
     def _update_dup_data(self):
         self.ch = [self.uuid, self.ip, self.tick, self.state]
 
-    def _is_update_clause(self):
+    def _should_touch(self):
         if not get_extra()['options'].has_key('ONDEMAND'):
             return True
         if self.uuid == get_extra()['system_id']:
             return True
-        return self.touched
+        return False
 
     # touch lsp, means we should generate flow and count this lsp in
     def touch(self):
@@ -488,12 +497,12 @@ class PhysicalChassis(LogicalEntity):
         self.add_clause()
 
     def del_clause(self):
-        if self._is_update_clause() is False:
+        if self.touched is False:
             return
         -chassis_array(self.ch, self.ch[PCH_UUID], self.ch[PCH_State])
 
     def add_clause(self):
-        if self._is_update_clause() is False:
+        if self.touched is False:
             return
         +chassis_array(self.ch, self.ch[PCH_UUID], self.ch[PCH_State])
 
