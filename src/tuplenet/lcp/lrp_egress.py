@@ -43,15 +43,15 @@ def init_lrp_egress_clause(options):
         ls_array(LS, UUID_LS, State3) &
         lr_array(LR, UUID_LR, State4) &
         lsp_array(UUID_LSP, LSP, UUID_LS, UUID_CHASSIS2, UUID_LRP2, State5) &
+        (UUID_CHASSIS2 != None) &
         (State == State1 + State2 + State3 + State4 + State5) & (State != 0)
         )
 
     opposite_side_has_patch_port(LR, LRP, State) <= (
-        local_lsp(LSP, LS, State2) &
-        (LSP[LSP_MAC] == 'ff:ff:ff:ff:ff:ee') &
+        local_patchport(LSP, LS, State1) &
         lsp_link_lrp(LSP1, LS, UUID_LS, LRP, LR,
-                     UUID_LR, UUID_LR_CHASSIS, State1) &
-        # NOTE only consider local_lsp, it means a gateway's oppsite
+                     UUID_LR, UUID_LR_CHASSIS, State2) &
+        # NOTE only consider local_patchport, it means a gateway's oppsite
         # LS has remote patchport cannot trigger this flow
         (State == State1 + State2)
         )
@@ -127,10 +127,14 @@ def init_lrp_egress_clause(options):
     # ask tuplenet to generate it.
     if options.has_key('ONDEMAND'):
         if options.has_key('ENABLE_REDIRECT'):
+            # A regular tuplenet node(with ondemand) may not know where dst lsp is,
+            # so it uploads packet to controller and redirects pkt to an edge node.
             lrp_handle_unknow_dst_pkt(LR, Priority, Match, Action, State) <= (
                 (Priority == 2) &
                 lr_array(LR, UUID_LR, State) & (State != 0) &
                 match.ip_proto(Match1) &
+                # set macaddress to 0, then other host know this packet
+                # should be threw to LR pipline
                 match.eth_dst("00:00:00:00:00:00", Match2) &
                 (Match == Match1 + Match2) &
                 action.load(1, NXM_Reg(REG_FLAG_IDX, FLAG_REDIRECT_BIT_IDX,
@@ -148,6 +152,27 @@ def init_lrp_egress_clause(options):
                 match.eth_dst("00:00:00:00:00:00", Match2) &
                 (Match == Match1 + Match2) &
                 action.upload_unknow_dst(Action)
+                )
+    else:
+        if options.has_key('ENABLE_REDIRECT'):
+            # A edge node(with ondemand disable) should know where is dst, but
+            # tuplenet instance may down so ovs-flow doesn't know the new dst(
+            # a lsp may be create while tuplenet is down, ovs-flow not updated).
+            # This ovs-flow should redirect this packet to other edge now as well,
+            # BUT NOT upload to controller
+            lrp_handle_unknow_dst_pkt(LR, Priority, Match, Action, State) <= (
+                (Priority == 2) &
+                lr_array(LR, UUID_LR, State) & (State != 0) &
+                match.ip_proto(Match1) &
+                # set macaddress to 0, then other host know this packet
+                # should be threw to LR pipline
+                match.eth_dst("00:00:00:00:00:00", Match2) &
+                (Match == Match1 + Match2) &
+                action.load(1, NXM_Reg(REG_FLAG_IDX, FLAG_REDIRECT_BIT_IDX,
+                                       FLAG_REDIRECT_BIT_IDX), Action1) &
+                action.resubmit_table(TABLE_EMBED2_METADATA, Action2) &
+                action.resubmit_table(TABLE_REDIRECT_CHASSIS, Action3) &
+                (Action == Action1 + Action2 + Action3)
                 )
 
     lrp_handle_unknow_dst_pkt(LR, Priority, Match, Action, State) <= (

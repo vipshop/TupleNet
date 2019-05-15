@@ -5,6 +5,7 @@ import shutil
 TP_PKT_CONTROLLER_PATH = "src/tuplenet/pkt_controller/pkt_controller"
 TP_CNM_PATH = "src/control/bin/tpcnm"
 TP_CTL_PATH = "src/control/bin/tpctl"
+TP_CNI_PATH = "src/control/bin/tpcni"
 
 with open("README.md", "r") as readme:
     long_description = readme.read()
@@ -31,8 +32,9 @@ def check_essential_ext_files():
         sys.exit(-1)
 
     if not os.path.exists(TP_CNM_PATH) or \
+       not os.path.exists(TP_CNI_PATH) or \
        not os.path.exists(TP_CTL_PATH):
-        print("cannot found tpctl or tpcnm , please build it first")
+        print("cannot found tpctl or tpcnm,tpcni , please build it first")
         sys.exit(-1)
 
 remove_tmpfiles()
@@ -61,7 +63,7 @@ setuptools.setup(
     install_requires = ['pyDatalog', 'etcd3'],
     package_data = {'tuplenet':['pkt_controller/pkt_controller'],},
     entry_points = {'console_scripts':['tuplenet = tuplenet.lcp:run_tuplenet']},
-    scripts = [TP_CNM_PATH, TP_CTL_PATH],
+    scripts = [TP_CNM_PATH, TP_CNI_PATH, TP_CTL_PATH],
     )
 
 

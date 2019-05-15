@@ -1,10 +1,9 @@
-import random
-import uuid
 import logging
 from pyDatalog import pyDatalog
 import socket, struct
 import threading
-from run_env import get_extra
+import tpstatic as st
+from tp_utils.run_env import get_extra
 
 logger = logging.getLogger(__name__)
 
@@ -34,63 +33,92 @@ def _gen_mac_by_ip(ip_int):
                     ip_int & 0xff)
     return mac
 
+def ip2int(ip):
+    ip_int = struct.unpack("!L", socket.inet_aton(ip))[0]
+    convert = socket.inet_ntoa(struct.pack("!I", ip_int))
+    if ip != convert:
+        raise Exception("invalid ip:%s", ip)
+    return ip_int
+
 class LogicalEntity(object):
-    property_hashmap = {}
-
-    @staticmethod
-    def property_hashmap_add(entity):
-        key = entity.essential_property_key
-        if LogicalEntity.property_hashmap.has_key(key):
-            raise RuntimeError('FATAL, we already get same essential property '
-                               'in hashmap!,exist entity:%s, new entity:%s'%
-                               (LogicalEntity.property_hashmap[key], entity))
-        # TODO a time cost function
-        if isinstance(entity, LogicalSwitchPort):
-            for p in LogicalEntity.property_hashmap.values():
-                if isinstance(p, LogicalSwitchPort) and \
-                   (p.ip == entity.ip or p.mac == entity.mac) and \
-                   p.ls_uuid == entity.ls_uuid and p.uuid != entity.uuid:
-                    raise RuntimeError('FATAL, we already get same essential property '
-                                       'in hashmap!,exist lsp:%s, new lsp:%s'%
-                                       (p, entity))
-        LogicalEntity.property_hashmap[key] = entity
-
-    @staticmethod
-    def property_hashmap_del(entity):
-        key = entity.essential_property_key
-        if LogicalEntity.property_hashmap.has_key(key):
-            LogicalEntity.property_hashmap.pop(key)
-        else:
-            raise RuntimeError('FATAL, we cannot found essential property '
-                               'in hashmap!,entity:%s', entity)
 
     def __init__(self):
         self.state = State_ADD
+        self.populated = False
 
     def populate(self):
-        self._update_dup_data()
-        LogicalEntity.property_hashmap_add(self)
-        self.add_clause()
+        if self.populated is False:
+            self._update_dup_data()
+            self.add_clause()
+            self.populated = True
 
     def _update(self, event):
         self.del_clause()
-        LogicalEntity.property_hashmap_del(self)
         self._update_dup_data()
-        if event != State_DEL:
-            # marking State_DEL means entity push in sink, no need to add
-            # back to property_hashmap
-            LogicalEntity.property_hashmap_add(self)
         self.add_clause()
 
     def eliminate(self):
         self.del_clause()
+        eliminate_me = getattr(self, '_eliminate', None)
+        if eliminate_me is not None:
+            eliminate_me()
 
     def mark(self, event):
         self.state = event
         self._update(event)
 
+class ILKEntity(object):
+    # user may config several lrp which has same ip and prefix but different
+    # output. A deletion of lsr may delete other ilk lrp ovs-flow. We consume
+    # priority to distinguish it to avoid overlap deletion.
+    # Max value of priority is 65535, and max prefix is 32. So we set 64 to
+    # max_ilk_n. 64 ilk lrp are enough for tuplenet network
+    _max_ilk_n = 64
+    _ilk_group = {}
+    _whole_idx_set = set(i for i in range(_max_ilk_n))
+
+    def __init__(self):
+        self.ilk_idx = self._get_ilk_idx()
+
+    def _get_free_idx(self, occupy_idx_set):
+        free_idx_set = ILKEntity._whole_idx_set - occupy_idx_set
+        if len(free_idx_set) == 0:
+            return -1
+        return free_idx_set.pop()
+
+    def _free_ilk_idx(self):
+        etype = self.entity_type
+        ip_prefix_int = (self.ip_int >> (32 - self.prefix)) << (32 - self.prefix)
+        key = "{}{}{}".format(self.lr_uuid, ip_prefix_int, self.prefix)
+        ILKEntity._ilk_group[etype][key].remove(self.ilk_idx)
+        return self.ilk_idx
+
+    def _get_ilk_idx(self):
+        idx = 0
+        etype = self.entity_type
+        ip_prefix_int = (self.ip_int >> (32 - self.prefix)) << (32 - self.prefix)
+        key = "{}{}{}".format(self.lr_uuid, ip_prefix_int, self.prefix)
+        if not ILKEntity._ilk_group.has_key(etype):
+            ILKEntity._ilk_group[etype] = {}
+        if ILKEntity._ilk_group[etype].has_key(key):
+            idx = self._get_free_idx(ILKEntity._ilk_group[etype][key])
+            if idx < 0:
+                raise Exception("too many ilk, entity:%s" % self.uuid)
+            ILKEntity._ilk_group[etype][key].add(idx)
+        else:
+            ILKEntity._ilk_group[etype][key] = set([idx])
+        return idx
+
+    # NOTE: please do NOT change the function name, it is consumed by
+    # LogicalEntity
+    def _eliminate(self):
+        ilk_idx = self._free_ilk_idx()
+        logger.debug("entity %s free ilk idx %u", self, ilk_idx)
+
+
 pyDatalog.create_terms('lsp_array, exchange_lsp_array')
-pyDatalog.create_terms('lrp_array, ls_array, lr_array, chassis_array')
+pyDatalog.create_terms('lrp_array, ls_array, chassis_array')
+pyDatalog.create_terms('_lr_array, lr_array')
 pyDatalog.create_terms('lroute_array, Route, lnat_array')
 pyDatalog.create_terms('lroute_lrp')
 pyDatalog.create_terms('ovsport, ovsport_chassis')
@@ -115,40 +143,41 @@ class LogicalSwitchPort(LogicalEntity):
     property_keys = [LOGICAL_ENTITY_ID, 'ip', 'mac',
                      LOGICAL_ENTITY_PARENT_ID, 'chassis', 'peer']
     entity_type = LOGICAL_ENTITY_TYPE_LSP
+    # NOTE: please change the name of variable if you had changed the string
+    #       in uniq_check_keys. _insert_entity_idxmap consumes them.
+    uniq_check_keys = ['ls_view_ip', 'ls_view_mac']
 
     def __init__(self, uuid, ip, mac, ls_uuid,
                  chassis = None, peer = None):
         super(LogicalSwitchPort, self).__init__()
         self.uuid = uuid
         self.ip = ip
-        self.ip_int = struct.unpack("!L", socket.inet_aton(ip))[0]
+        self.ip_int = ip2int(ip)
         self.mac = mac;
         self.mac_int = int(mac.translate(None, ":.- "), 16)
         self.chassis = chassis
         self.ls_uuid = ls_uuid
         self.peer = peer
         self.portID = self.ip_int & 0xffff # 0 ~ 0xffff
+        self.ls_view_ip = '{}{}'.format(self.ls_uuid, self.ip)
+        self.ls_view_mac = '{}{}'.format(self.ls_uuid, self.mac)
         self.lsp_shop = lsp_array if peer is None else exchange_lsp_array
         # only regular lsp need to be touched
-        self.touched = False if peer is None else True
-        self.populate()
-
-    @property
-    def essential_property_key(self):
-        return "lsp{}{}{}{}".format(self.ip, self.mac,
-                                    self.ls_uuid, self.chassis)
+        self.touched = self._should_touch()
 
     def _update_dup_data(self):
         self.lsp = [self.uuid, self.ip, self.ip_int, self.mac,
                     self.mac_int, self.chassis, self.ls_uuid,
                     self.peer, self.portID, self.state]
 
-    def _is_update_clause(self):
+    def _should_touch(self):
         if not get_extra()['options'].has_key('ONDEMAND'):
             return True
         if self.chassis == get_extra()['system_id']:
             return True
-        return self.touched
+        if self.peer is not None:
+            return True
+        return False
 
     # touch lsp, means we should generate flow and count this lsp in
     def touch(self):
@@ -160,14 +189,14 @@ class LogicalSwitchPort(LogicalEntity):
         self.add_clause()
 
     def del_clause(self):
-        if self._is_update_clause() is False:
+        if self.touched is False:
             return
         -self.lsp_shop(self.lsp[LSP_UUID], self.lsp,
                        self.lsp[LSP_LS_UUID], self.lsp[LSP_CHASSIS_UUID],
                        self.lsp[LSP_PEER], self.lsp[LSP_State])
 
     def add_clause(self):
-        if self._is_update_clause() is False:
+        if self.touched is False:
             return
         +self.lsp_shop(self.lsp[LSP_UUID], self.lsp,
                        self.lsp[LSP_LS_UUID], self.lsp[LSP_CHASSIS_UUID],
@@ -192,36 +221,37 @@ LRP_MAC_INT = 5
 LRP_LR_UUID = 6
 LRP_PEER = 7
 LRP_PORTID = 8
-LRP_State = 9
+LRP_ILK_IDX = 9
+LRP_State = 10
 +lrp_array(0,0,0,0,0)
 -lrp_array(0,0,0,0,0)
-class LogicalRouterPort(LogicalEntity):
+class LogicalRouterPort(LogicalEntity, ILKEntity):
     property_keys = [LOGICAL_ENTITY_ID, 'ip', 'prefix', 'mac',
                      LOGICAL_ENTITY_PARENT_ID, 'peer']
     entity_type = LOGICAL_ENTITY_TYPE_LRP
+    uniq_check_keys = ['lr_view_ip', 'lr_view_mac']
+
     def __init__(self, uuid, ip, prefix,
                  mac, lr_uuid, peer = None):
         super(LogicalRouterPort, self).__init__()
         self.uuid = uuid
-        self.prefix = int(prefix)
+        self.prefix = max(min(int(prefix), 32), 0)
         self.ip = ip
-        self.ip_int = struct.unpack("!L", socket.inet_aton(ip))[0]
+        self.ip_int = ip2int(ip)
         self.mac = mac;
         self.mac_int = int(mac.translate(None, ":.- "), 16)
         self.lr_uuid = lr_uuid
         self.peer = peer
         self.portID = self.ip_int & 0xffff # 0 ~ 0xffff
-        self.populate()
-
-    @property
-    def essential_property_key(self):
-        return "lrp{}{}{}".format(self.ip, self.mac, self.lr_uuid)
+        self.lr_view_ip = '{}{}'.format(self.lr_uuid, self.ip)
+        self.lr_view_mac = '{}{}'.format(self.lr_uuid, self.mac)
+        ILKEntity.__init__(self)
 
     def _update_dup_data(self):
         self.lrp = [self.uuid, self.prefix, self.ip,
                     self.ip_int, self.mac, self.mac_int,
                     self.lr_uuid, self.peer,
-                    self.portID, self.state]
+                    self.portID, self.ilk_idx, self.state]
 
     def del_clause(self):
         -lrp_array(self.lrp[LRP_UUID], self.lrp, self.lrp[LRP_LR_UUID],
@@ -237,38 +267,37 @@ class LogicalRouterPort(LogicalEntity):
                self.lr_uuid == lr_uuid and self.peer == peer
 
     def __repr__(self):
-        return "lrp({},ip:{},mac:{},peer:{})".format(self.uuid, self.ip,
-                                                     self.mac, self.peer)
+        return "lrp({},ip:{},mac:{},peer:{}, ilk_idx:{})".format(
+                        self.uuid, self.ip, self.mac, self.peer, self.ilk_idx)
 
 
 LR_UUID = 0
 LR_CHASSIS_UUID = 1
 LR_ID = 2
 LR_State = 3
-+lr_array(0,0,0)
--lr_array(0,0,0)
++_lr_array(0,0,0,0)
+-_lr_array(0,0,0,0)
 class LogicalRouter(LogicalEntity):
     property_keys = [LOGICAL_ENTITY_ID, 'id', 'chassis']
     entity_type = LOGICAL_ENTITY_TYPE_LR
+    uniq_check_keys = ['global_view_id']
     def __init__(self, uuid, lrID, chassis = None):
         super(LogicalRouter, self).__init__()
         self.uuid = uuid
         self.chassis = chassis
         self.lrID = int(lrID)
-        self.populate()
-
-    @property
-    def essential_property_key(self):
-        return "porthub{}".format(self.lrID) # ls and lr cannot share same id
+        self.global_view_id = str(self.lrID)
 
     def _update_dup_data(self):
         self.lr = [self.uuid, self.chassis, self.lrID, self.state]
 
     def del_clause(self):
-        -lr_array(self.lr, self.lr[LR_UUID], self.lr[LR_State])
+        -_lr_array(self.lr, self.lr[LR_UUID],
+                   self.lr[LR_CHASSIS_UUID],self.lr[LR_State])
 
     def add_clause(self):
-        +lr_array(self.lr, self.lr[LR_UUID], self.lr[LR_State])
+        +_lr_array(self.lr, self.lr[LR_UUID],
+                   self.lr[LR_CHASSIS_UUID],self.lr[LR_State])
 
     def is_same(self, uuid, lrID, chassis):
         return self.uuid == uuid and self.lrID == int(lrID) and \
@@ -286,37 +315,38 @@ LSR_PREFIX = 4
 LSR_NEXT_HOP = 5
 LSR_NEXT_HOP_INT = 6
 LSR_OUTPORT = 7
-LSR_State = 8
+LSR_ILK_IDX = 8
+LSR_State = 9
 +lroute_array(0,0,0)
 -lroute_array(0,0,0)
-class LogicalStaticRoute(LogicalEntity):
+class LogicalStaticRoute(LogicalEntity, ILKEntity):
     property_keys = [LOGICAL_ENTITY_ID, 'ip', 'prefix', 'next_hop',
                      'outport', LOGICAL_ENTITY_PARENT_ID]
     entity_type = LOGICAL_ENTITY_TYPE_LSR
+    uniq_check_keys = ['lr_view_lsr']
+
     def __init__(self, uuid, ip, prefix, next_hop,
                  outport, lr_uuid):
         super(LogicalStaticRoute, self).__init__()
         self.uuid = uuid
         self.lr_uuid = lr_uuid
+        self.prefix = max(min(int(prefix), 32), 0)
         self.ip = ip
-        self.ip_int = struct.unpack("!L", socket.inet_aton(ip))[0]
-        self.prefix = int(prefix)
+        self.ip_int = ip2int(ip)
+        self.ip_int = (self.ip_int >> (32 - self.prefix)) << (32 - self.prefix)
         self.next_hop = next_hop
-        self.next_hop_int = struct.unpack("!L", socket.inet_aton(next_hop))[0]
+        self.next_hop_int = ip2int(next_hop)
         self.outport = outport
-        self.populate()
-
-    @property
-    def essential_property_key(self):
-        return "lsr{}{}{}{}{}".format(self.lr_uuid, self.ip,
-                                      self.prefix, self.next_hop,
-                                      self.outport)
+        self.lr_view_lsr = "lsr{}{}{}{}{}".format(self.lr_uuid, self.ip,
+                                                  self.prefix, self.next_hop,
+                                                  self.outport)
+        ILKEntity.__init__(self)
 
     def _update_dup_data(self):
         self.lsr = [self.uuid, self.lr_uuid, self.ip,
                     self.ip_int, self.prefix, self.next_hop,
                     self.next_hop_int, self.outport,
-                    self.state]
+                    self.ilk_idx, self.state]
 
     def del_clause(self):
         -lroute_array(self.lsr, self.lsr[LSR_LR_UUID], self.lsr[LSR_State])
@@ -330,8 +360,9 @@ class LogicalStaticRoute(LogicalEntity):
                self.outport == outport and self.lr_uuid == lr_uuid
 
     def __repr__(self):
-        return "lsr:({}, rule:{}/{}, output:{})".format(self.uuid, self.ip,
-                                                        self.prefix, self.outport)
+        return "lsr:({}, rule:{}/{}, output:{}, ilk_idx:{})".format(
+                        self.uuid, self.ip, self.prefix,
+                        self.outport, self.ilk_idx)
 
 LNAT_UUID = 0
 LNAT_LR_UUID = 1
@@ -350,25 +381,22 @@ class LogicalNetAddrXlate(LogicalEntity):
     property_keys = [LOGICAL_ENTITY_ID, 'ip', 'prefix', 'xlate_ip',
                      'xlate_type', LOGICAL_ENTITY_PARENT_ID]
     entity_type = LOGICAL_ENTITY_TYPE_LNAT
+    uniq_check_keys = ['lr_view_lnat']
     def __init__(self, uuid, ip, prefix, xlate_ip,
                  xlate_type, lr_uuid):
         super(LogicalNetAddrXlate, self).__init__()
         self.uuid = uuid
         self.lr_uuid = lr_uuid
         self.ip = ip
-        self.ip_int = struct.unpack("!L", socket.inet_aton(ip))[0]
+        self.ip_int = ip2int(ip)
         self.prefix = int(prefix)
         self.xlate_ip = xlate_ip
-        self.xlate_ip_int = struct.unpack("!L", socket.inet_aton(xlate_ip))[0]
+        self.xlate_ip_int = ip2int(xlate_ip)
         self.xlate_mac = _gen_mac_by_ip(self.xlate_ip_int)
         self.xlate_mac_int = int(self.xlate_mac.translate(None, ":.- "), 16)
         self.xlate_type = xlate_type
-        self.populate()
-
-    @property
-    def essential_property_key(self):
-        return "lnat{}{}{}{}".format(self.lr_uuid, self.ip,
-                                     self.prefix, self.xlate_type)
+        self.lr_view_lnat = "lnat{}{}{}{}".format(self.lr_uuid, self.ip,
+                                                  self.prefix, self.xlate_type)
 
     def _update_dup_data(self):
         self.lnat = [self.uuid, self.lr_uuid, self.ip,
@@ -405,15 +433,12 @@ LS_State = 2
 class LogicalSwitch(LogicalEntity):
     property_keys = [LOGICAL_ENTITY_ID, 'id']
     entity_type = LOGICAL_ENTITY_TYPE_LS
+    uniq_check_keys = ['global_view_id']
     def __init__(self, uuid, lsID):
         super(LogicalSwitch, self).__init__()
         self.uuid = uuid
         self.lsID = lsID
-        self.populate()
-
-    @property
-    def essential_property_key(self):
-        return "porthub{}".format(self.lsID) # ls and lr cannot share same id
+        self.global_view_id = str(self.lsID)
 
     def _update_dup_data(self):
         self.ls = [self.uuid, self.lsID, self.state]
@@ -436,35 +461,31 @@ PCH_IP = 1
 PCH_TICK = 2
 PCH_State = 3
 PCH_OFPORT = 4 # external data
-+chassis_array(['flow_base_tunnel', '', 0, 0],
-               'flow_base_tunnel', 0)
++chassis_array([st.TP_FLOW_TUNNEL_NAME, '', 0, 0],
+               st.TP_FLOW_TUNNEL_NAME, 0)
 class PhysicalChassis(LogicalEntity):
     property_keys = [LOGICAL_ENTITY_ID, 'ip', 'tick']
     entity_type = LOGICAL_ENTITY_TYPE_CHASSIS
+    uniq_check_keys = ['global_view_chassis']
     def __init__(self, uuid, ip, tick):
         super(PhysicalChassis, self).__init__()
         self.uuid = uuid
         self.ip = ip
-        self.ip_int = struct.unpack("!L", socket.inet_aton(ip))[0]
+        self.ip_int = ip2int(ip)
         # it tells which chassis(has same IP) is the latest one
         self.tick = int(tick)
-        self.touched = False
-        self.populate()
-
-    @property
-    def essential_property_key(self):
-        #we allow different chassis owns same IP
-        return "chassis{}{}".format(self.ip, self.tick)
+        self.global_view_chassis = "chassis{}{}".format(self.ip, self.tick)
+        self.touched = self._should_touch()
 
     def _update_dup_data(self):
         self.ch = [self.uuid, self.ip, self.tick, self.state]
 
-    def _is_update_clause(self):
+    def _should_touch(self):
         if not get_extra()['options'].has_key('ONDEMAND'):
             return True
         if self.uuid == get_extra()['system_id']:
             return True
-        return self.touched
+        return False
 
     # touch lsp, means we should generate flow and count this lsp in
     def touch(self):
@@ -476,12 +497,12 @@ class PhysicalChassis(LogicalEntity):
         self.add_clause()
 
     def del_clause(self):
-        if self._is_update_clause() is False:
+        if self.touched is False:
             return
         -chassis_array(self.ch, self.ch[PCH_UUID], self.ch[PCH_State])
 
     def add_clause(self):
-        if self._is_update_clause() is False:
+        if self.touched is False:
             return
         +chassis_array(self.ch, self.ch[PCH_UUID], self.ch[PCH_State])
 
@@ -501,6 +522,7 @@ OVSPORT_State = 3
 +ovsport_chassis(0,0,0,0)
 -ovsport_chassis(0,0,0,0)
 class OVSPort(LogicalEntity):
+    uniq_check_keys = ['host_view_ovsport']
     def __init__(self, name, iface_id, ofport, is_remote):
         super(OVSPort, self).__init__()
         self.ovsport_name = name
@@ -508,13 +530,10 @@ class OVSPort(LogicalEntity):
         self.iface_id = iface_id
         self.ofport = ofport
         self.is_remote = is_remote
+        self.host_view_ovsport = "ovsport{}{}{}".format(self.ovsport_name,
+                                                        self.iface_id, self.ofport)
         self.port_shop = ovsport_chassis if is_remote else ovsport
-        self.populate()
 
-    @property
-    def essential_property_key(self):
-        return "ovsport{}{}{}".format(self.ovsport_name,
-                                      self.iface_id, self.ofport)
 
     def _update_dup_data(self):
         self.port = [self.ovsport_name, self.iface_id, self.ofport, self.state]
@@ -571,6 +590,7 @@ class LogicalEntityZoo():
         self.zoo_ver = 0 # if you modify the init value, please fix prev_zoo_ver as well
         self.entity_set = {}
         self.entity_sink_set = {}
+        self.entity_idxmap = {}
         self.zoo_gate = ZooGate(self.entity_set, self.entity_sink_set,
                                 self.lock)
         for name in LogicalEntityZoo.logical_entity_types:
@@ -581,20 +601,22 @@ class LogicalEntityZoo():
         if entity is None:
             return
         entity_group = self.entity_set[entity_type]
-        entity_sink_group = self.entity_sink_set[entity_type]
         with self.lock:
             # pop out previous entity into entity_sink_set for removing later
             if entity_group.has_key(entity.uuid):
                 logger.info("pop out old entity %s into sink", entity.uuid)
                 self.move_entity2sink(entity_type, entity.uuid)
+
+            if self._insert_entity_idxmap(entity) is False:
+                logger.warn("faild to insert entity into idxmap")
+                return
             entity_group[entity.uuid] = entity
             self.zoo_ver += 1
         logger.info('create a new %s:%s', entity_type, entity)
+        return entity
 
     def convert_pool2entity(self, entity_type, add_pool):
         entity_class = LogicalEntityZoo.logical_entity_types[entity_type]
-        entity_group = self.entity_set[entity_type]
-        entity_sink_group = self.entity_sink_set[entity_type]
         for path, value_set in add_pool.items():
             path = path.split('/')
             self._convert_kv2entity(entity_class, path, value_set)
@@ -614,8 +636,34 @@ class LogicalEntityZoo():
                 args.append(properties.get(pname))
             self.add_entity(entity_class.entity_type, *args)
         except Exception as err:
-            logger.warning("hit error in converting properties to entity "
-                           "property:%s, err:%s", properties, err)
+            logger.exception("hit error in converting properties to entity "
+                             "property:%s, err:%s", properties, err)
+
+    def _insert_entity_idxmap(self, entity):
+        with self.lock:
+            for k in entity.uniq_check_keys:
+                v = getattr(entity, k)
+                if not self.entity_idxmap.has_key(k):
+                    self.entity_idxmap[k] = {}
+                if self.entity_idxmap[k].has_key(v):
+                    logger.info('cannot insert %s in entity_idxmap, it already '
+                                'has %s', entity, self.entity_idxmap[k][v])
+                    return False
+                self.entity_idxmap[k][v] = entity
+
+        return True
+
+    def _del_entity_idxmap(self, entity):
+        with self.lock:
+            for k in entity.uniq_check_keys:
+                v = getattr(entity, k)
+                try:
+                    self.entity_idxmap[k].pop(v)
+                except:
+                    logger.exception("failed to remove entity:%s "
+                                     "from entity_idxmap", entity)
+                    return
+
 
     def add_entity(self, entity_type, *properties):
         entity_class = LogicalEntityZoo.logical_entity_types.get(entity_type)
@@ -639,7 +687,10 @@ class LogicalEntityZoo():
                                  "property:%s, err:%s",
                                  entity_type, properties, err)
                 return
-        self._add_entity_in_zoo(entity_type, e)
+        e = self._add_entity_in_zoo(entity_type, e)
+        if e is None:
+            return None
+        e.populate()
 
         # a chassis which a LR pin on should be touch to generate
         # tunnel. This tunnel was use to redirect traffic.
@@ -673,15 +724,10 @@ class LogicalEntityZoo():
 
             entity.mark(State_DEL)
             if entity_sink_group.has_key(key):
-                if type(entity_sink_group[key]) == list:
-                    entity_sink_group[key].append(entity)
-                else:
-                    prev_entity = entity_sink_group[key]
-                    entity_sink_group[entity.uuid] = [entity, prev_entity]
-                logger.info("sink %s has previous entity, append %s in",
-                            entity_type, key)
+                entity_sink_group[key].append(entity)
             else:
-                entity_sink_group[key] = entity
+                entity_sink_group[key] = [entity]
+            self._del_entity_idxmap(entity)
             # update the zoo version as well
             self.zoo_ver += 1
         logger.info('move %s to sink', entity)
@@ -748,7 +794,7 @@ class LogicalEntityZoo():
 
     def _sweep_entity_set(self):
         # TODO it is a time cost function
-        for group_key, group in self.entity_set.items():
+        for group in self.entity_set.values():
             for key,e in group.items():
                 if e.state == State_ADD:
                     e.mark(State_NO)
@@ -756,45 +802,44 @@ class LogicalEntityZoo():
 
 
     def _clean_sink(self):
-        for group_key, group in self.entity_sink_set.items():
+        for group in self.entity_sink_set.values():
             for key, e in group.items():
-                if type(e) is list:
-                    # some entities in sink may be list
-                    # due to they have same key.
-                    for entry in e:
-                        entry.eliminate()
-                        logger.debug('eliminate %s from sink', entry)
-                else:
-                    e.eliminate()
+                for entry in e:
+                    entry.eliminate()
+                    logger.debug('eliminate %s from sink', entry)
                 group.pop(key)
-                logger.debug('eliminate %s from sink', e)
+
+    def update_version_force(self):
+        with self.lock:
+            self.zoo_ver += 1
 
 
 entity_zoo = LogicalEntityZoo()
 def get_zoo():
     return entity_zoo
 
-pyDatalog.create_terms('LSP, LS, LRP, LNAT, LR, PHY_CHASSIS')
+pyDatalog.create_terms('LSP, LS, LRP, LNAT, LR, LR_NEXT, PHY_CHASSIS')
 pyDatalog.create_terms('UUID_LS, UUID_LR, UUID_LSP, UUID_LRP, UUID_CHASSIS')
 pyDatalog.create_terms('UUID_LS1, UUID_LR1, UUID_LSP1, UUID_LRP1, UUID_CHASSIS1')
 pyDatalog.create_terms('UUID_LS2, UUID_LR2, UUID_LSP2, UUID_LRP2,UUID_CHASSIS2')
 pyDatalog.create_terms('UUID_LR_CHASSIS1, UUID_LR_CHASSIS2')
 pyDatalog.create_terms('LSP1, LSP2, LRP1, LRP2, LR1, LR2')
 pyDatalog.create_terms('UUID_LR_CHASSIS')
-pyDatalog.create_terms('LSP_WITH_OFPORT, PHY_CHASSIS_WITH_OFPORT, OFPORT')
+pyDatalog.create_terms('LSP_WITH_OFPORT, PHY_CHASSIS_WITH_OFPORT, OFPORT, OFPORT1')
 pyDatalog.create_terms('State, State1, State2, State3, State4, State5, State6')
 pyDatalog.create_terms('PORT_NAME, XLATE_TYPE')
 
 pyDatalog.create_terms('remote_lsp')
 pyDatalog.create_terms('active_lsp')
 pyDatalog.create_terms('remote_chassis')
-pyDatalog.create_terms('local_chassis')
 pyDatalog.create_terms('remote_unable_chassis')
 pyDatalog.create_terms('local_lsp, local_bond_lsp')
 pyDatalog.create_terms('lsp_link_lrp')
 pyDatalog.create_terms('lnat_data')
 pyDatalog.create_terms('local_system_id')
+pyDatalog.create_terms('next_hop_lr')
 pyDatalog.create_terms('next_hop_ovsport')
+pyDatalog.create_terms('local_patchport')
 
 def init_entity_clause(options):
 
@@ -802,15 +847,28 @@ def init_entity_clause(options):
         ovsport(PORT_NAME, UUID_LSP, OFPORT, State1) &
         (OFPORT > 0) &
         ls_array(LS, UUID_LS, State2) &
-        lsp_array(UUID_LSP, LSP, UUID_LS, UUID_CHASSIS, UUID_LRP, State3) &
         local_system_id(UUID_CHASSIS) &
+        lsp_array(UUID_LSP, LSP, UUID_LS, UUID_CHASSIS, UUID_LRP, State3) &
         (LSP_WITH_OFPORT == (LSP + [OFPORT])) &
         (State == State1 + State2 + State3)
         )
+    local_bond_lsp(LSP_WITH_OFPORT, LS, State) <= (
+        local_patchport(LSP_WITH_OFPORT, LS, State))
+
+    local_patchport(LSP_WITH_OFPORT, LS, State) <= (
+        ovsport(PORT_NAME, UUID_LSP, OFPORT, State1) &
+        (OFPORT > 0) &
+        ls_array(LS, UUID_LS, State2) &
+        local_system_id(UUID_CHASSIS) &
+        exchange_lsp_array(UUID_LSP, LSP, UUID_LS, UUID_CHASSIS, UUID_LRP, State3) &
+        (LSP[LSP_IP] == '255.255.255.255') &
+        (State == State1 + State2 + State3) &
+        (LSP_WITH_OFPORT == (LSP + [OFPORT]))
+        )
+
 
     local_lsp(LSP, LS, State) <= (
-        (UUID_LR_CHASSIS == None) &
-        lsp_link_lrp(LSP, LS, UUID_LS, LRP, LR, UUID_LR, UUID_LR_CHASSIS, State)
+        lsp_link_lrp(LSP, LS, UUID_LS, LRP, LR, UUID_LR, None, State)
         )
     local_lsp(LSP, LS, State) <= (
         local_system_id(UUID_LR_CHASSIS) &
@@ -835,11 +893,6 @@ def init_entity_clause(options):
         (State == State1 + State2)
         )
 
-    local_chassis(PHY_CHASSIS, State) <= (
-        local_system_id(UUID_CHASSIS) &
-        chassis_array(PHY_CHASSIS, UUID_CHASSIS, State)
-        )
-
     remote_lsp(LSP, LS, PHY_CHASSIS, State) <= (
         remote_chassis(UUID_CHASSIS, PHY_CHASSIS, State1) &
         lsp_array(UUID_LSP, LSP, UUID_LS, UUID_CHASSIS, UUID_LRP, State2) &
@@ -853,6 +906,31 @@ def init_entity_clause(options):
         (State == State1 + State2)
         )
 
+    lr_array(LR, UUID_LR, State) <= (
+        _lr_array(LR, UUID_LR, None, State)
+        )
+    # figure out a lr which pin on a chassis,
+    # do NOT contain lr which pin on local host
+    # NOTE: if admin delete a chassis, all tuplenet will sync this action,
+    # all tuplenets delete those flows except that chassis, it means this
+    # tuplenet(del-chassis) should work as usual(not response icmp request).
+    # Why we do it? Other tuplenets may still forward traffic to host(del-chassis),
+    # in a while so host(del-chassis) should work as usual. On the another hand,
+    # outside phy-switch may consume icmp request to query the status of this
+    # LR(del-chassis). TupleNet should stop sending icmp feedback.
+    lr_array(LR, UUID_LR, State) <= (
+        _lr_array(LR, UUID_LR, UUID_LR_CHASSIS, State1) &
+        (UUID_LR_CHASSIS != None) &
+        # do NOT contain lr which pin on local host
+        (local_system_id(UUID_CHASSIS)) & (UUID_LR_CHASSIS != UUID_CHASSIS) &
+        chassis_array(PHY_CHASSIS, UUID_LR_CHASSIS, State2) &
+        (State == State1 + State2)
+        )
+    # figure out a lr which pin on local host
+    lr_array(LR, UUID_LR, State) <= (
+        local_system_id(UUID_LR_CHASSIS) &
+        _lr_array(LR, UUID_LR, UUID_LR_CHASSIS, State)
+        )
 
     lsp_link_lrp(LSP, LS, UUID_LS, LRP, LR, UUID_LR, UUID_LR_CHASSIS, State) <= (
         lrp_array(UUID_LRP, LRP, UUID_LR, UUID_LSP, State1) &
@@ -863,32 +941,29 @@ def init_entity_clause(options):
         (State == State1 + State2 + State3 +State4)
         )
 
-    next_hop_ovsport(UUID_LRP, OFPORT, State) <= (
-        lrp_array(UUID_LRP, LRP, UUID_LR, UUID_LSP, State1) &
-        exchange_lsp_array(UUID_LSP1, LSP1, UUID_LS, UUID_CHASSIS1, UUID_LRP, State2) &
-        exchange_lsp_array(UUID_LSP2, LSP2, UUID_LS, UUID_CHASSIS2, UUID_LRP2, State3) &
-        lrp_array(UUID_LRP2, LRP2, UUID_LR2, UUID_LSP2, State4) & (UUID_LR != UUID_LR2) &
-        lr_array(LR2, UUID_LR2, State5) &
-        ovsport_chassis(PORT_NAME, LR2[LR_CHASSIS_UUID], OFPORT, State6) &
+    next_hop_lr(UUID_LRP, LRP, LR, LR_NEXT, State) <= (
+        lrp_array(UUID_LRP, LRP, UUID_LR, UUID_LSP1, State1) &
+        exchange_lsp_array(UUID_LSP1, LSP1, UUID_LS,
+                           UUID_CHASSIS1, UUID_LRP, State2) &
+        exchange_lsp_array(UUID_LSP2, LSP2, UUID_LS,
+                           UUID_CHASSIS2, UUID_LRP2, State3) &
+        lrp_array(UUID_LRP2, LRP2, UUID_LR2, UUID_LSP2, State4) &
+        (UUID_LR != UUID_LR2) &
+        lr_array(LR_NEXT, UUID_LR2, State5) &
+        lr_array(LR, UUID_LR, State6) &
         (State == State1 + State2 + State3 + State4 + State5 + State6)
         )
 
-    if not get_extra()['options'].has_key('ENABLE_PERFORMANCE_TESTING'):
-        lnat_data(LNAT, LR, XLATE_TYPE, UUID_LR, State) <= (
-            lr_array(LR, UUID_LR, State1) &
-            # TODO local_system_id, UUID_CHASSIS here introduce
-            # performance regression
-            (UUID_CHASSIS == LR[LR_CHASSIS_UUID]) &
-            local_system_id(UUID_CHASSIS) &
-            lnat_array(LNAT, UUID_LR, XLATE_TYPE, State2) &
-            (State == State1 + State2)
-        )
-    else:
-        lnat_data(LNAT, LR, XLATE_TYPE, UUID_LR, State) <= (
-            lr_array(LR, UUID_LR, State1) &
-            lnat_array(LNAT, UUID_LR, XLATE_TYPE, State2) &
-            (State == State1 + State2)
+    next_hop_ovsport(UUID_LRP, OFPORT, State) <= (
+        next_hop_lr(UUID_LRP, LRP, LR, LR_NEXT, State1) &
+        ovsport_chassis(PORT_NAME, LR_NEXT[LR_CHASSIS_UUID],
+                        OFPORT, State2) & (OFPORT > 0) &
+        (State == State1 + State2)
         )
 
-
+    lnat_data(LNAT, LR, XLATE_TYPE, UUID_LR, State) <= (
+        lr_array(LR, UUID_LR, State1) &
+        lnat_array(LNAT, UUID_LR, XLATE_TYPE, State2) &
+        (State == State1 + State2)
+    )
 

@@ -110,17 +110,17 @@ func TestController_DeviceOperation(t *testing.T) {
 	expectSucceed("controller shall be able to connects to etcd")
 
 	// test invalid devs to save and delete
-	invalidDevs := []interface{} {nil, 32, "string", 15.1, true, struct{}{}}
+	invalidDevs := []interface{}{nil, 32, "string", 15.1, true, struct{}{}}
 	for i := range invalidDevs {
 		err = controller.Save(invalidDevs[i:])
 		expectFail("save invalid dev starting from %d", i)
-		err = controller.Delete(false,invalidDevs[i:])
+		err = controller.Delete(false, invalidDevs[i:])
 		expectFail("delete invalid dev starting from %d", i)
 	}
 
 	// test Router creation
 	name := "router-1"
-	r := logicaldev.NewRouter(name,"asdfasdfasdfasdfasdf")
+	r := logicaldev.NewRouter(name, "asdfasdfasdfasdfasdf")
 
 	// create a router
 	err = controller.Save(r)
@@ -202,8 +202,28 @@ func TestController_DeviceOperation(t *testing.T) {
 	expectSucceed("read nat2 in db")
 	expectSame(nat2, nat2InDb)
 
+	// test create lsp with auto-generate ip
+	swIPAM := logicaldev.NewSwitch("switch-ipam")
+	err = controller.Save(swIPAM)
+	expectSucceed("create %s", swIPAM)
+	for i := 0; i < 16; i++ {
+		name := fmt.Sprintf("lsp-ipam-%d", i)
+		mac := fmt.Sprintf("12:34:56:78:11:%02x", i)
+		switchPort := swIPAM.CreatePort(name, "0.0.0.0", mac)
+		err = controller.SaveSwitchPort(switchPort, "172.16.1.1", 28)
+		if i < 13 {
+			expectSucceed("create %s success", name)
+		} else {
+			expectFail("cannot create %s", name)
+		}
+	}
+
+	// delete switch-ipam recursively
+	err = controller.Delete(true, swIPAM)
+	expectSucceed("remove %s", swIPAM.Name)
+
 	// delete the router recursively
-	r2 := logicaldev.NewRouter(r.Name+ "1", "")
+	r2 := logicaldev.NewRouter(r.Name+"1", "")
 	err = controller.Save(r2)
 	expectSucceed("save %s", r2.Name)
 

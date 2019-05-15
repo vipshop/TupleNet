@@ -2,16 +2,21 @@ import os
 import logging
 import socket
 import struct
-from pyDatalog import pyDatalog
 
 logger = logging.getLogger(__name__)
 
-extra = {'accept_diff': False}
+extra = {}
 def get_extra():
+    if len(extra) == 0:
+        acquire_outside_env()
     return extra
 
 def acquire_outside_env():
     extra['options'] = {}
+    if not os.environ.has_key('TUPLENET_RUNDIR'):
+        extra['options']['TUPLENET_RUNDIR'] = '/var/run/tuplenet/'
+    else:
+        extra['options']['TUPLENET_RUNDIR'] = os.path.join(os.environ['TUPLENET_RUNDIR'])
     # enable ONDEMAND by default
     if not os.environ.has_key('ONDEMAND') or \
        (os.environ.has_key('ONDEMAND') and os.environ['ONDEMAND'] == '1'):
@@ -28,6 +33,18 @@ def acquire_outside_env():
     if os.environ.has_key('GATEWAY') and os.environ['GATEWAY'] == '1':
         extra['options']['GATEWAY'] = 1
         logger.info("enable gateway feature")
+
+    if os.environ.has_key('ENABLE_UNTUNNEL') and os.environ['ENABLE_UNTUNNEL'] == '1':
+        extra['options']['ENABLE_UNTUNNEL'] = 1
+        logger.info("enable untunnel feature")
+
+    if os.environ.has_key('HASH_FN') and \
+       os.environ['HASH_FN'] in ['eth_src', 'symmetric_l4', 'symmetric_l3l4',
+                                 'symmetric_l3l4+udp', 'nw_src', 'nw_dst']:
+        extra['options']['HASH_FN'] = os.environ['HASH_FN']
+    else:
+        extra['options']['HASH_FN'] = 'nw_dst'
+    logger.info("HASH_FN is %s", extra['options']['HASH_FN'])
 
     if os.environ.has_key('IPFIX_COLLECTOR'):
         try:

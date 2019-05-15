@@ -6,6 +6,7 @@ import logging
 import time
 import struct
 import socket
+import random
 from optparse import OptionParser
 import ConfigParser
 from multiprocessing.pool import ThreadPool
@@ -13,8 +14,7 @@ from multiprocessing.pool import ThreadPool
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ppparent_dir = os.path.dirname(os.path.dirname(parent_dir))
 py_third_dir = os.path.join(ppparent_dir, 'py_third')
-sys.path.append(parent_dir)
-sys.path.append(py_third_dir)
+sys.path = [parent_dir, py_third_dir] + sys.path
 from lcp import link_master as lm
 from lcp.flow_common import table_note_dict
 from lcp import flow_common
@@ -26,9 +26,10 @@ WAIT_TRACE_TIMEOUT = 0
 logger = None
 TUPLENET_DIR = ''
 UNKNOW_SYMBOL = "<UNKNOW>"
+AUTO_DETECT_LOOP_ENV_NAME = 'DETECT_LOOP'
+BATCH_NUM_ENV_NAME = 'BATCH_NUM'
 wmaster = None
 entity_zoo = {}
-entity_lock = threading.RLock()
 
 class TPObject:
     def __init__(self, name, properties):
@@ -49,6 +50,12 @@ class TPObject:
             ret += "{}={}, ".format(k,v)
         return ret
 
+    def __hash__(self):
+        return hash(str([self.name, self.type, self.parent]))
+
+    def __eq__(self, other):
+        return str(self) == str(other)
+
     __repr__ = __str__
 
 def init_logger():
@@ -60,7 +67,8 @@ def init_logger():
         log_type = logging.NullHandler()
 
     logger = logging.getLogger('')
-    format_type = '%(asctime)s.%(msecs)03d %(levelname)s %(filename)s [line:%(lineno)d]: %(message)s'
+    format_type = ("%(asctime)s.%(msecs)03d %(levelname)s %(filename)s "
+                   "[line:%(lineno)d]: %(message)s")
     datefmt = '%Y-%m-%d %H:%M:%S'
     console = log_type
     console_formater = logging.Formatter(format_type, datefmt)
@@ -74,60 +82,175 @@ def errprint(*args, **kwargs):
 
 
 def update_entity_data(add_pool, del_pool):
-    with entity_lock:
-        if del_pool is not None:
-            for etype,entity_dict in del_pool.items():
-                if not entity_zoo.has_key(etype):
-                    continue
-                for key, entity in entity_dict.items():
-                    key = key.split('/')[-1]
-                    entity_zoo[etype].pop(key)
-        if add_pool is not None:
-            for etype,entity_dict in add_pool.items():
-                if not entity_zoo.has_key(etype):
-                    entity_zoo[etype] = {}
-                for k, entity in entity_dict.items():
-                    parent,type,key = k.split('/')[-3:]
-                    type = k.split('/')[-2]
-                    entity_zoo[etype][key] = TPObject(key, entity)
-                    entity_zoo[etype][key].type = type
-                    entity_zoo[etype][key].parent = parent
+    if del_pool is not None:
+        for etype,entity_dict in del_pool.items():
+            if not entity_zoo.has_key(etype):
+                continue
+            for key, entity in entity_dict.items():
+                key = key.split('/')[-1]
+                entity_zoo[etype].pop(key)
+    if add_pool is not None:
+        for etype,entity_dict in add_pool.items():
+            if not entity_zoo.has_key(etype):
+                entity_zoo[etype] = {}
+            for k, entity in entity_dict.items():
+                parent,type,key = k.split('/')[-3:]
+                type = k.split('/')[-2]
+                entity_zoo[etype][key] = TPObject(key, entity)
+                entity_zoo[etype][key].type = type
+                entity_zoo[etype][key].parent = parent
 
 
 
 def sync_etcd_data(etcd_endpoints):
     global wmaster
-    wmaster = lm.WatchMaster(etcd_endpoints, TUPLENET_DIR)
+    if wmaster == None:
+        wmaster = lm.WatchMaster(etcd_endpoints, TUPLENET_DIR)
     data_type, add_pool, del_pool = wmaster.read_remote_kvdata()
     update_entity_data(add_pool, del_pool)
-    time.sleep(1)
+
+def _find_all_active_lsp_by_ls(ls_array):
+    lsp_array = []
+    for lsp in entity_zoo['lsp'].values():
+        if lsp.chassis is None or \
+           lsp.parent not in ls_array or \
+           not entity_zoo['chassis'].has_key(lsp.chassis):
+            continue
+        lsp_array.append(lsp)
+    return lsp_array
+
+def select_random_src_target(ls_array, target_ip_array, batch_n):
+    lsp_array = _find_all_active_lsp_by_ls(ls_array)
+    # generate N * (N - 1 + M) detect pairs
+    batch_n = min(len(lsp_array) * (len(lsp_array)+len(target_ip_array)-1),
+                  batch_n)
+    src_lsp_array = lsp_array
+    target_array = lsp_array + target_ip_array
+
+    n = 0
+    pairs = {}
+    while n < batch_n:
+        src_lsp = random.choice(src_lsp_array)
+        target = random.choice(target_array)
+        k = str(src_lsp) + str(target)
+        if pairs.has_key(k):
+            continue
+        pairs[k] = (src_lsp, target)
+        n += 1
+    return pairs
+
+def _get_gw_mac(lsname):
+    for lsp in entity_zoo['lsp'].values():
+        if lsp.peer is None or \
+           lsp.parent != lsname:
+            continue
+        return lsp.mac
+
+def _convert_src_target2pkt(src_lsp, target):
+    gw_mac = _get_gw_mac(src_lsp.parent)
+    if isinstance(target, TPObject):
+        if target.parent == src_lsp.parent:
+            target_mac = target.mac
+        else:
+            target_mac = gw_mac
+        target_ip = target.ip
+    else:
+        target_mac = gw_mac
+        target_ip = target
+    # do NOT construct icmp request packet, a lrp port will revise the icmp
+    # requst packet into reply packet and send it back
+    return construct_icmp_reply(src_lsp.mac, target_mac,
+                                src_lsp.ip, target_ip)
+
+def _find_incorrect_trace(result, expect_target_list):
+    incorrect = []
+    for i, traces in enumerate(result):
+        last_trace = traces[-1]
+        expect_target = expect_target_list[i]
+        try:
+            to_iface_id = last_trace.split(',')[3].split(':')[-1]
+
+            if isinstance(expect_target, TPObject):
+                if to_iface_id != expect_target.name:
+                   incorrect.append((traces, expect_target))
+            elif not entity_zoo['lsp'].has_key(to_iface_id):
+                incorrect.append((traces, expect_target))
+            elif entity_zoo['lsp'][to_iface_id].ip != expect_target:
+                incorrect.append((traces, expect_target))
+        except:
+            incorrect.append((traces, expect_target))
+    return incorrect
+
+def _auto_detect_network(ls_array, target_ip_array, batch_n):
+    inject_list = []
+    expect_target_list = []
+    pairs = select_random_src_target(ls_array, target_ip_array, batch_n)
+    for src_lsp, target in pairs.values():
+        packet = _convert_src_target2pkt(src_lsp, target)
+        inject_list.append((src_lsp.name, packet))
+        expect_target_list.append(target)
+
+    result = run_pkt_trace_async(inject_list)
+    incorrect = _find_incorrect_trace(result, expect_target_list)
+    return incorrect
+
+def auto_detect_network(auto_detect, n):
+    batch_n = int(THREAD_POOL_MAX_N/10)
+    env = os.environ.copy()
+    if env.has_key(BATCH_NUM_ENV_NAME):
+        try:
+            batch_n = int(env[BATCH_NUM_ENV_NAME])
+        except:
+            pass
+
+    batch_n = min(THREAD_POOL_MAX_N, batch_n)
+    ls_array = []
+    target_ip_array = []
+    segments = auto_detect.split(',')
+    for s in segments:
+        try:
+            socket.inet_aton(s)
+        except:
+            # not a ip address, we treat it as a name of LogicalSwitch
+            ls_array.append(s)
+        else:
+            target_ip_array.append(s)
+    for i in range(n):
+        incorrect = _auto_detect_network(ls_array, target_ip_array,
+                                         batch_n)
+        if len(incorrect) != 0:
+            errprint(incorrect)
+            return
+        sync_etcd_data(None)
+
 
 def find_chassis_by_port(lport):
-    with entity_lock:
-        lsp = entity_zoo['lsp'].get(lport)
-        if lsp is None:
-            return
-        ch = entity_zoo['chassis'].get(lsp.chassis)
-        return ch.name if ch is not None else None
+    lsp = entity_zoo['lsp'].get(lport)
+    if lsp is None:
+        return
+    ch = entity_zoo['chassis'].get(lsp.chassis)
+    return ch.name if ch is not None else None
 
 def etcd_config_pkt_trace(lport, packet):
     chassis_id = find_chassis_by_port(lport)
     if chassis_id is None:
         raise Exception("cannot found logical port %s pin on a chassis" % lport)
 
-    if etcd_config_pkt_trace.cmd_id == 0:
-        etcd_config_pkt_trace.cmd_id = int(time.time() * 100) & 0xffff
-    else:
-        # increase the cmd_id one by one to distinguish the command
-        # NOTE the cmd_id may roll back from 0xffff to 0x0
-        etcd_config_pkt_trace.cmd_id = \
-                    (etcd_config_pkt_trace.cmd_id + 1) & 0xffff
-    cmd_id = etcd_config_pkt_trace.cmd_id
+    with etcd_config_pkt_trace.lock:
+        if etcd_config_pkt_trace.cmd_id == 0:
+            etcd_config_pkt_trace.cmd_id = int(time.time() * 100) & 0xffff
+        else:
+            # increase the cmd_id one by one to distinguish the command
+            # NOTE the cmd_id may roll back from 0xffff to 0x0
+            etcd_config_pkt_trace.cmd_id = \
+                        (etcd_config_pkt_trace.cmd_id + 1) & 0xffff
+        cmd_id = etcd_config_pkt_trace.cmd_id
     key = 'push/' + chassis_id + '/cmd/' + str(cmd_id)
     value = "cmd=pkt_trace,packet={},port={}".format(packet, lport)
     wmaster.lease_communicate(key, value, 10)
     return cmd_id
 etcd_config_pkt_trace.cmd_id = 0 # init the static variable
+etcd_config_pkt_trace.lock = threading.RLock()
 
 def etcd_read_cmd_result(cmd_id):
     ret_data = wmaster.get_prefix(TUPLENET_DIR +
@@ -227,21 +350,21 @@ def run_pkt_trace(lport, packet):
     time.sleep(WAIT_TRACE_TIMEOUT)
     trace_path = etcd_read_cmd_result(cmd_id)
     traces = []
-    with entity_lock:
-        for trace in trace_path:
-            datapath = find_datapath_by_id(trace["datapath_id"])
-            if datapath is None:
-                traces.append("<ERROR>")
-                continue
-            src_port_name = find_port_by_id(datapath, trace["src_port_id"])
-            dst_port_name = find_port_by_id(datapath, trace["dst_port_id"])
-            stage = table_note_dict[int(trace["table_id"])]
-            trace = "type:{},pipeline:{},from:{},to:{},stage:{},chassis:{},output_iface_id:{}".format(
-                            datapath.type, datapath.name,
-                            src_port_name, dst_port_name,
-                            stage, trace["chassis_id"],
-                            trace['output_iface_id'])
-            traces.append(trace)
+    for trace in trace_path:
+        datapath = find_datapath_by_id(trace["datapath_id"])
+        if datapath is None:
+            traces.append("<ERROR>")
+            continue
+        src_port_name = find_port_by_id(datapath, trace["src_port_id"])
+        dst_port_name = find_port_by_id(datapath, trace["dst_port_id"])
+        stage = table_note_dict[int(trace["table_id"])]
+        trace = ("type:{},pipeline:{},from:{},to:{},stage:{},"
+                 "chassis:{},output_iface_id:{}").format(
+                        datapath.type, datapath.name,
+                        src_port_name, dst_port_name,
+                        stage, trace["chassis_id"],
+                        trace['output_iface_id'])
+        traces.append(trace)
     if len(traces) == 0:
         return ['error no traces']
     return traces
@@ -277,7 +400,13 @@ def cal_checksum(header):
     header = struct.pack("!H", reverse)
     return header
 
-def construct_icmp(src_mac, dst_mac, src_ip, dst_ip):
+def construct_icmp_request(src_mac, dst_mac, src_ip, dst_ip):
+    return _construct_icmp(src_mac, dst_mac, src_ip, dst_ip, 'request')
+
+def construct_icmp_reply(src_mac, dst_mac, src_ip, dst_ip):
+    return _construct_icmp(src_mac, dst_mac, src_ip, dst_ip, 'reply')
+
+def _construct_icmp(src_mac, dst_mac, src_ip, dst_ip, type):
     src_mac = src_mac.split(":")
     dst_mac = dst_mac.split(":")
     for i in xrange(6):
@@ -303,14 +432,18 @@ def construct_icmp(src_mac, dst_mac, src_ip, dst_ip):
                                ip_checksum + src_ip + dst_ip)
     ip_header = l3_head + ttl + protocol + ip_checksum + src_ip + dst_ip
 
-    icmp_type = struct.pack("!H", 0x0800)
+    if type == 'request':
+        icmp_type = struct.pack("!H", 0x0800)
+    elif type == 'reply':
+        icmp_type = struct.pack("!H", 0x0)
     icmp_chksum = struct.pack("!H", 0x8510)
     icmp_id = struct.pack("!H", 0x5fbf)
     icmp_seq = struct.pack("!H", 0x0001)
     icmp_data = struct.pack("B", 1)
     for i in range(2, 57):
         icmp_data += struct.pack("B", i)
-    icmp_payload = icmp_type + icmp_chksum + icmp_id + icmp_seq + icmp_data
+    icmp_payload = icmp_type + icmp_chksum + icmp_id + \
+                   icmp_seq + icmp_data
 
     icmp_packet = eth_header + ip_header + icmp_payload
 
@@ -320,13 +453,20 @@ def construct_icmp(src_mac, dst_mac, src_ip, dst_ip):
         icmp_str += "{:02x}".format(i)
     return icmp_str
 
-
 def config_sanity_check(config):
     etcd_endpoints = lm.sanity_etcdhost(config.get(BASIC_SEC_NAME, 'endpoints'))
     prefix = config.get(BASIC_SEC_NAME, 'prefix')
     wait_time = config.getint(BASIC_SEC_NAME, 'wait_time')
     if not prefix.endswith('/'):
         raise Exception('prefix should be end with \'/\'')
+
+    try:
+        auto_detect = config.get(BASIC_SEC_NAME, 'auto_detect')
+    except ConfigParser.NoOptionError:
+        auto_detect = ""
+    # auto_detect has high priority
+    if auto_detect != "":
+        return (etcd_endpoints, prefix, wait_time), auto_detect, None
 
     inject_info_list = []
     for section in config.sections():
@@ -341,14 +481,23 @@ def config_sanity_check(config):
                 dst_mac = config.get(section, 'dst_mac')
                 src_ip = config.get(section, 'src_ip')
                 dst_ip = config.get(section, 'dst_ip')
-                packet = construct_icmp(src_mac, dst_mac, src_ip, dst_ip)
+                packet = construct_icmp_request(src_mac, dst_mac,
+                                                src_ip, dst_ip)
             else:
                 packet = header
             inject_info_list.append((inject_port, packet))
         except ConfigParser.NoSectionError:
             continue
 
-    return (etcd_endpoints, prefix, wait_time), inject_info_list
+    return (etcd_endpoints, prefix, wait_time), \
+           auto_detect, inject_info_list
+
+def init_env(config):
+    global WAIT_TRACE_TIMEOUT, TUPLENET_DIR
+    etcd_endpoints, path_prefix, wait_time = config
+    TUPLENET_DIR = path_prefix
+    WAIT_TRACE_TIMEOUT = wait_time
+    sync_etcd_data(etcd_endpoints)
 
 if __name__ == "__main__":
     usage = """usage: python %prog [options]
@@ -361,6 +510,8 @@ if __name__ == "__main__":
             --dst_ip          destination ip address of packet
             -d, --header      packet header and payload
             --wait_time       the time of waiting results of a tracing
+            --auto_detect     the logical switch and ip you want to detect: --auto_detect LS1,LS2,100.1.1.1
+                              program will randomly detect the the ports connectivity between LS1,LS2,100.1.1.1
             the config file like:
 
             [basic]
@@ -418,6 +569,10 @@ if __name__ == "__main__":
                       action = "store", type = "string",
                       default = "",
                       help = "a file contains inject port, src_mac...")
+    parser.add_option("--auto_detect", dest = "auto_detect",
+                      action = "store", type = "string",
+                      default = "",
+                      help = "a batch of logicalswitch or ip, like: --auto_detect LS-A,10.1.1.1")
 
     (options, args) = parser.parse_args()
 
@@ -431,6 +586,7 @@ if __name__ == "__main__":
         config.set(BASIC_SEC_NAME, 'endpoints', options.endpoints)
         config.set(BASIC_SEC_NAME, 'prefix', options.path_prefix)
         config.set(BASIC_SEC_NAME, 'wait_time', options.wait_time)
+        config.set(BASIC_SEC_NAME, 'auto_detect', options.auto_detect)
 
         config.add_section('inject')
         config.set('inject', 'port', options.inject_port)
@@ -441,10 +597,16 @@ if __name__ == "__main__":
         if options.packet != "":
             config.set('inject', 'header', options.packet)
 
-    basic_config, inject_info_list = config_sanity_check(config)
-    etcd_endpoints, path_prefix, WAIT_TRACE_TIMEOUT = basic_config
-    TUPLENET_DIR = path_prefix
-    sync_etcd_data(etcd_endpoints)
+    basic_config, auto_detect, inject_info_list = config_sanity_check(config)
+    init_env(basic_config)
+    if auto_detect != "":
+        try:
+            n = int(os.environ.get(AUTO_DETECT_LOOP_ENV_NAME))
+        except:
+            n = 0xffffff
+        auto_detect_network(auto_detect, n)
+        sys.exit()
+
     result = run_pkt_trace_async(inject_info_list)
     for i, traces in enumerate(result):
         if i:

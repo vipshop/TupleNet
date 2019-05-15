@@ -20,6 +20,17 @@ pyDatalog.create_terms('lrp_ip_unsnat_stage1, lrp_ip_unsnat_stage2')
 pyDatalog.create_terms('lrp_ip_dnat_stage1, lrp_ip_dnat_stage2')
 pyDatalog.create_terms('lrp_ip_route')
 pyDatalog.create_terms('lrp_ecmp_judge')
+pyDatalog.create_terms('_live_lsp_link_lrp')
+pyDatalog.create_terms('static_route_changed')
+
+# NOTE: value of priority is in [0,65535]
+# ---------------------------------------------
+# |PREFIX(6Bit) | Level(4Bit) | lrp_idx(6Bit) |
+# ---------------------------------------------
+
+def _cal_priority(prefix, level, idx):
+    return (int(prefix) << 10) + (int(level) << 6) + idx
+pyDatalog.create_terms('_cal_priority')
 
 
 # NOTE: all lsp and lrp use IP least 16bits as a portID,
@@ -38,11 +49,31 @@ def init_lrp_ingress_clause(options):
 
     init_ecmp_clause(options)
 
+    if options.has_key('GATEWAY'):
+        _live_lsp_link_lrp(LSP, LS, UUID_LS, LRP, LR,
+                           UUID_LR, None, State) <= (
+            lsp_link_lrp(LSP, LS, UUID_LS, LRP, LR,
+                         UUID_LR, None, State)
+        )
+        _live_lsp_link_lrp(LSP, LS, UUID_LS, LRP, LR, UUID_LR,
+                           UUID_LR_CHASSIS, State) <= (
+            lsp_link_lrp(LSP, LS, UUID_LS, LRP, LR,
+                         UUID_LR, UUID_LR_CHASSIS, State1) &
+            chassis_array(PHY_CHASSIS, UUID_LR_CHASSIS, State2) &
+            (State == State1 + State2)
+        )
+    else:
+        _live_lsp_link_lrp(LSP, LS, UUID_LS, LRP, LR,
+                           UUID_LR, UUID_LR_CHASSIS, State) <= (
+            lsp_link_lrp(LSP, LS, UUID_LS, LRP, LR,
+                         UUID_LR, UUID_LR_CHASSIS, State)
+        )
+
     # response ICMP packet if receiving ICMP request
     lrp_pkt_response(LR, Priority, Match, Action, State) <= (
         (Priority == 3) &
-        lsp_link_lrp(LSP, LS, UUID_LS, LRP, LR,
-                     UUID_LR, UUID_LR_CHASSIS, State) & (State != 0) &
+        _live_lsp_link_lrp(LSP, LS, UUID_LS, LRP, LR,
+                           UUID_LR, UUID_LR_CHASSIS, State) & (State != 0) &
         match.icmp_proto(Match1) &
         match.icmp_type(8, Match2) &
         match.icmp_code(0, Match3) &
@@ -58,6 +89,7 @@ def init_lrp_ingress_clause(options):
         (Action == Action1 + Action2 + Action3 + Action4 +
                    Action5 + Action6)
         )
+
 
     lrp_pkt_response(LR, Priority, Match, Action, State) <= (
         (Priority == 0) &
@@ -97,7 +129,7 @@ def init_lrp_ingress_clause(options):
     lrp_ip_route(LR, Priority, Match, Action, State) <= (
         lsp_link_lrp(LSP, LS, UUID_LS, LRP, LR,
                      UUID_LR, UUID_LR_CHASSIS, State) & (State != 0) &
-        (Priority == LRP[LRP_PREFIX] * 3) &
+        (Priority == _cal_priority(LRP[LRP_PREFIX], 0, LRP[LRP_ILK_IDX])) &
         match.ip_proto(Match1) &
         match.ip_dst_prefix(LRP[LRP_IP],
                             LRP[LRP_PREFIX], Match2) &
@@ -115,16 +147,27 @@ def init_lrp_ingress_clause(options):
         (Action == Action1 + Action2 + Action3 + Action4 + Action5)
         )
 
+
+    if options.has_key('GATEWAY'):
+        static_route_changed(Route, LR, LRP, State) <= (
+            local_system_id(UUID_CHASSIS) &
+            lroute_array(Route, UUID_LR, State1) &
+            lsp_link_lrp(LSP, LS, UUID_LS, LRP, LR,
+                         UUID_LR, UUID_CHASSIS, State2) &
+            (Route[LSR_OUTPORT] == LRP[LRP_UUID]) &
+            local_patchport(LSP1, LS, State3) &
+            (State == State1 + State2 + State3) & (State != 0)
+            )
+    static_route_changed(Route, LR, LRP, State) <= (
+        lroute_array(Route, UUID_LR, State1) &
+        next_hop_lr(Route[LSR_OUTPORT], LRP, LR, LR_NEXT, State2) &
+        (State == State1 + State2) & (State != 0)
+        )
+
     #static route
     lrp_ip_route(LR, Priority, Match, Action, State) <= (
-        lsp_link_lrp(LSP, LS, UUID_LS, LRP, LR,
-                     UUID_LR, UUID_LR_CHASSIS, State1) &
-        (lroute_array(Route, UUID_LR, State2)) &
-        (State == State1 + State2) & (State != 0) &
-        (UUID_LR == LR[LR_UUID]) &
-        # only match the first outport
-        (LRP[LRP_UUID] == Route[LSR_OUTPORT]) &
-        (Priority == 1 + Route[LSR_PREFIX] * 3) &
+        static_route_changed(Route, LR, LRP, State) &
+        (Priority == _cal_priority(Route[LSR_PREFIX], 1, Route[LSR_ILK_IDX])) &
         match.ip_proto(Match1) &
         match.ip_dst_prefix(Route[LSR_IP],
                             Route[LSR_PREFIX], Match2) &

@@ -1,4 +1,5 @@
 import os, sys
+import random
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ppparent_dir = os.path.dirname(os.path.dirname(parent_dir))
 py_third_dir = os.path.join(ppparent_dir, 'py_third')
@@ -10,12 +11,12 @@ from pyDatalog import pyDatalog, Logic, pyEngine
 from pyDatalog.pyDatalog import assert_fact, load, ask
 from logicalview import *
 import lflow
-import run_env
+from tp_utils import run_env
 import time
 import sys
 import ecmp
 import tunnel
-from run_env import get_extra
+from tp_utils.run_env import get_extra
 import lsp_ingress, lsp_egress, lrp_ingress, lrp_egress, physical_flow
 import middle_table as mid
 import logging
@@ -27,6 +28,7 @@ pyDatalog.create_terms('A,B,C,D,E,F,G,H,I,J,K,X,Y,Z')
 lsp_ingress_flows = {
                      'lsp_arp_response':lsp_ingress.lsp_arp_response,
                      'lsp_arp_controller':lsp_ingress.lsp_arp_controller,
+                     'lsp_untunnel_deliver':lsp_ingress.lsp_untunnel_deliver,
                      'lsp_lookup_dst_port':lsp_ingress.lsp_lookup_dst_port,
                      'lsp_output_dst_port':lsp_ingress.lsp_output_dst_port,
                     }
@@ -64,6 +66,13 @@ phy_detail_flows = {'convert_phy_logical': physical_flow.convert_phy_logical,
                     'redirect_other_chassis':mid.redirect_other_chassis}
 logical_flows = [phy_flows, phy_detail_flows, lsp_ingress_flows, lsp_egress_flows,
                  lrp_ingress_flows, lrp_egress_flows]
+
+def populate_all():
+    for group in entity_set.values():
+        for entity in group.values():
+            if entity.populated is False:
+                entity.populate()
+
 
 def test_rand_entity(entity_set, rand_ls_num, rand_chassis_num, rand_lsp_num):
     lsp_set = entity_set['lsp']
@@ -179,16 +188,25 @@ def test_rand_entity(entity_set, rand_ls_num, rand_chassis_num, rand_lsp_num):
                                                         chassis_id,
                                                         i, True)
     for i in xrange(rand_lsp_num):
-        randmac = "01:02:{:02x}:{:02x}:{:02x}:{:02x}".format(random.randint(0x00, 0xff),
-                                                             random.randint(0x00, 0xff),
-                                                             random.randint(0x00, 0xff),
-                                                             random.randint(0x00, 0xff))
-        randip = "192.{}.{}.{}".format(random.randint(1,254),
-                                       random.randint(1,254),
-                                       random.randint(1,254))
-        randid = 'AArandport'+str(i)
-        lsp_set[randid] = LogicalSwitchPort(randid, randip, randmac, get_one_rand_ls(i),
-                                            'chassis'+str(i%rand_chassis_num))
+        while True:
+            randmac = "01:02:{:02x}:{:02x}:{:02x}:{:02x}".format(random.randint(0x00, 0xff),
+                                                                 random.randint(0x00, 0xff),
+                                                                 random.randint(0x00, 0xff),
+                                                                 random.randint(0x00, 0xff))
+            randip = "192.{}.{}.{}".format(random.randint(1,254),
+                                           random.randint(1,254),
+                                           random.randint(1,254))
+            randid = 'AArandport'+str(i)
+            try:
+                lsp_set[randid] = LogicalSwitchPort(randid, randip, randmac, get_one_rand_ls(i),
+                                                    'chassis'+str(i%rand_chassis_num))
+            except:
+                continue
+            else:
+                break
+
+    populate_all()
+
     logger.info("start building flows")
     start_time = time.time()
     lflow.build_flows(Table, Priority, Match, Action, State)
@@ -198,9 +216,11 @@ def test_rand_entity(entity_set, rand_ls_num, rand_chassis_num, rand_lsp_num):
     logger.info('cost time:%s, total flows number:%d',
                  time.time()-start_time, len(table_tuple))
     for i in xrange(1):
-        lsp_set['newone'+str(i)] = LogicalSwitchPort('newone'+str(i), '192.1.{}.{}'.format(random.randint(1,254), random.randint(1,254)),
-                                                     '11:11:11:11:11:{:02x}'.format(i),'LS-A',
-                                                     'chassis10')
+        lsp_set['newone'+str(i)] = \
+                    LogicalSwitchPort('newone'+str(i),
+                                      '192.1.{}.{}'.format(random.randint(1,254), random.randint(1,254)),
+                                      '11:11:11:11:11:{:02x}'.format(i),'LS-A',
+                                      'chassis10')
         chassis_id = 'chassis_new'+str(i)
         ch = PhysicalChassis(chassis_id,
                              "{}.{}.{}.{}".format(random.randint(1,254),
@@ -216,6 +236,9 @@ def test_rand_entity(entity_set, rand_ls_num, rand_chassis_num, rand_lsp_num):
                                                        "192.168.4.5", 'snat', "LR-edge1")
         lnat_set['ldnat'+str(i)] = LogicalNetAddrXlate('ldnat'+str(i), "10.10.5.%d"%i, 32,
                                                        "192.168.5.5", 'dnat', "LR-edge2")
+
+
+        populate_all()
 
         start_time = time.time()
         lflow.build_flows(Table, Priority, Match, Action, State)
@@ -259,14 +282,15 @@ def test_rand_entity(entity_set, rand_ls_num, rand_chassis_num, rand_lsp_num):
                                                    random.randint(1,254)),
                              int(time.time()))
         chassis_set[chassis_id] = ch
+        populate_all()
         start_time = time.time()
         tunnel.tunnel_port_oper(A,B,C)
         tmp=A.data; tmp=B.data; tmp=C.data
         logger.info('tunnel_port_oper cost time:%s, num:%d',
                     time.time()-start_time, len(tmp))
         start_time = time.time()
-        active_lsp(A,B,C,State);tmp=A.data;
-        logger.info('active_lsp cost time:%s', time.time()-start_time)
+        ecmp.ecmp_bfd_port(A,B); tmp=A.data
+        logger.info('bfd cost time:%s', time.time()-start_time)
 
         logger.info('\n\n')
 
@@ -277,7 +301,10 @@ extra['system_id'] = 'chassis-local'
 extra['options'] = {}
 extra['options']['ENABLE_REDIRECT'] = ''
 extra['options']['ENABLE_PERFORMANCE_TESTING'] = ''
-extra['options']['ONDEMAND'] = ''
+extra['options']['GATEWAY'] = ''
+#extra['options']['ONDEMAND'] = ''
+#extra['options']['ENABLE_UNTUNNEL'] = ''
+extra['options']['br-int_mac'] = '00:00:00:11:11:11'
 entity_set = entity_zoo.entity_set
 lflow.init_build_flows_clause(extra['options'])
 test_rand_entity(entity_set, 200, 500, 5000)

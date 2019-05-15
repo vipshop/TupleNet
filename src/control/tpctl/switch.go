@@ -124,6 +124,43 @@ func showSwitchPort(ctx *cli.Context) error {
 	return nil
 }
 
+func addPatchPort(ctx *cli.Context) error {
+	checkArgsThenConnect(ctx, 4, 4, "require a switch name, a port name, chassis and peer ovs-bridge name")
+
+	switchName := ctx.Args().Get(0)
+	portName := validateAndTrimSpace(ctx.Args().Get(1))
+	chassis := ctx.Args().Get(2)
+	peer := ctx.Args().Get(3)
+
+	mac := "ff:ff:ff:ff:ff:ee"
+	ip := "255.255.255.255"
+	swtch, err := controller.GetSwitch(switchName)
+	if err != nil {
+		fail(err)
+	}
+
+	_, err = controller.GetSwitchPort(swtch, portName)
+	if err != nil && errors.Cause(err) != etcd3.ErrKeyNotFound {
+		fail(err)
+	}
+
+	if err == nil {
+		failf("switch %s port %s exists", switchName, portName)
+	}
+
+	port := swtch.CreatePort(portName, ip, mac)
+	port.PeerRouterPortName = peer
+	port.Chassis = chassis
+	err = controller.Save(port)
+	if err != nil {
+		fail(err)
+	}
+
+	fmt.Printf("switch %s patchport %s created\n", switchName, portName)
+
+	return nil
+}
+
 func addSwitchPort(ctx *cli.Context) error {
 	checkArgsThenConnect(ctx, 3, 5, "require a switch name, a port name, an IP and optionally a MAC, a peer port")
 
@@ -136,7 +173,7 @@ func addSwitchPort(ctx *cli.Context) error {
 	validateIP(ip)
 
 	if mac == "" {
-		mac = macFromIP(ip)
+		mac = etcd3.MacFromIP(ip)
 	} else {
 		validateMAC(mac)
 	}

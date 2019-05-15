@@ -1,12 +1,9 @@
-import sys
 import time
 import logging
 import logging.handlers
 import threading
 import os
 import random
-import signal
-from optparse import OptionParser
 import etcd3
 import grpc
 
@@ -72,7 +69,7 @@ class WatchMaster():
         self.watch_canceled = True
         self.watch_id_hash = {}
         self._previous_choose_id = -1
-        self.reconn_master(3)
+        self.reconn_master(10)
 
     def __del__(self):
         if not self.watch_canceled:
@@ -91,6 +88,7 @@ class WatchMaster():
 
 
     def reconn_master(self, retry_n = 0xffffffff):
+        tolerate_log_n = 0
         while True:
             if retry_n == 0:
                 raise Exception('failed to connect remote etcd')
@@ -124,12 +122,30 @@ class WatchMaster():
                             'delete': self.etcd.delete,
                             'add_watch_callback': self.etcd.add_watch_callback}
             except Exception as err:
-                logger.warning('failed to get member list, retry..')
+                tolerate_log_n += 1
+                if tolerate_log_n % 3 == 0:
+                    logger.warning('failed to get member list, retry..')
                 time.sleep(1)
                 continue
             finally:
                 retry_n -= 1
             return
+
+    def update_chassis(self, ip):
+        if self.system_id is None:
+            logger.info("system_id is None, do NOT update chassis")
+            return 0
+        key = 'chassis/{}'.format(self.system_id)
+        value = 'ip={},tick={}'.format(ip, int(time.time()))
+        return self.put_entity_view(key, value)
+
+    def remove_chassis(self):
+        if self.system_id is None:
+            logger.info("system_id is None, do NOT remove chassis")
+            return 0
+        key = 'chassis/{}'.format(self.system_id)
+        return self.delete_entity_no_retry(key)
+
 
     def _etcd_operate(self, op, *args, **kwargs):
         while True:
@@ -435,5 +451,4 @@ def sanity_etcdhost(s):
     except Exception as err:
         logger.warning("error etcd host address:%s", s)
         raise RuntimeError("error etcd host address:%s"%s)
-        return
 

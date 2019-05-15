@@ -83,6 +83,12 @@ bash ${CONTROL_BIN_PATH}/build.sh || exit_test
 (tpctl lsp del | grep 'require') || exit_test
 (tpctl lsp del aaa bbb ccc | grep 'require') || exit_test
 
+(tpctl patchport add | grep 'require') || exit_test
+(tpctl patchport add aaa | grep 'require') || exit_test
+(tpctl patchport add aaa bbb | grep 'require') || exit_test
+(tpctl patchport add aaa bbb ccc | grep 'require') || exit_test
+
+
 (tpctl ch del | grep 'require') || exit_test
 (tpctl ch del aaa bbb | grep 'require') || exit_test
 
@@ -236,6 +242,11 @@ for j in `seq 1 255`;do
   tpctl lnat add LR-1 LNAT-${j} 10.${a}.${b}.1/24 snat 10.${a}.${b}.1 || exit_test
   (tpctl lnat add LR-1 LNAT-${j} 10.${a}.${b}.1/24 dnat 10.${a}.${b}.1 | grep "LNAT-${j} exists")  || exit_test
 done
+
+# create patchport
+tpctl patchport add LS-1 patchport1 hv-unknow br0 || exit_test
+# cannot create another patchport on same LS, patchport occupies same IP
+! tpctl patchport add LS-1 patchport2 hv-unknow2 br0 || exit_test
 
 # remove LR-1 ip book data and rebuild
 before="$(etcd_ipbook get LR LR-1)"

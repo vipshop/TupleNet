@@ -9,7 +9,7 @@ skip_if_in_container
 
 DISABLE_DUMMY=1
 sim_create hv1 || exit_test
-ONDEMAND=0 GATEWAY=1 start_tuplenet_daemon hv1 172.20.11.1
+ENABLE_UNTUNNEL=1 ONDEMAND=0 GATEWAY=1 start_tuplenet_daemon hv1 172.20.11.1
 wait_for_brint # waiting for building br-int bridge
 
 # for supporting parallel testing, must generate uniq namespace name
@@ -79,38 +79,30 @@ verify_has_str "$ret" "1 received" || exit_test
 ret="`ip netns exec ${LS_B} ping 172.20.12.18 -c 1`"
 verify_has_str "$ret" "1 received" || exit_test
 
-# start a http server in namespace "${out1}", the listen port is 7878
-start_http_instance 7878 ${out1}
-start_http_instance 7878 ${out2}
+ret="`ip netns exec ${LS_A} ping 100.10.10.1 -c 1`"
+verify_has_str "$ret" "1 received" || exit_test
+ret="`ip netns exec ${LS_A} ping 100.10.10.2 -c 1`"
+verify_has_str "$ret" "1 received" || exit_test
+ret="`ip netns exec ${LS_A} ping 100.10.10.3 -c 1`"
+verify_has_str "$ret" "1 received" || exit_test
+
+
+tcpdump_file=`random_short_str "${OVS_RUNDIR}/tcpdump.pcap"`
+tcpdump -i br-int icmp -nevvv -w $tcpdump_file &
+tcpdump_pid=$!
+on_tuplenet_exit "kill $tcpdump_pid 2>/dev/null"
 sleep 2
+ret="`ip netns exec ${LS_B} ping 192.168.30.10 -c 1`"
+pmsg "$ret"
+kill $tcpdump_pid 2>/dev/null
+sleep 1 # tcpdump need sometime to dump packet into file
+pkt_dump="`tcpdump -r $tcpdump_file -nnevvv`"
+verify_has_str "$pkt_dump" "192.168.30.10" || exit_test
 
-ret="`ip netns exec ${LS_A} curl -m 2 http://172.20.11.16:7878/`"
-verify_has_str "$ret" "html" || exit_test
-ret="`ip netns exec ${LS_B} curl -m 2 http://172.20.11.16:7878/`"
-verify_has_str "$ret" "html" || exit_test
-
-ret="`ip netns exec ${LS_A} curl -m 2 http://172.20.12.18:7878/`"
-verify_has_str "$ret" "html" || exit_test
-ret="`ip netns exec ${LS_B} curl -m 2 http://172.20.12.18:7878/`"
-verify_has_str "$ret" "html" || exit_test
-
-# delete the routes(LR-A to m1,m2) on LR-A
-tpctl lsr del LR-A lsr1 || exit_test
-tpctl lsr del LR-A lsr2 || exit_test
-# delete the old snat on edge1, edge2
-tpctl lnat del edge1 snat1_rule || exit_test
-tpctl lnat del edge2 snat2_rule || exit_test
-# add new route on LR-A, make sure LS-A,LS-B's traffic can be route to edge1
-tpctl lsr add LR-A lsr1 172.20.0.0/16 100.10.10.2 LR-A_to_m1 || exit_test
-# add two new snat on edge1
-tpctl lnat add edge1 snat1_rule 10.10.1.0/24 snat 172.20.11.200 || exit_test
-tpctl lnat add edge1 snat2_rule 10.10.2.0/24 snat 172.20.11.201 || exit_test
-
+# delete m1 to test if it cause overlap deletion
+(yes | tpctl ls del -r m1) || exit_test
 wait_for_flows_unchange # waiting for install flows
-
-ret="`ip netns exec ${LS_A} curl -m 2 http://172.20.11.16:7878/`"
-verify_has_str "$ret" "html" || exit_test
-ret="`ip netns exec ${LS_B} curl -m 2 http://172.20.11.16:7878/`"
-verify_has_str "$ret" "html" || exit_test
+ret="`ip netns exec ${LS_A} ping 100.10.10.3 -c 1`"
+verify_has_str "$ret" "1 received" || exit_test
 
 pass_test

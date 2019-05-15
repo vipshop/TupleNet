@@ -4,17 +4,23 @@ import match
 from logicalview import *
 from flow_common import *
 from reg import *
+import tpstatic as st
 
 pyDatalog.create_terms('Table, Priority, Match, Action')
 pyDatalog.create_terms('Action1, Action2, Action3, Action4, Action5')
 pyDatalog.create_terms('Action6, Action7, Action8, Action9, Action10')
 pyDatalog.create_terms('Match1, Match2, Match3, Match4, Match5')
 pyDatalog.create_terms('Route1, Route2, OFPORT1, OFPORT2')
+pyDatalog.create_terms('PHY_CHASSIS1, PHY_CHASSIS2')
 pyDatalog.create_terms('A,B,C,D,E,F,G,H,X,Y,Z')
 pyDatalog.create_terms('ecmp_aggregate_outport, ecmp_aggregate_outport_readd')
 pyDatalog.create_terms('ecmp_static_route, ecmp_static_route_judge, ecmp_bfd_port')
 pyDatalog.create_terms('State_COMBIND1, State_COMBIND2')
 
+# NOTE: same to the function of _cal_priority in lrp_ingress.py
+def _cal_priority(prefix, level, idx):
+    return (int(prefix) << 10) + (int(level) << 6) + idx
+pyDatalog.create_terms('_cal_priority')
 
 def init_ecmp_clause(options):
     # for adding
@@ -79,12 +85,13 @@ def init_ecmp_clause(options):
         (Y == OFPORT)
         )
 
+    # adding and readding may generate same flow, it is ok.
     ecmp_static_route(LR, Priority, Match, Action, State) <= (
         lr_array(LR, UUID_LR, State1) &
         (ecmp_aggregate_outport[X] == Y) &
         (State == State1 + X[3]) & (State != 0) &
         (X[0] == UUID_LR) &
-        (Priority == X[2] * 3 + 2) &
+        (Priority == _cal_priority(X[2], 2, 0)) &
         match.ip_proto(Match1) &
         match.ip_dst_prefix(X[1], X[2], Match2) &
         (Match == Match1 + Match2) &
@@ -98,7 +105,7 @@ def init_ecmp_clause(options):
         (ecmp_aggregate_outport_readd[X] == Y) &
         (State == State1 + X[3]) & (State != 0) &
         (X[0] == UUID_LR) &
-        (Priority == X[2] * 3 + 2) &
+        (Priority == _cal_priority(X[2], 2, 0)) &
         match.ip_proto(Match1) &
         match.ip_dst_prefix(X[1], X[2], Match2) &
         (Match == Match1 + Match2) &
@@ -117,7 +124,7 @@ def init_ecmp_clause(options):
             lr_array(LR, UUID_LR, State3) &
             lrp_array(Route[LSR_OUTPORT], LRP, UUID_LR, UUID_LSP, State4) &
             (State == State1 + State2 + State3 + State4) & (State != 0) &
-            (Priority == Route[LSR_PREFIX] * 3 + 2) &
+            (Priority == _cal_priority(Route[LSR_PREFIX], 2, 0)) &
             match.reg_outport(OFPORT, Match1) &
             match.ip_proto(Match2) &
             match.ip_dst_prefix(Route[LSR_IP], Route[LSR_PREFIX], Match3) &
@@ -136,7 +143,7 @@ def init_ecmp_clause(options):
         ecmp_static_route_judge(LR, Priority, Match, Action, State) <= (
             lr_array(LR, UUID_LR, State) & (State != 0) &
             (Priority == 1) &
-            match.reg_outport(0xffff, Match) &
+            match.reg_outport(st.TP_OFPORT_NONE, Match) &
             action.resubmit_table(TABLE_DROP_PACKET, Action)
             )
 
@@ -148,12 +155,41 @@ def init_ecmp_clause(options):
         action.resubmit_next(Action)
         )
 
-    ecmp_bfd_port(PORT_NAME, State) <= (
-        lroute_array(Route, UUID_LR, State1) &
-        next_hop_ovsport(Route[LSR_OUTPORT], OFPORT, State2) &
-        # we only enable/disable ovsport that exist
-        ovsport_chassis(PORT_NAME, UUID_CHASSIS, OFPORT, State3) & (State3 >= 0) &
-        chassis_array(PHY_CHASSIS, UUID_CHASSIS, State4) &
-        (State == State1 + State2 + State3 + State4)
-        )
+    if options.has_key('GATEWAY'):
+        # gateway chassis should set all tunnel port's bfd to true, unless the
+        # chassis was deleted
+        ecmp_bfd_port(PORT_NAME, State) <= (
+            ovsport_chassis(PORT_NAME, UUID_CHASSIS, OFPORT, State1) &
+            # we only enable ovsport that exist
+            (State1 >= 0) & (UUID_CHASSIS != st.TP_FLOW_TUNNEL_NAME) &
+            chassis_array(PHY_CHASSIS, UUID_CHASSIS, State2) &
+            (State == State1 + State2) & (State != 0)
+            )
+        # disable all tunnel port bfd if we found our chassis was deleted
+        ecmp_bfd_port(PORT_NAME, State) <= (
+            local_system_id(UUID_CHASSIS) &
+            chassis_array(PHY_CHASSIS1, UUID_CHASSIS, State1) &
+            # prevent event like chassis tick update,
+            # ecmp_bfd_port will grep out PORT_NAME with state above 0.
+            # In the same time, it also grep out PORT_NAME with state has negative
+            # value. But config_tunnel_bfd help us eliminate negative part
+            # NOTE: it can grep out (State1=1) (State2=1) (State=1),
+            # (State1=1) (State2=-1)(State=-1),(State1=-1) (State2=-1)(State=-1)
+            # but config_tunnel_bfd will keep (State=1) only
+            chassis_array(PHY_CHASSIS2, UUID_CHASSIS, State2) &
+            (State == State1 + State2) & (State != 0) &
+            # figure out all tunnel port
+            ovsport_chassis(PORT_NAME, UUID_CHASSIS1, OFPORT, State3) & (State3 >= 0) &
+            (UUID_CHASSIS1 != st.TP_FLOW_TUNNEL_NAME)
+            )
+    else:
+        ecmp_bfd_port(PORT_NAME, State) <= (
+            lroute_array(Route, UUID_LR, State1) &
+            next_hop_ovsport(Route[LSR_OUTPORT], OFPORT, State2) &
+            # we only enable/disable ovsport that exist
+            ovsport_chassis(PORT_NAME, UUID_CHASSIS, OFPORT, State3) & (State3 >= 0) &
+            chassis_array(PHY_CHASSIS, UUID_CHASSIS, State4) &
+            (UUID_CHASSIS != st.TP_FLOW_TUNNEL_NAME) &
+            (State == State1 + State2 + State3 + State4)
+            )
 

@@ -4,6 +4,7 @@ from reg import *
 from flow_common import *
 import match
 import action
+import tpstatic as st
 
 
 pyDatalog.create_terms('Action1, Action2, Action3, Action4, Action5')
@@ -31,7 +32,7 @@ def init_lsp_egress_clause(way):
         ls_array(LS, UUID_LS, State) & (State != 0) &
         match.reg_flag(FLAG_LOOPBACK, Match) &
         # load 0xffff(OFPP_NONE) -> inport to avoid dropping loopback packet
-        action.load(0xffff, NXM_Reg(IN_PORT_IDX), Action1) &
+        action.load(st.TP_OFPORT_NONE, NXM_Reg(IN_PORT_IDX), Action1) &
         action.resubmit_next(Action2) &
         (Action == Action1 + Action2)
         )

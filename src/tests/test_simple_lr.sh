@@ -11,12 +11,12 @@ net_join phy hv2 || exit_test
 net_join phy hv3 || exit_test
 
 # create logical switch and logical router first
-etcd_ls_add LS-A
-etcd_ls_add LS-B
-etcd_lr_add LR-A
+tpctl ls add LS-A
+tpctl ls add LS-B
+tpctl lr add LR-A
 
 # build a agent_LR to help redirect traffic
-etcd_lr_add agent_LR hv3
+tpctl lr add agent_LR hv3
 
 start_tuplenet_daemon hv1 192.168.100.1
 start_tuplenet_daemon hv2 192.168.100.2
@@ -32,9 +32,9 @@ etcd_ls_link_lr LS-A LR-A 10.10.1.1 24 00:00:06:08:06:01
 # link LS-B to LR-A
 etcd_ls_link_lr LS-B LR-A 10.10.2.1 24 00:00:06:08:06:02
 # create logical switch port
-etcd_lsp_add LS-A lsp-portA 10.10.1.2 00:00:06:08:06:03
-etcd_lsp_add LS-B lsp-portB 10.10.2.3 00:00:06:08:06:04
-etcd_lsp_add LS-B lsp-portC 10.10.2.4 00:00:06:08:06:05
+tpctl lsp add LS-A lsp-portA 10.10.1.2 00:00:06:08:06:03
+tpctl lsp add LS-B lsp-portB 10.10.2.3 00:00:06:08:06:04
+tpctl lsp add LS-B lsp-portC 10.10.2.4 00:00:06:08:06:05
 wait_for_flows_unchange # waiting for install flows
 
 ip_src=`ip_to_hex 10 10 1 2`

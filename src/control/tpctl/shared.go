@@ -8,7 +8,6 @@ import (
 	"net"
 	"os"
 	"reflect"
-	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -26,7 +25,7 @@ func failf(format string, args ...interface{}) {
 func checkArgsThenConnect(ctx *cli.Context, min, max int, usage string) {
 	var (
 		args = ctx.Args()
-		err error
+		err  error
 	)
 
 	if len(args) < min || len(args) > max {
@@ -80,18 +79,6 @@ func validateMAC(input string) {
 	if err != nil {
 		fail(err)
 	}
-}
-
-// user of this function shall ensure the ip is valid
-func macFromIP(ip string) string {
-	parts := strings.Split(ip, ".")
-
-	a, _ := strconv.ParseUint(parts[0], 10, 8)
-	b, _ := strconv.ParseUint(parts[1], 10, 8)
-	c, _ := strconv.ParseUint(parts[2], 10, 8)
-	d, _ := strconv.ParseUint(parts[3], 10, 8)
-
-	return fmt.Sprintf("f2:01:%02x:%02x:%02x:%02x", a, b, c, d)
 }
 
 func printStruct(ptr interface{}) {

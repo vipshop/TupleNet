@@ -70,6 +70,18 @@ sim_destroy()
     test -e "$pidfile" && kill `cat $pidfile`
     pidfile="$OVS_RUNDIR"/ovs-vswitchd.pid
     test -e "$pidfile" && kill `cat $pidfile`
+    remove_arp_from_array $sim_id
+}
+
+is_br_int_secure_failmode()
+{
+    local sim_id=$1
+    ovs_setenv $sim_id
+    mode=`ovs-vsctl get-fail-mode br-int`
+    if [ "$mode" != "secure" ]; then
+        return 1
+    fi
+    return 0
 }
 
 remove_sim_id_from_array()
@@ -117,6 +129,20 @@ net_join()
       options:stream="unix:$ovs_base/main/$port.sock" \
       options:tx_pcap="$ovs_base/$sim_id/$sim_port-tx.pcap" \
       options:rxq_pcap="$ovs_base/$sim_id/$sim_port-rx.pcap" || return 1
+}
+
+net_dropout()
+{
+    ovs_setenv main
+    local net=$1
+    local sim_id=$2
+    local port=${net}_${sim_id}
+    ovs-vsctl del-port $port || return 1
+
+    ovs_setenv $sim_id
+    local sim_bridge="br0"
+    ovs-vsctl del-br $sim_bridge || return 1
+    remove_arp_from_array $sim_id
 }
 
 port_add()
@@ -223,18 +249,6 @@ modify_port_iface_random_id()
     modify_port_iface_id $sim_id $sim_port $iface_id || return 1
 }
 
-patchport_add()
-{
-    local sim_id=$1
-    local sim_port=$2
-    local peer_port=${sim_port}-peer
-    ovs_setenv $sim_id
-    ovs-vsctl add-port "br-int" $sim_port -- set Interface $sim_port \
-      type=patch external_ids:iface-id=$sim_port options:peer=$peer_port
-    ovs-vsctl add-port "br0" $peer_port -- set Interface $peer_port \
-      type=patch options:peer=$sim_port || return 1
-    pmsg "create ovs patchport $sim_port in hypervisor $sim_id"
-}
 
 print_bridge_detail()
 {
@@ -460,17 +474,17 @@ config_bfd()
     ovs_setenv $sim_id
     iface=`ovs-vsctl list interface|grep -E "name   |external_ids"|grep "chassis-id" -A 1|grep $peer_chassis -A 1|tail -n1|awk '{print \$3}'|sed s/\"//g`
     pmsg "set Interface $iface bfd:$config"
-    ovs-vsctl set Interface $iface bfd:$config
+    ovs-vsctl set Interface $iface bfd:$config || return 1
 }
 
 enable_bfd()
 {
-    config_bfd $1 $2 "enable=true"
+    config_bfd $1 $2 "enable=true" || return 1
 }
 
 disable_bfd()
 {
-    config_bfd $1 $2 "enable=false"
+    config_bfd $1 $2 "enable=false" || return 1
 }
 
 is_tunnel_bfd_fit()
@@ -561,6 +575,7 @@ wait_for_flows_unchange()
         current_flows_array="$current_flows $current_flows_array"
     done
 
+    i=0
     while [ "$current_flows_array" != "$prev_flows_array" ]
     do
         prev_flows_array=$current_flows_array
@@ -572,6 +587,10 @@ wait_for_flows_unchange()
             current_flows=`get_ovs_flows`
             current_flows_array="$current_flows $current_flows_array"
         done
+        i=$((i+1))
+        if [ $i -gt 20 ]; then
+            pmsg "cost to much time in waiting flows sync, exit"
+        fi
     done
     end_time=$(date +%s)
     cost_time=$((end_time - start_time))
@@ -600,6 +619,28 @@ wait_for_brint()
     end_time=$(date +%s)
     cost_time=$((end_time - start_time))
     pmsg "building br-int cost $cost_time second"
+}
+
+wait_bfd_state_up()
+{
+    local sim_id=$1
+    local peer_chassis=$2
+    ovs_setenv $sim_id
+    iface=`ovs-vsctl list interface|grep -E "name   |external_ids"|grep "chassis-id" -A 1|grep $peer_chassis -A 1|tail -n1|awk '{print \$3}'|sed s/\"//g`
+
+    i=0
+    while [ $i -le 10 ]; do
+        i=$((i+1))
+        config=`ovs-vsctl get Interface $iface bfd_status:state`
+        if [ "$config" != "up" ]; then
+            pmsg "bfd state:$config, iface=$iface"
+            sleep 3
+        else
+            return 0
+        fi
+    done
+    pmsg "exceed 30s, bfd state is not in up state"
+    return 1
 }
 
 is_port_exist()

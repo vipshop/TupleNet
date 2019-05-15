@@ -1,5 +1,6 @@
 from pyDatalog import pyDatalog
-import flow_common as fc
+from tp_utils import run_env
+hash_fn = run_env.get_extra()['options']['HASH_FN']
 
 Action_output = 1
 Action_output_reg = 2
@@ -111,8 +112,8 @@ ACTION_STR_MAP = {
         Action_dnat:'ct(commit,nat(dst={}),table={})',
         Action_undnat:'ct(nat,table={})',
 
-        Action_bundle:'bundle(nw_dst,0,active_backup,ofport,slaves:{})',
-        Action_bundle_load:'bundle_load(nw_dst,0,hrw,ofport,{},slaves:{})',
+        Action_bundle:'bundle({},0,active_backup,ofport,slaves:{{}})'.format(hash_fn),
+        Action_bundle_load:'bundle_load({},0,hrw,ofport,{{}},slaves:{{}})'.format(hash_fn),
 
         Action_note:'note:{:02x}',
 

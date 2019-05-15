@@ -39,12 +39,8 @@ wait_for_brint # waiting for building br-int bridge
 port_add hv1 lsp-portA || exit_test
 port_add hv2 lsp-portB || exit_test
 port_add hv2 lsp-portC || exit_test
-patchport_add hv3 patchport-outside1 || exit_test
-patchport_add hv4 patchport-outside2 || exit_test
-
-# add patchport into etcd
-etcd_patchport_add outside1 patchport-outside1
-etcd_patchport_add outside2 patchport-outside2
+tp_add_patchport hv3 outside1 patchport-outside1 || exit_test
+tp_add_patchport hv4 outside2 patchport-outside2 || exit_test
 
 # link LS-A to LR-A
 etcd_ls_link_lr LS-A LR-A 10.10.1.1 24 00:00:06:08:06:01

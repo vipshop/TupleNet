@@ -43,7 +43,20 @@ stop_etcd_instance 0
 pmsg "sleep 10s to give etcd cluster sync time"
 sleep 10
 # create logical switch port
+# set a error lsp which only container ip
+etcdput "LS/LS-B/lsp/lsp-portB" "ip=10.10.2.3" || exit_test
+sleep 1
+etcdput "LS/LS-B/lsp/lsp-portB" "ip=10.10.2.3, mac=ff" || exit_test
+sleep 1
+etcdput "LS/LS-B/lsp/lsp-portB" "ip=10.10.2.3, mac=00:11:22:11:22:11:11" || exit_test
+sleep 1
+etcdput "LS/LS-B/lsp/lsp-portB" "ip=10.10.2.a, mac=00:11:22:11:22:11" || exit_test
+sleep 1
+# revise lsp-portB
 etcd_lsp_add LS-B lsp-portB 10.10.2.3 00:00:06:08:06:04
+sleep 2
+# set a error lsp which only container ip
+etcdput "LS/LS-B/lsp/lsp-portB" "ip=10.10.2.3" || exit_test
 wait_for_flows_unchange # waiting for install flows
 
 ip_src=`ip_to_hex 10 10 1 2`
@@ -107,6 +120,11 @@ sleep 25
 
 etcd_lsp_add LS-B lsp-portE 10.10.2.6 00:00:06:08:06:07
 port_add hv3 lsp-portE || exit_test
+# set a hv with error ip
+etcdput "chassis/hv1" "ip=2,tick=10" || exit_test
+sleep 1
+# set a hv with error tick
+etcdput "chassis/hv1" "ip=2.2.2.2,tick=aa" || exit_test
 wait_for_flows_unchange # waiting for install flows
 ip_src=`ip_to_hex 10 10 2 6`
 ip_dst=`ip_to_hex 10 10 1 2`

@@ -3,7 +3,8 @@ import action
 import match
 from reg import *
 from logicalview import *
-from flow_common import TABLE_PIPELINE_FORWARD, TABLE_EXTRACT_METADATA
+import tpstatic as st
+from flow_common import TABLE_PIPELINE_FORWARD, TABLE_EXTRACT_METADATA, TABLE_DROP_PACKET
 
 pyDatalog.create_terms('Table, Priority, Match, Action')
 pyDatalog.create_terms('Action1, Action2, Action3, Action4, Action5')
@@ -81,6 +82,12 @@ def init_physical_flow_clause(options):
         action.move(NXM_Reg(REG_SRC_IDX), NXM_Reg(REG_DST_IDX), Action9) &
         (Action == Action1 + Action2 + Action3 + Action4 +
                    Action5 + Action6 + Action7 + Action8 + Action9)
+        )
+
+    output_pkt_by_reg(Priority, Match, Action) <= (
+        (Priority == 1) &
+        match.reg_outport(st.TP_OFPORT_NONE, Match) &
+        action.resubmit_table(TABLE_DROP_PACKET, Action)
         )
 
     output_pkt_by_reg(Priority, Match, Action) <= (

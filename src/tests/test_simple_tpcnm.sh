@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-. env_utils.sh ; skip_if_in_container
+#noparallel
+. env_utils.sh
+skip_if_in_container
 
 pmsg "preparing env"
 env_init ${0##*/} # 0##*/ is the filename

@@ -4,32 +4,28 @@ import os
 import time
 import logging
 import threading
-import subprocess
 from logging.handlers import RotatingFileHandler
 import socket
 import fcntl
 import struct
 import signal
+import re
 
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ppparent_dir = os.path.dirname(os.path.dirname(parent_dir))
 py_third_dir = os.path.join(ppparent_dir, 'py_third')
-sys.path.append(parent_dir)
-sys.path.append(ppparent_dir)
-sys.path.append(py_third_dir)
-import re
+sys.path = [parent_dir, ppparent_dir, py_third_dir] + sys.path
 import lflow
 import commit_ovs as cm
 import logicalview as lgview
-import run_env
 import state_update
 import tentacle
 import tuplesync
 import link_master as lm
-from onexit import on_parent_exit
 from optparse import OptionParser
 from pyDatalog import pyDatalog
-from tp_utils import pipe
+from tp_utils import run_env, pipe
+import syscmd
 import version
 
 logger = None
@@ -45,6 +41,9 @@ def handle_exit_signal(signum, frame):
     logger.info('Exit tuplenet')
     sys.exit(0)
 
+def killme():
+    os.kill(os.getpid(), signal.SIGTERM)
+
 
 def clean_env(extra, ret):
     if os.path.exists(extra['flock']):
@@ -53,7 +52,7 @@ def clean_env(extra, ret):
         extra['lm'].stop_all_watches()
     pipe.destory_runtime_files()
 
-def get_if_ip(ifname_list = ['eth0', 'br0']):
+def _interface_ip(ifname_list = ['eth0', 'br0']):
     for ifname in ifname_list:
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -74,7 +73,8 @@ def write_pid_into_file(pid_lock_file):
 
 def check_single_instance():
     current_file_name = os.path.realpath(__file__).split('/')[-1]
-    pid_lock_file = pipe.RUNNING_ENV_PATH + current_file_name + '.pid'
+    pid_lock_file = os.path.join(extra['options']['TUPLENET_RUNDIR'],
+                                 current_file_name + '.pid')
     if os.path.exists(pid_lock_file):
         with open(pid_lock_file, 'r') as fd:
             pid = int(fd.read())
@@ -85,6 +85,17 @@ def check_single_instance():
                 logger.info('the previous may hit some issue and exit without '
                             'clean the environment')
     write_pid_into_file(pid_lock_file)
+
+def _correct_sysctl_config(kv):
+    try:
+        for k,v in kv.items():
+            current_v = syscmd.sysctl_read(k)
+            if current_v != v:
+                syscmd.sysctl_write(k, v)
+    except syscmd.SyscmdErr as err:
+        logger.warning("failed to write sysctl config, err:%s", err)
+        return False
+    return True
 
 def create_watch_master(hosts, prefix, local_system_id):
     extra['lm'] = lm.WatchMaster(lm.sanity_etcdhost(hosts),
@@ -97,44 +108,57 @@ def init_env(options):
 
     pipe.create_runtime_folder()
     check_single_instance()
-    run_env.acquire_outside_env()
-    lflow.init_build_flows_clause(extra['options'])
 
     system_id = cm.system_id()
     if system_id is None or system_id == "":
-        logger.error('Openvswitch has no chassis id')
-        clean_env(extra, -1)
-        sys.exit(-1)
-    extra['system_id'] = system_id
-    +lgview.local_system_id(system_id)
+        logger.error('openvswitch has no chassis id')
+        killme()
 
+    extra['system_id'] = system_id
     logic = pyDatalog.Logic(True)
     extra['logic'] = logic
-    create_watch_master(options.host, options.path_prefix, system_id)
-    cm.build_br_integration()
-    cm.insert_ovs_ipfix()
-    cm.set_tunnel_tlv()
 
-def update_chassis(interface_list):
+    br_int_mac = cm.build_br_integration()
+    extra['options']['br-int_mac'] = br_int_mac
+    if extra['options'].has_key('ENABLE_UNTUNNEL'):
+        config = {'net.ipv4.conf.all.rp_filter':'0'}
+        config['net.ipv4.ip_forward'] = '1'
+        config['net.ipv4.conf.br-int.rp_filter'] = '0'
+        config['net.ipv4.conf.br-int.forwarding'] = '1'
+        if _correct_sysctl_config(config) is False:
+            logger.error('failed to correct sysctl config:%s', config)
+            killme()
+        try:
+            br = 'br-int'
+            syscmd.network_ifup(br)
+            logger.info('ifup the interface %s', br)
+        except Exception as err:
+            logger.error('failed to ifup %s interface, err:', br, err)
+            killme()
+
+    +lgview.local_system_id(system_id)
+    lflow.init_build_flows_clause(extra['options'])
+
+    try:
+        cm.insert_ovs_ipfix()
+        cm.set_tunnel_tlv()
+        create_watch_master(options.host, options.path_prefix, system_id)
+    except Exception as err:
+        logger.error("hit error in init_env, err:%s", err)
+        killme()
+
+def config_consume_ip(interface_list):
     if re.match(r"^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$", interface_list[0]):
         host_ip = interface_list[0]
     else:
-        host_ip = get_if_ip(interface_list)
+        host_ip = _interface_ip(interface_list)
     if host_ip is None:
         logger.error('cannot get a valid ip for ovs tunnel')
-        clean_env(extra, -1)
-        sys.exit(-1)
+        killme()
     logger.info('consume %s as tunnel ip', host_ip)
-    wmaster = extra['lm']
-    key = 'chassis/{}'.format(extra['system_id'])
-    value = 'ip={},tick={}'.format(host_ip, int(time.time()))
-    ret = wmaster.put_entity_view(key, value)
-    if ret == 0:
-        raise Exception("error in updating chassis")
-    logger.info("update local system-id %s to remote etcd", extra['system_id'])
+    extra['consume_ip'] = host_ip
 
 def run_monitor_thread():
-    logic = extra['logic']
     extra['lock'] = threading.Lock()
     logger.info("start a monitor thread")
     mon_ovsdb_thread = cm.start_monitor_ovsdb(entity_zoo, extra)
@@ -145,8 +169,7 @@ def run_monitor_thread():
         # TODO we should figure out the root cause
         if time.time() - start_time > 5:
             logger.error("tuplenet hangs on starting ovsdb-client")
-            clean_env(extra, -1)
-            sys.exit(-1)
+            killme()
         with extra['lock']:
             if extra.has_key('ovsdb-client'):
                 break;
@@ -199,8 +222,8 @@ def run_main(interval):
 
 def init_logger(log_dir, log_level = logging.DEBUG):
     global logger
-
-    format_type = '%(asctime)s.%(msecs)03d %(levelname)s %(process)d %(filename)s[line:%(lineno)d]: %(message)s'
+    # NOTE: set event type to default, tuplenet does not need to specify the event of logs
+    format_type = '[%(asctime)s.%(msecs)03d][%(levelname)s][%(process)d][%(filename)s:%(lineno)d]>>>[default]msg=%(message)s'
     datefmt = '%Y-%m-%d %H:%M:%S'
     formatter = logging.Formatter(format_type, datefmt)
     logger = logging.getLogger('')
@@ -214,11 +237,21 @@ def init_logger(log_dir, log_level = logging.DEBUG):
                 print "can not create dir %s, err:%s" % (log_dir, str(e))
                 sys.exit(1)
 
+        # config regular and warning log path
         log_path = log_dir + '/tuplenet.log'
         rotate_handler = RotatingFileHandler(log_path, maxBytes = 2000 * 1024 * 1024,
                                              backupCount = 5)
         rotate_handler.setFormatter(formatter)
         logger.addHandler(rotate_handler)
+
+        # config warning log path, output warn/error log into another file
+        log_path = log_dir + '/tuplenet_warn.log'
+        rotate_handler = RotatingFileHandler(log_path, maxBytes = 2000 * 1024 * 1024,
+                                             backupCount = 5)
+        rotate_handler.setFormatter(formatter)
+        rotate_handler.setLevel(logging.WARN)
+        logger.addHandler(rotate_handler)
+
     else:
         console = logging.StreamHandler();
         console_formater = logging.Formatter(format_type, datefmt)
@@ -271,11 +304,12 @@ def main():
     logger.info("accept log path:%s", options.log_dir)
     logger.info("accept interval:%s", options.interval)
     logger.info("accept etcd host:%s", options.host)
+    logger.info("features config:%s", extra['options'])
     init_env(options)
     run_monitor_thread()
     run_arp_update_thread()
     run_debug_thread()
-    update_chassis(interface_list)
+    config_consume_ip(interface_list)
     run_main(options.interval)
 
 

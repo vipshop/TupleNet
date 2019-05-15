@@ -144,6 +144,13 @@ etcddel()
     etcdctl --endpoints $etcd_client_specs del ${prefix}$1 || return 1
 }
 
+etcdget()
+{
+    local prefix=${tuplenet_prefix}entity_view/
+    pmsg "etcdget key:${prefix}${1}"
+    echo "`etcdctl --endpoints $etcd_client_specs get ${prefix}$1`"
+}
+
 etcd_chassis_add()
 {
     hv=$1
@@ -151,6 +158,14 @@ etcd_chassis_add()
     tick=$3
     etcdput chassis/$hv ip=$ip,tick=$tick
 }
+
+etcd_get_chassis_tick()
+{
+    hv=$1
+    info=`etcdget chassis/$hv`
+    echo `echo "$info" | awk -F'=' '{print $3}'`
+}
+
 
 etcd_chassis_del()
 {
@@ -254,12 +269,6 @@ etcd_lsp_del()
     etcddel LS/$ls_name/lsp/$lsp_name || return 1
 }
 
-etcd_patchport_add()
-{
-    ls_name=$1
-    lsp_name=$2
-    etcdput LS/$ls_name/lsp/$lsp_name ip=255.255.255.255,mac=ff:ff:ff:ff:ff:ee || return 1
-}
 
 etcd_ls_link_lr()
 {

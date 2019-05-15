@@ -9,10 +9,12 @@ env_init ${0##*/} # 0##*/ is the filename
 sim_create hv1 || exit_test
 sim_create hv2 || exit_test
 sim_create hv3 || exit_test
+sim_create hv4 || exit_test
 net_create phy || exit_test
 net_join phy hv1 || exit_test
 net_join phy hv2 || exit_test
 net_join phy hv3 || exit_test
+net_join phy hv4 || exit_test
 
 # create logical switch and logical router first
 etcd_ls_add LS-A
@@ -26,6 +28,7 @@ etcd_ls_add outside1
 etcd_ls_add outside2
 
 start_tuplenet_daemon hv1 192.168.100.1
+start_tuplenet_daemon hv4 192.168.100.4
 ONDEMAND=0 GATEWAY=1 start_tuplenet_daemon hv2 192.168.100.2
 ONDEMAND=0 GATEWAY=1 start_tuplenet_daemon hv3 192.168.100.3
 install_arp
@@ -191,34 +194,50 @@ type:LS,pipeline:m2,from:m2_to_LR-A,to:m2_to_edge2,stage:TABLE_LSP_TRACE_EGRESS_
 type:LR,pipeline:edge2,from:edge2_to_m2,to:<UNKNOW>,stage:TABLE_LRP_TRACE_INGRESS_IN,chassis:hv3,output_iface_id:<UNK_PORT>
 type:LR,pipeline:edge2,from:edge2_to_m2,to:edge2_to_outside2,stage:TABLE_LRP_TRACE_INGRESS_OUT,chassis:hv3,output_iface_id:<UNK_PORT>
 type:LR,pipeline:edge2,from:edge2_to_m2,to:edge2_to_outside2,stage:TABLE_LRP_TRACE_EGRESS_IN,chassis:hv3,output_iface_id:<UNK_PORT>
-type:LR,pipeline:edge2,from:edge2_to_m2,to:edge2_to_outside2,stage:TABLE_DROP_PACKET,chassis:hv3,output_iface_id:<UNK_PORT>"
+type:LR,pipeline:edge2,from:edge2_to_m2,to:edge2_to_outside2,stage:TABLE_OUTPUT_PKT,chassis:hv3,output_iface_id:hv2
+type:LR,pipeline:edge2,from:edge2_to_m2,to:edge2_to_outside2,stage:TABLE_LRP_TRACE_INGRESS_OUT,chassis:hv2,output_iface_id:<UNK_PORT>
+type:LR,pipeline:edge2,from:edge2_to_m2,to:edge2_to_outside2,stage:TABLE_LRP_TRACE_EGRESS_IN,chassis:hv2,output_iface_id:<UNK_PORT>
+type:LR,pipeline:edge2,from:edge2_to_m2,to:edge2_to_outside2,stage:TABLE_DROP_PACKET,chassis:hv2,output_iface_id:<UNK_PORT>"
 verify_trace "$expect_path" "$real_path" || exit_test
 
 real_path=`inject_trace_packet lsp-portA 00:00:06:08:07:01 10.10.1.2 00:00:06:08:06:01 100.10.10.111`
 real_pkt=`get_tx_last_pkt hv1 lsp-portA`
 # we don't update expect_pkt, because we won't expect receiving icmp back
 verify_pkt $expect_pkt $real_pkt || exit_test
+# redirect feature will direct traffic to other chassis, so it would not drop this packet
+# then the last path(TABLE_DROP_PACKET) should be deleted
 expect_path="type:LS,pipeline:LS-A,from:lsp-portA,to:<UNKNOW>,stage:TABLE_LSP_TRACE_INGRESS_IN,chassis:hv1,output_iface_id:<UNK_PORT>
 type:LS,pipeline:LS-A,from:lsp-portA,to:LS-A_to_LR-A,stage:TABLE_LSP_TRACE_INGRESS_OUT,chassis:hv1,output_iface_id:<UNK_PORT>
 type:LS,pipeline:LS-A,from:lsp-portA,to:LS-A_to_LR-A,stage:TABLE_LSP_TRACE_EGRESS_IN,chassis:hv1,output_iface_id:<UNK_PORT>
 type:LS,pipeline:LS-A,from:lsp-portA,to:LS-A_to_LR-A,stage:TABLE_LSP_TRACE_EGRESS_OUT,chassis:hv1,output_iface_id:<UNK_PORT>
 type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:<UNKNOW>,stage:TABLE_LRP_TRACE_INGRESS_IN,chassis:hv1,output_iface_id:<UNK_PORT>
 type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:LR-A_to_m2,stage:TABLE_LRP_TRACE_INGRESS_OUT,chassis:hv1,output_iface_id:<UNK_PORT>
-type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:LR-A_to_m2,stage:TABLE_LRP_TRACE_EGRESS_IN,chassis:hv1,output_iface_id:<UNK_PORT>\n"
-
-# ondemand & redirect feature will direct traffic to other chassis, so it would not drop this packet
-# then the last path(TABLE_DROP_PACKET) should be deleted
-if [[ -z "$ONDEMAND" || "$ONDEMAND" == 1 ]]; then
-    last_path="type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:LR-A_to_m2,stage:TABLE_OUTPUT_PKT,chassis:hv1,output_iface_id:hv3
+type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:LR-A_to_m2,stage:TABLE_LRP_TRACE_EGRESS_IN,chassis:hv1,output_iface_id:<UNK_PORT>
+type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:LR-A_to_m2,stage:TABLE_OUTPUT_PKT,chassis:hv1,output_iface_id:hv3
 type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:LR-A_to_m2,stage:TABLE_LRP_TRACE_INGRESS_OUT,chassis:hv3,output_iface_id:<UNK_PORT>
 type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:LR-A_to_m2,stage:TABLE_LRP_TRACE_EGRESS_IN,chassis:hv3,output_iface_id:<UNK_PORT>
 type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:LR-A_to_m2,stage:TABLE_DROP_PACKET,chassis:hv3,output_iface_id:<UNK_PORT>"
-else
-    last_path="type:LR,pipeline:LR-A,from:LR-A_to_LS-A,to:LR-A_to_m2,stage:TABLE_DROP_PACKET,chassis:hv1,output_iface_id:<UNK_PORT>"
-fi
 
-expect_path=`echo -e "${expect_path}${last_path}"`
+
 verify_trace "$expect_path" "$real_path" || exit_test
 
+# create a lot of lsp to test if pkt-trace works well.
+i=15
+MAX_PORT_N=$((10+i))
+while [ $i -lt $MAX_PORT_N ]; do
+    mac_hex=`int_to_hex $i`
+    port_add hv4 lsp-portA${i} || exit_test
+    etcd_lsp_add LS-A lsp-portA${i} 10.10.1.${i} 00:00:09:09:09:$mac_hex
+    port_add hv1 lsp-portB${i} || exit_test
+    etcd_lsp_add LS-B lsp-portB${i} 10.10.2.${i} 00:00:09:09:0a:$mac_hex
+    i=$((i+1))
+done
+wait_for_flows_unchange
+output="$(BATCH_NUM=20 TRACE_WAIT_TIME=6 DETECT_LOOP=3 inject_trace_packet LS-A,LS-B 2>&1)"
+if [ "$output" != "" ]; then
+    pmsg "error tracing output"
+    pmsg "$output"
+    exit_test
+fi
 
 pass_test

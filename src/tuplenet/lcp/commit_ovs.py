@@ -1,4 +1,4 @@
-import sys, os
+import os
 import json
 import subprocess
 import logging
@@ -8,7 +8,7 @@ import time, random, string
 import logicalview as lgview
 from pyDatalog import pyDatalog
 from onexit import on_parent_exit
-from run_env import is_gateway_chassis, get_extra
+from tp_utils.run_env import is_gateway_chassis, get_extra
 
 logger = logging.getLogger(__name__)
 flow_lock = threading.Lock()
@@ -21,7 +21,7 @@ class OVSToolErr(Exception):
     pass
 
 def call_popen(cmd, commu=None, shell=False):
-    child = subprocess.Popen(cmd, shell, stdout=subprocess.PIPE,
+    child = subprocess.Popen(cmd, shell=shell, stdout=subprocess.PIPE,
                              stdin=subprocess.PIPE, stderr=subprocess.PIPE)
     if commu is None:
         output = child.communicate()
@@ -96,8 +96,15 @@ def update_ovsport(record, entity_zoo):
 
     ofport = record[2]
     name = record[3]
-    external_ids = record[4]
-    external_ids = parse_map(external_ids)
+    external_ids = parse_map(record[4])
+    port_type = record[5]
+
+    # adding an interal port may imply that an new bridge was created,
+    # we should update zoo's version to test if tuplenet should rebuild
+    # patchports.
+    if port_type == 'internal':
+        entity_zoo.update_version_force()
+
     if external_ids.has_key('iface-id'):
         uuid = external_ids['iface-id']
         is_remote = False
@@ -115,6 +122,9 @@ def update_ovsport(record, entity_zoo):
         logger.info("try to move port %s to sink uuid:%s", name, uuid)
         entity_zoo.move_entity2sink(entity_type, name)
     else:
+        if ofport < 0:
+            logger.info("do not accept ovsport %s which has negative ofport %d", name, ofport)
+            return
         logger.info("try to add ovsport entity %s ofport:%d, uuid:%s in zoo",
                     name, ofport, uuid)
         entity_zoo.add_entity(entity_type, name, uuid, ofport, is_remote)
@@ -124,7 +134,7 @@ def update_ovsport(record, entity_zoo):
 def monitor_ovsdb(entity_zoo, extra):
     pyDatalog.Logic(extra['logic'])
     cmd = ['ovsdb-client', 'monitor', 'Interface',
-           'ofport', 'name', 'external_ids', '--format=json']
+           'ofport', 'name', 'external_ids', 'type', '--format=json']
 
     logger.info("start ovsdb-client instance")
     try:
@@ -192,7 +202,7 @@ def system_id():
              "table":"Open_vSwitch","columns":["external_ids"], \
              "where":[]}]']
     try:
-        json_str = call_popen(cmd, shell=True)
+        json_str = call_popen(cmd, shell=False)
     except Exception:
         logger.error('failed to get system-id')
         return
@@ -212,6 +222,7 @@ def remove_tunnel_by_name(portname):
         ovs_vsctl('del-port', 'br-int', portname)
     except Exception as err:
         logger.info("cannot delete tunnel port:%s", err)
+    logger.info("delete ovs tunnel port %s", portname)
     return
 
 def get_tunnel_chassis_id(portname):
@@ -241,16 +252,13 @@ def create_tunnel(ip, uuid):
            portname, 'type=geneve', 'options:remote_ip={}'.format(ip),
            'options:key=flow', 'options:csum=true',
            'external_ids:chassis-id={}'.format(uuid)]
+    logger.info("adding ovs tunnel port %s", portname)
     try:
         ovs_vsctl(*cmd)
     except Exception as err:
         logger.error('cannot create tunnle, cmd:%s, err:%s', cmd, err)
         return portname
 
-    # if this host is a gateway, then we should enable bfd for each tunnle port
-    if is_gateway_chassis():
-        logger.info("local host is gateway, enable bfd on %s", portname)
-        config_ovsport_bfd(portname, 'enable=true')
     return portname
 
 def create_flowbased_tunnel(chassis_id):
@@ -260,6 +268,7 @@ def create_flowbased_tunnel(chassis_id):
            portname, 'type=geneve', 'options:remote_ip=flow',
            'options:key=flow', 'options:csum=true',
            'external_ids:chassis-id={}'.format(chassis_id)]
+    logger.info("adding  ovs tunnel port %s", portname)
     try:
         ovs_vsctl(*cmd)
     except Exception as err:
@@ -268,20 +277,71 @@ def create_flowbased_tunnel(chassis_id):
     return portname
 
 
-def create_patch_port(uuid, peer_bridge):
-    portname = 'patch-' + 'br-int' + peer_bridge + str(uuid)[0:8]
-    peername = 'patch-' + peer_bridge + 'br-int' + str(uuid)[0:8]
+def create_patchport(portname, peer_br, br = 'br-int'):
+    peer_portname = portname + "-peer"
+    try:
+        ovs_vsctl('br-exists', peer_br)
+    except:
+        logger.info("the bridge %s is not exist, would not create patchports",
+                    peer_br)
+        return
 
-    cmd = ['add-port', 'br-int', portname, '--', 'set', 'interface',
-           portname, 'type=patch',
-           'external_ids:iface-id={}'.format(uuid),
-           'options:peer={}'.format(peername)]
-    ovs_vsctl(*cmd)
-    cmd = ['add-port', peer_bridge, peername, '--', 'set', 'interface',
-           peername, 'type=patch',
-           'options:peer={}'.format(portname)]
-    ovs_vsctl(*cmd)
+    cmd = []
+    try:
+        ovs_vsctl('list', 'interface', portname)
+    except:
+        cmd += ['--', 'add-port', br, portname,
+                '--', 'set', 'interface', portname, 'type=patch',
+                'options:peer={}'.format(peer_portname),
+                'external_ids:iface-id={}'.format(portname)
+               ]
 
+    try:
+        ovs_vsctl('list', 'interface', peer_portname)
+    except:
+        cmd += ['--', 'add-port', peer_br, peer_portname,
+                '--', 'set', 'interface', peer_portname, 'type=patch',
+                'options:peer={}'.format(portname),
+                'external_ids:iface-id={}'.format(peer_portname)
+               ]
+    if len(cmd) == 0:
+        logger.info("the patchports had been created, skip..")
+        return
+
+    try:
+        ovs_vsctl(*cmd)
+    except Exception as err:
+        logger.warning("failed to create patchport, err:%s", err)
+    else:
+        logger.info("created patchport %s, %s", portname, peer_portname)
+
+
+def delete_patchport(portname):
+    try:
+        peer_portname = ovs_vsctl('get', 'interface', portname,
+                                  'options:peer').strip("\"")
+    except Exception as err:
+        logger.warning("failed to get %s peer patchport information, err:%s",
+                       portname, err)
+        return
+    try:
+        ovs_vsctl('del-port', portname)
+    except Exception as err:
+        logger.warning("failed to delete patchport %s, err:%s", portname, err)
+        return
+
+    try:
+        ovs_vsctl('list', 'interface', peer_portname)
+    except Exception as err:
+        logger.warning("failed to find patchport %s, err:%s",
+                       peer_portname, err)
+        return
+    try:
+        ovs_vsctl('del-port', peer_portname)
+    except Exception as err:
+        logger.warning("failed to delete patchport %s, err:%s", peer_portname, err)
+        return
+    logger.info("removed patchport %s %s", portname, peer_portname)
 
 def commit_replaceflows(replace_flows, br = 'br-int'):
     # commit_replaceflows is only consumed by update_logical_view in booting
@@ -348,22 +408,46 @@ def commit_flows(add_flows, del_flows):
             cm_cnt += 1
     return cm_cnt;
 
+def _set_br_failmode(br, mode):
+    try:
+        cur_mode = ovs_vsctl('get-fail-mode', br)
+    except Exception:
+        logger.error("failed to get fail mode of bridge %s", br)
+        raise OVSToolErr("failed to get fail mode of bridge")
+    if cur_mode != mode:
+        logger.info("config bridge %s fail-mode into %s", br, mode)
+        try:
+            ovs_vsctl('set-fail-mode', br, mode)
+        except Exception:
+            logger.error("failed to config %s fail-mode into %s", br, mode)
+            raise OVSToolErr("failed to config fail-mode")
+
+def _get_br_integration_mac(br):
+    try:
+        mac = ovs_vsctl('get', 'interface', br, 'mac_in_use')
+    except Exception:
+        logger.error("failed to get bridge %s's mac_in_use", br)
+        return
+    mac = mac.encode('ascii','ignore').replace('"', '')
+    return mac
+
 def build_br_integration(br = 'br-int'):
     try:
         ovs_vsctl('br-exists', br)
         logger.info("the bridge %s is exist", br)
+        _set_br_failmode(br, 'secure')
         # if we hit no issue, then it means the bridge is exist
-        return
+        return _get_br_integration_mac(br)
     except Exception as err:
         logger.info("the bridge %s is not exist, try to create a new one", br)
     try:
-        ovs_vsctl('add-br', br)
+        ovs_vsctl('add-br', br, '--', 'set', 'Bridge', br, 'fail-mode=secure')
         logger.info("create bridge %s for integration", br)
     except Exception as err:
         logger.error("failed to create %s", br)
         raise OVSToolErr("failed to create integration bridge")
 
-    clean_ovs_flows()
+    return _get_br_integration_mac(br)
 
 def set_tunnel_tlv(vipclass = 0xffee, br = 'br-int'):
     while True:
@@ -408,9 +492,9 @@ def config_ovsport_bfd(portname, config):
 def inject_pkt_to_ovsport(cmd_id, packet_data, ofport):
     try:
         ovs_ofctl('packet-out', 'br-int', 'NONE',
-                  'load:{}->NXM_OF_IN_PORT[],'
+                  ('load:{}->NXM_OF_IN_PORT[],'
                   'load:{}->NXM_NX_REG10[16..31],'
-                  'load:1->NXM_NX_REG10[1],resubmit(,0)'.format(ofport, cmd_id),
+                  'load:1->NXM_NX_REG10[1],resubmit(,0)').format(ofport, cmd_id),
                   packet_data)
     except Exception as err:
         logger.warning("failed to inject packet %s to ofport %d",

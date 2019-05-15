@@ -1,25 +1,27 @@
 import os
-import sys
 import commit_ovs as cm
-import pkt_trace
+import flow_common as fc
 import logging
 import logicalview as lgview
 import lflow
 import ecmp
 import action as ovsaction
 import match as ovsmatch
-import link_master as lm
 import time
 from pyDatalog import pyDatalog
-from run_env import is_gateway_chassis
+from tp_utils.run_env import is_gateway_chassis, get_extra
 import tunnel
+import patchport
 
 logger = logging.getLogger(__name__)
 prev_zoo_ver = 0 # it should be 0 which same as entity_zoo's zoo_ver
 had_clean_tunnel_ports = False
 had_clean_ovs_flows = False
+# NOTE: DO NOT revise the filename
+MAC_IP_BIND_FILE = os.path.join(get_extra()['options']['TUPLENET_RUNDIR'],
+                                'mac_ip_bind.data')
 pyDatalog.create_terms('Table, Priority, Match, Action, State')
-pyDatalog.create_terms('PORT_NAME, IP, UUID_CHASSIS')
+pyDatalog.create_terms('PORT_NAME, IP, UUID_CHASSIS, X, Y, PEER_BR')
 
 def update_lsp_chassis(entity_set, system_id):
     lsp_chassis_changed = []
@@ -49,6 +51,39 @@ def revise_lsp_chassis(entity_zoo, system_id):
         lsp_chassis_changed = update_lsp_chassis(entity_set,
                                                  system_id)
         return generate_lsp_kv(lsp_chassis_changed, system_id)
+
+def _gen_arp_ip_flow(mac_addr, ip_int):
+    match = 'table={t},priority=1,ip,reg2={dst},'.format(
+                    t = fc.TABLE_SEARCH_IP_MAC, dst = ip_int)
+    action = 'actions=mod_dl_dst:{}'.format(mac_addr)
+    flow = match + action
+    return flow
+
+def update_ovs_arp_ip_mac(mac_addr, ip_int):
+    flow = _gen_arp_ip_flow(mac_addr, ip_int)
+    cm.commit_flows([flow], [])
+    with open(MAC_IP_BIND_FILE, 'a') as fd:
+        fd.write("{},{}\n".format(mac_addr, ip_int))
+
+def _get_ovs_arp_ip_mac_from_file():
+    flows = []
+    if not os.path.isfile(MAC_IP_BIND_FILE):
+        return flows
+
+    logger.info("update arp mac_ip bind map from file %s", MAC_IP_BIND_FILE)
+    try:
+        with open(MAC_IP_BIND_FILE, 'r+') as fd:
+            for line in fd:
+                mac_addr,ip_int = line.split(',')
+                ip_int = int(ip_int)
+                flow = _gen_arp_ip_flow(mac_addr, ip_int)
+                flows.append(flow)
+            # erase the file contents, otherwise the size of file may increase
+            # too big to reload
+            fd.truncate(0)
+    except:
+        logger.exception("failed to read <mac,ip> pairs")
+    return flows
 
 def convert_tuple2flow(lflows):
     ovs_flows_add = []
@@ -82,8 +117,9 @@ def execute_pushed_cmd_inject_pkt(cmd_id, packet_data, lsp, entity_zoo):
         ovsport_set = entity_set['ovsport']
         for _, ovsport in ovsport_set.items():
             if ovsport.iface_id == lsp:
-                logger.info("inject packet to ovsport %s, packet_data:%s",
-                            ovsport.ovsport_name, packet_data)
+                logger.info("inject packet to ovsport %s, packet_data:%s, "
+                            "cmd_id:%s",
+                            ovsport.ovsport_name, packet_data, cmd_id)
                 cm.inject_pkt_to_ovsport(cmd_id, packet_data,
                                          ovsport.ofport)
 
@@ -104,14 +140,8 @@ def execute_pushed_cmd(cmd_set, entity_zoo):
                            path, value_set, err)
             continue
 
-def rebuild_chassis_tunnel():
+def rebuild_chassis_tunnel(port_configs):
     global had_clean_tunnel_ports
-    tunnel.tunnel_port_oper(IP, UUID_CHASSIS, State)
-    ips = IP.data
-    uuids = UUID_CHASSIS.data
-    states = State.data
-
-    port_configs = zip(ips, uuids, states)
     # no need to care about same IP but different operation, only the top tick
     # chassis IP was grep out
     for ip, uuid, state in port_configs:
@@ -158,28 +188,19 @@ def update_entity(entity_zoo, add_pool, del_pool):
 def update_entity_from_remote(entity_zoo, extra):
     wmaster = extra['lm']
     data_type, add_pool, del_pool = wmaster.read_remote_kvdata()
-    if data_type == True and extra['accept_diff'] == True:
+    if data_type == True and update_entity_from_remote.accept_diff == True:
         logger.warning("received data is not incremental data, link_master may "
                        "hit compact event")
         entity_zoo.move_all_entity2sink([lgview.LOGICAL_ENTITY_TYPE_OVSPORT,
                                          lgview.LOGICAL_ENTITY_TYPE_OVSPORT_CHASSIS])
 
-    extra['accept_diff'] = True
+    update_entity_from_remote.accept_diff = True
     update_entity(entity_zoo, add_pool, del_pool)
     if add_pool is not None and add_pool.has_key('cmd'):
         execute_pushed_cmd(add_pool['cmd'], entity_zoo)
+update_entity_from_remote.accept_diff = False
 
-def config_tunnel_bfd():
-    if is_gateway_chassis():
-        # no need to config bfd on a gateway tunnel port. It was configed
-        # enable-bfd after creating
-        return
-
-    ecmp.ecmp_bfd_port(PORT_NAME, State)
-    port_names = PORT_NAME.data
-    states = State.data
-    port_configs = zip(port_names, states)
-
+def config_tunnel_bfd(port_configs):
     # NOTE: remote chassis reboot will update the tick and ecmp_bfd_port
     # generate two records like:
     #    port tupleNet-3232261123 --> bfd_to_true
@@ -207,8 +228,18 @@ def config_tunnel_bfd():
         logger.info("config %s bfd to %s", portname, state)
         cm.config_ovsport_bfd(portname, state)
 
+def rebuild_patchport(port_config):
+    for portname, peer_br, state in port_config:
+        if state < 0:
+            cm.delete_patchport(portname)
+        else:
+            cm.create_patchport(portname, peer_br)
+
 def update_ovs_side(entity_zoo):
     global had_clean_ovs_flows
+    bfd_port_configs = []
+    tunnel_port_configs = []
+    patchport_configs = []
     # we must lock the whole process of generating flow and sweepping zoo
     # otherwise we may mark some new entities to State_NO, without generating
     # any ovs flows
@@ -223,24 +254,49 @@ def update_ovs_side(entity_zoo):
             static_lflows = zip(Table.data, Priority.data, Match.data,
                                 Action.data, [1]*len(Table.data))
             lflows += static_lflows
+        tunnel.tunnel_port_oper(IP, UUID_CHASSIS, State)
+        tunnel_port_configs = zip(IP.data, UUID_CHASSIS.data, State.data)
+        ecmp.ecmp_bfd_port(PORT_NAME, State)
+        bfd_port_configs = zip(PORT_NAME.data, State.data)
+        patchport.patchport_oper(PORT_NAME, PEER_BR, State)
+        patchport_configs = zip(PORT_NAME.data, PEER_BR.data, State.data)
+
         cost_time = time.time() - start_time
-        config_tunnel_bfd()
-        rebuild_chassis_tunnel()
         entity_zoo.sweep_zoo()
 
     ovs_flows_add, ovs_flows_del = convert_tuple2flow(lflows)
     # on testing mode, it avoids similar flow replacing the others
     if os.environ.has_key('RUNTEST'):
         ovs_flows_add.sort()
-    logger.info('insert flow number:%d, del flow number:%d',
-                len(ovs_flows_add), len(ovs_flows_del))
-    logger.info("pydatalog cost %fs in generating flows", cost_time)
+    logger.info("pydatalog cost %fs in computing flows and config", cost_time)
     if not had_clean_ovs_flows:
         had_clean_ovs_flows = True
+        ovs_flows_add += _get_ovs_arp_ip_mac_from_file()
         cm.commit_replaceflows(ovs_flows_add)
     else:
         cm.commit_flows(ovs_flows_add, ovs_flows_del)
+    logger.info('insert flow number:%d, del flow number:%d',
+                len(ovs_flows_add), len(ovs_flows_del))
 
+    rebuild_chassis_tunnel(tunnel_port_configs)
+    config_tunnel_bfd(bfd_port_configs)
+    rebuild_patchport(patchport_configs)
+
+# etcd side may get two or more chassis which has same IP.
+# (A vm may be rebuild then it has different chassis-id but original IP.)
+# Tick is the register time for chassis. this function grep out
+# the lastest registed chassis by IP. Shoud update chassis if it
+# has no record or the record is not current chassis.
+def _is_new_chassis(consume_ip, chassis_id):
+    try:
+        (tunnel.latest_chassis[consume_ip] == Y)
+        remote_chassis = Y.data[0][0]
+        return False if remote_chassis == chassis_id else True
+    except:
+        return True
+
+# NOTE: we do NOT udpate chassis, unless we found the chassis record
+# is not right
 def update_logical_view(entity_zoo, extra):
     cnt_upload = 0
     wmaster = extra['lm']
@@ -258,9 +314,24 @@ def update_logical_view(entity_zoo, extra):
         return
 
     update_ovs_side(entity_zoo)
+    # update chassis information to remote if tuplenet had been install ovsflow
+    if update_logical_view.updated_chassis is False:
+        if not _is_new_chassis(extra['consume_ip'], extra['system_id']):
+            # no need to update chassis, and set updated_chassis = True to
+            # avoid reupdate while this chassis was remove
+            update_logical_view.updated_chassis = True
+        else:
+            ret = wmaster.update_chassis(extra['consume_ip'])
+            if ret == 1:
+                update_logical_view.updated_chassis = True
+            else:
+                logger.warning("failed to update chassis information to remote etcd")
+            cnt_upload += ret
+
     # call this function again immediately because tuplenet update the lsp
     # so we should read the change of etcd as soon as possible
     if cnt_upload > 0:
         update_logical_view(entity_zoo, extra)
 
 update_logical_view.cnt = 0
+update_logical_view.updated_chassis = False
