@@ -60,7 +60,7 @@ def _interface_ip(ifname_list = ['eth0', 'br0']):
                                       struct.pack('256s', ifname[:15]))[20:24])
             return ip
         except Exception as err:
-            logger.info('skip %s, failed get the ip address', ifname)
+            logger.info('skip %s, failed get the ip address, err:%s', ifname, err)
             continue
 
 def write_pid_into_file(pid_lock_file):
@@ -83,7 +83,7 @@ def check_single_instance():
                 logger.warning('kill the running instance')
             except OSError as err:
                 logger.info('the previous may hit some issue and exit without '
-                            'clean the environment')
+                            'clean the environment, err:%s', err)
     write_pid_into_file(pid_lock_file)
 
 def _correct_sysctl_config(kv):
@@ -290,7 +290,7 @@ def main():
                       action = "store_true",
                       help = "print version of tuplenet")
 
-    (options, args) = parser.parse_args()
+    (options, _) = parser.parse_args()
     if options.version:
         print(version.__version__)
         print("git version:%s" % version.git_version)

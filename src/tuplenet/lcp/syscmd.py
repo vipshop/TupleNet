@@ -1,4 +1,3 @@
-import sys
 import commands
 
 class SyscmdErr(Exception):

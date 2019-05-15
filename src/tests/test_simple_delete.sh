@@ -153,7 +153,7 @@ packet=`build_icmp_request 000006080701 000006080601 $ip_src $ip_dst $ttl f891 8
 inject_pkt hv1 lsp-portA "$packet" || exit_test
 wait_for_packet # wait for packet
 real_pkt=`get_tx_pkt hv1 lsp-portA`  # the receive packets has no change, becuase we don't want to get a feed back
-verify_pkt $expect_pkt $real_pkt || exit_test
+verify_pkt "$expect_pkt" "$real_pkt" || exit_test
 
 
 # send icmp to edge2 from hv3
@@ -166,7 +166,7 @@ wait_for_packet # wait for packet
 ttl=fd
 expect_pkt=""
 real_pkt=`get_tx_pkt hv3 lsp-portC`  # the receive packets has no change, becuase we don't want to get a feed back
-verify_pkt $expect_pkt $real_pkt || exit_test
+verify_pkt "$expect_pkt" "$real_pkt" || exit_test
 
 # send icmp to edge1 from hv3
 ip_src=`ip_to_hex 10 10 1 3`
