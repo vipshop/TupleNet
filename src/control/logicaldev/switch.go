@@ -4,6 +4,7 @@ type Switch struct {
 	Name string `json:"name"`
 	ID   uint32 `tn:"id" json:"id"`
 }
+func (ptr *Switch) dummy() {}
 
 type SwitchPort struct {
 	Name               string `json:"name"`
@@ -14,6 +15,7 @@ type SwitchPort struct {
 
 	Owner *Switch
 }
+func (ptr *SwitchPort) dummy() {}
 
 func NewSwitch(name string) *Switch {
 	return &Switch{Name:name}

@@ -5,3 +5,5 @@ type Chassis struct {
 	IP   string `tn:"ip" json:"ip"`
 	Tick uint64 `tn:"tick" json:"tick"`
 }
+
+func (ptr *Chassis) dummy() {}
