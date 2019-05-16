@@ -588,7 +588,7 @@ func (ptr *Controller) SaveSwitchPort(
 // It also performs the heavy lifting of:
 //   1. getting a valid device id for router, switch
 //   2. checking if an IP is already used by other port
-func (ptr *Controller) Save(devs ...interface{}) error {
+func (ptr *Controller) Save(devs ...Device) error {
 	// logging can be removed when it becomes stable
 	ptr.logger.Debugf("-----start: save transaction-----")
 	defer ptr.logger.Debugf("-----end: save transaction-----")
@@ -662,8 +662,6 @@ func (ptr *Controller) Save(devs ...interface{}) error {
 			k = routerStaticRoutePath(t.Owner.Name, t.Name)
 		case *NAT:
 			k = routerNATPath(t.Owner.Name, t.Name)
-		default:
-			err = errors.New("supported type")
 		}
 
 		if err != nil {
@@ -702,7 +700,7 @@ func (ptr *Controller) Save(devs ...interface{}) error {
 
 // Delete devices from db, recycle the device id or IP map if neccessary
 // if recursive is true, all children devices will be removed as well
-func (ptr *Controller) Delete(recursive bool, devs ...interface{}) error {
+func (ptr *Controller) Delete(recursive bool, devs ...Device) error {
 	// logging can be removed when it becomes stable
 	ptr.logger.Debugf("-----start: delete transaction-----")
 	defer ptr.logger.Debugf("-----end: delete transaction-----")
@@ -774,8 +772,6 @@ func (ptr *Controller) Delete(recursive bool, devs ...interface{}) error {
 			keys = append(keys, routerStaticRoutePath(t.Owner.Name, t.Name))
 		case *NAT:
 			keys = append(keys, routerNATPath(t.Owner.Name, t.Name))
-		default:
-			err = errors.New("supported type")
 		}
 
 		if err != nil {

@@ -5,6 +5,7 @@ type Router struct {
 	ID      uint32 `tn:"id" json:"id"`
 	Chassis string `tn:"chassis,omitempty" json:"chassis,omitempty"`
 }
+func (ptr *Router) dummy() {}
 
 type RouterPort struct {
 	Name               string `json:"name"`
@@ -15,6 +16,7 @@ type RouterPort struct {
 
 	Owner *Router
 }
+func (ptr *RouterPort) dummy() {}
 
 type StaticRoute struct {
 	Name    string `json:"name"`
@@ -25,6 +27,7 @@ type StaticRoute struct {
 
 	Owner *Router
 }
+func (ptr *StaticRoute) dummy() {}
 
 type NAT struct {
 	Name          string `json:"name"`
@@ -35,6 +38,7 @@ type NAT struct {
 
 	Owner *Router
 }
+func (ptr *NAT) dummy() {}
 
 func NewRouter(name string, chassis string) *Router {
 	return &Router{Name:name, Chassis:chassis}
