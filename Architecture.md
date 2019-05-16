@@ -7,7 +7,7 @@ TupleNet 的架构是一种面向数据库架构模式，在TupleNet构建的系
 
 
 
-``` python
+```
                                      +-----------------+
                                      |      ETCD       |
                                      |                 |
@@ -34,7 +34,7 @@ TupleNet的dataplane使用的是openvswitch（版本大于等于2.8.0）来实�
 
 为了屏蔽物理网络设备影响，TupleNet通过使用Geneve在physical networking上组建virtual-networking，Geneve是一种扩展性很好的用于组建Overlay network的协议，和VXLAN很类似，它通过UDP来进行二次封包来解决跨越网络的问题。Geneve的扩展性非常好，并且很多网络已经支持Geneve的TSO，速度上和VXLAN，STT是相近的，而Geneve可以支持option headers，可以在一定程度上任意添加metadata，而更多的metadata数据为更好描述encapsulated报文提供了便捷。
 
-``` python
+```
       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
       |Ver|  Opt Len  |O|C|    Rsvd.  |          Protocol Type        |
       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -56,7 +56,7 @@ TupleNet 没有使用ovs python库来直接和ovsdb来进行通信，也没有�
 
 ## Implementation of data-plane
 目前我们在Geneve的option header中使用64个bit来存储encapsulated frame需要的metadata信息，其中source port ID 和destination port ID（logcial switch和logical router的port都会占用一个port ID，该ID目前根据给定的port IP的后16bit来自动生成）各占用16bit，也就是说一个logical switch或logical router中，最多只能有65536个port。Frame Flag会说明payload里面数据报文的特殊意义，比如表明这个数据包是特殊的需要帮助转发的报文。Command ID是用来和etcd交互的，它用来标记该数据报文属于某个特殊命令，目前被用于pkt-tracing。
-``` python
+```
       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
       |  Source port ID               |     Destination port ID       |
       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -68,7 +68,7 @@ TupleNet 没有使用ovs python库来直接和ovsdb来进行通信，也没有�
 ### PipeLine
 
 为了灵活处理各种类型的数据报文，我们为virtualswitch，virtualrouter建立了相应的数据报文处理pipeline，所有数据报文都需要经过pipeline的处理。
-``` python
+```
 
 
                  PORT        +--------------------------------------------------------------------------------------------------------------------------+

@@ -49,7 +49,7 @@ func createNetwork(w http.ResponseWriter, r *http.Request) {
 		prefix    uint64
 		mac       string
 
-		devices []interface{}
+		devices []logicaldev.Device
 		router  *logicaldev.Router
 		sw      *logicaldev.Switch
 		rport   *logicaldev.RouterPort
@@ -126,7 +126,7 @@ func deleteNetwork(w http.ResponseWriter, r *http.Request) {
 		swtch  *logicaldev.Switch
 		rport  *logicaldev.RouterPort
 
-		devices []interface{}
+		devices []logicaldev.Device
 	)
 
 	if err = json.NewDecoder(r.Body).Decode(&req); err != nil {
