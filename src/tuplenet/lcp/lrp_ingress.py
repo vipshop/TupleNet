@@ -21,7 +21,8 @@ pyDatalog.create_terms('lrp_ip_dnat_stage1, lrp_ip_dnat_stage2')
 pyDatalog.create_terms('lrp_ip_route')
 pyDatalog.create_terms('lrp_ecmp_judge')
 pyDatalog.create_terms('_live_lsp_link_lrp')
-pyDatalog.create_terms('static_route_changed')
+pyDatalog.create_terms('_static_route_changed')
+pyDatalog.create_terms('_next_live_hop_lr')
 
 # NOTE: value of priority is in [0,65535]
 # ---------------------------------------------
@@ -149,7 +150,7 @@ def init_lrp_ingress_clause(options):
 
 
     if options.has_key('GATEWAY'):
-        static_route_changed(Route, LR, LRP, State) <= (
+        _static_route_changed(Route, LR, LRP, State) <= (
             local_system_id(UUID_CHASSIS) &
             lroute_array(Route, UUID_LR, State1) &
             lsp_link_lrp(LSP, LS, UUID_LS, LRP, LR,
@@ -158,15 +159,35 @@ def init_lrp_ingress_clause(options):
             local_patchport(LSP1, LS, State3) &
             (State == State1 + State2 + State3) & (State != 0)
             )
-    static_route_changed(Route, LR, LRP, State) <= (
+
+    _next_live_hop_lr(UUID_LRP, LRP, LR, LR_NEXT, State) <= (
+        next_hop_lr(UUID_LRP, LRP, LR, LR_NEXT, State) &
+        (LR_NEXT[LR_CHASSIS_UUID] == None)
+        )
+    # if next LR is pining on a chassis, tuplenet have to verify if the geneve
+    # tunnel port had been create. Otherwise, some packet may deliver to this
+    # LR which has no tunnel port to remote chassis. It cause packet drop once
+    # a gateway chassis was re-add.
+    _next_live_hop_lr(UUID_LRP, LRP, LR, LR_NEXT, State) <= (
+        next_hop_lr(UUID_LRP, LRP, LR, LR_NEXT, State1) &
+        (LR_NEXT[LR_CHASSIS_UUID] != None) &
+        remote_chassis(LR_NEXT[LR_CHASSIS_UUID], PHY_CHASSIS_WITH_OFPORT, State2) &
+        (State == State1 + State2)
+        )
+    _next_live_hop_lr(UUID_LRP, LRP, LR, LR_NEXT, State) <= (
+        next_hop_lr(UUID_LRP, LRP, LR, LR_NEXT, State) &
+        local_system_id(LR_NEXT[LR_CHASSIS_UUID])
+        )
+
+    _static_route_changed(Route, LR, LRP, State) <= (
         lroute_array(Route, UUID_LR, State1) &
-        next_hop_lr(Route[LSR_OUTPORT], LRP, LR, LR_NEXT, State2) &
+        _next_live_hop_lr(Route[LSR_OUTPORT], LRP, LR, LR_NEXT, State2) &
         (State == State1 + State2) & (State != 0)
         )
 
     #static route
     lrp_ip_route(LR, Priority, Match, Action, State) <= (
-        static_route_changed(Route, LR, LRP, State) &
+        _static_route_changed(Route, LR, LRP, State) &
         (Priority == _cal_priority(Route[LSR_PREFIX], 1, Route[LSR_ILK_IDX])) &
         match.ip_proto(Match1) &
         match.ip_dst_prefix(Route[LSR_IP],

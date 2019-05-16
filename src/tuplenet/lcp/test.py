@@ -1,4 +1,4 @@
-import os, sys
+import os,sys
 import random
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ppparent_dir = os.path.dirname(os.path.dirname(parent_dir))
@@ -11,9 +11,7 @@ from pyDatalog import pyDatalog, Logic, pyEngine
 from pyDatalog.pyDatalog import assert_fact, load, ask
 from logicalview import *
 import lflow
-from tp_utils import run_env
 import time
-import sys
 import ecmp
 import tunnel
 from tp_utils.run_env import get_extra

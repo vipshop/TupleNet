@@ -143,6 +143,23 @@ kill_tuplenet_daemon hv3 -TERM
 GATEWAY=1 ONDEMAND=0 tuplenet_boot hv3 192.168.100.4
 tuplenet_boot hv2 192.168.100.3
 wait_for_flows_unchange # waiting for install flows
+
+# grep out the ovs-flow in hv1 and check if the static route and static bundle route
+# were add in same time. static route should be add only the ovs has tunnel to next-LR's chassis
+ovs_setenv hv1
+current_ovs_flows="`ovs-ofctl dump-flows br-int`"
+abs() { echo ${1#-};}
+bundle_flow=`echo "$current_ovs_flows"|grep bundle_load|grep "table=37"`
+static_route_flow=`echo "$current_ovs_flows" | grep "table=37" | grep "ip,metadata=0x3 actions=load" | grep "n_packets=0"`
+duration_bundle_flow=`echo $bundle_flow |awk -F '=|,| ' '{print $5}'` ; duration_bundle_flow=${duration_bundle_flow%?}
+duration_static_route_flow=`echo $static_route_flow |awk -F '=|,| ' '{print $5}'`; duration_static_route_flow=${duration_static_route_flow%?}
+cost_time=`echo "$duration_bundle_flow - $duration_static_route_flow" | bc`
+cost_time=`abs $cost_time`
+if [ $(echo "$cost_time > 0.1" | bc) == 1 ]; then
+    pmsg "error flows duration $duration_bundle_flow $duration_static_route_flow $cost_time"
+    exit_test
+fi
+
 # NOTE: we have to disable bfd because the bfd issue would break the test.
 # the bfd issue( tunnel bfd interface can send/receive bfd packet but still in
 # down or init state)

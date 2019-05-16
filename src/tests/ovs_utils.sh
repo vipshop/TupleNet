@@ -588,8 +588,9 @@ wait_for_flows_unchange()
             current_flows_array="$current_flows $current_flows_array"
         done
         i=$((i+1))
-        if [ $i -gt 20 ]; then
+        if [ $i -gt 30 ]; then
             pmsg "cost to much time in waiting flows sync, exit"
+            return 1
         fi
     done
     end_time=$(date +%s)

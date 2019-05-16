@@ -8,7 +8,7 @@ import time, random, string
 import logicalview as lgview
 from pyDatalog import pyDatalog
 from onexit import on_parent_exit
-from tp_utils.run_env import is_gateway_chassis, get_extra
+from tp_utils.run_env import get_extra
 
 logger = logging.getLogger(__name__)
 flow_lock = threading.Lock()
@@ -357,7 +357,7 @@ def commit_replaceflows(replace_flows, br = 'br-int'):
             fp.write('\n'.join(replace_flows))
         ovs_ofctl('replace-flows', '-O', OPENFLOW_VER, br, filepath)
         os.remove(filepath)
-    except IOError as err:
+    except IOError:
         logger.error("failed to write flows into file %s", filepath)
         raise
     except RuntimeError as err:
@@ -496,7 +496,7 @@ def inject_pkt_to_ovsport(cmd_id, packet_data, ofport):
                   'load:{}->NXM_NX_REG10[16..31],'
                   'load:1->NXM_NX_REG10[1],resubmit(,0)').format(ofport, cmd_id),
                   packet_data)
-    except Exception as err:
+    except Exception:
         logger.warning("failed to inject packet %s to ofport %d",
                        packet_data, ofport)
 

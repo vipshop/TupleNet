@@ -9,7 +9,7 @@ import action as ovsaction
 import match as ovsmatch
 import time
 from pyDatalog import pyDatalog
-from tp_utils.run_env import is_gateway_chassis, get_extra
+from tp_utils.run_env import get_extra
 import tunnel
 import patchport
 

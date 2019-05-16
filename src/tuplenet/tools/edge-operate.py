@@ -25,7 +25,6 @@ class TPToolErr(Exception):
 
 def init_logger():
     global logger
-    env = os.environ.copy()
     log_type = logging.NullHandler()
     logger = logging.getLogger('')
     format_type = ("%(asctime)s.%(msecs)03d %(levelname)s %(filename)s "
