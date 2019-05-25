@@ -118,23 +118,25 @@ def init_env(options):
     logic = pyDatalog.Logic(True)
     extra['logic'] = logic
 
-    br_int_mac = cm.build_br_integration()
-    extra['options']['br-int_mac'] = br_int_mac
+    br = cm.build_br_integration()
     if extra['options'].has_key('ENABLE_UNTUNNEL'):
-        config = {'net.ipv4.conf.all.rp_filter':'0'}
-        config['net.ipv4.ip_forward'] = '1'
-        config['net.ipv4.conf.br-int.rp_filter'] = '0'
-        config['net.ipv4.conf.br-int.forwarding'] = '1'
-        if _correct_sysctl_config(config) is False:
-            logger.error('failed to correct sysctl config:%s', config)
-            killme()
-        try:
-            br = 'br-int'
-            syscmd.network_ifup(br)
-            logger.info('ifup the interface %s', br)
-        except Exception as err:
-            logger.error('failed to ifup %s interface, err:', br, err)
-            killme()
+        dsrport_info = cm.create_br_int_dsrport(br)
+        if dsrport_info is not None:
+            dsr_portname = dsrport_info['name']
+            extra['options']['dsrport'] = dsrport_info
+            config = {'net.ipv4.conf.all.rp_filter':'0'}
+            config['net.ipv4.ip_forward'] = '1'
+            config['net.ipv4.conf.{}.rp_filter'.format(dsr_portname)] = '0'
+            config['net.ipv4.conf.{}.forwarding'.format(dsr_portname)] = '1'
+            if _correct_sysctl_config(config) is False:
+                logger.error('failed to correct sysctl config:%s', config)
+                killme()
+            try:
+                syscmd.network_ifup(dsr_portname)
+                logger.info('ifup the interface %s', dsr_portname)
+            except Exception as err:
+                logger.error('failed to ifup %s interface, err:', dsr_portname, err)
+                killme()
 
     +lgview.local_system_id(system_id)
     lflow.init_build_flows_clause(extra['options'])
