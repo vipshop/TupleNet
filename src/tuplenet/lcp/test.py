@@ -302,7 +302,7 @@ extra['options']['ENABLE_PERFORMANCE_TESTING'] = ''
 extra['options']['GATEWAY'] = ''
 #extra['options']['ONDEMAND'] = ''
 #extra['options']['ENABLE_UNTUNNEL'] = ''
-extra['options']['br-int_mac'] = '00:00:00:11:11:11'
+extra['options']['dsrport'] = {'name':'dsrport', 'ofport':'99', 'mac':'00:00:00:11:11:11'}
 entity_set = entity_zoo.entity_set
 lflow.init_build_flows_clause(extra['options'])
 test_rand_entity(entity_set, 200, 500, 5000)

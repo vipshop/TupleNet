@@ -88,7 +88,7 @@ verify_has_str "$ret" "1 received" || exit_test
 
 
 tcpdump_file=`random_short_str "${OVS_RUNDIR}/tcpdump.pcap"`
-tcpdump -i br-int icmp -nevvv -w $tcpdump_file &
+tcpdump -i br-int-dsrgw icmp -nevvv -w $tcpdump_file &
 tcpdump_pid=$!
 on_tuplenet_exit "kill $tcpdump_pid 2>/dev/null"
 sleep 2

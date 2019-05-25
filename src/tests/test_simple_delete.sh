@@ -53,8 +53,10 @@ etcd_ls_link_lr outside1 edge1 172.20.11.11 24 00:00:06:08:06:07 || exit_test
 etcd_ls_link_lr outside2 edge2 172.20.11.12 24 00:00:06:08:06:08 || exit_test
 
 # set static route on LR-A, the route is ecmp route
-etcd_lsr_add LR-A 0.0.0.0 0 100.10.10.2 "LR-A_to_m1" || exit_test
 etcd_lsr_add LR-A 0.0.0.0 0 100.10.10.2 "LR-A_to_m2" || exit_test
+sleep 2; # make sure the the static route to m2 is the lower priority route if
+         # ovs has no bundle ecmp flows(in edge node)
+etcd_lsr_add LR-A 0.0.0.0 0 100.10.10.2 "LR-A_to_m1" || exit_test
 # set static route on edge1
 etcd_lsr_add edge1 10.10.0.0 16 100.10.10.1 edge1_to_m1 || exit_test
 # set static route on edge2
@@ -156,7 +158,7 @@ real_pkt=`get_tx_pkt hv1 lsp-portA`  # the receive packets has no change, becuas
 verify_pkt "$expect_pkt" "$real_pkt" || exit_test
 
 
-# send icmp to edge2 from hv3
+# send icmp to edge2 from hv3, hv3 is edge
 ip_src=`ip_to_hex 10 10 1 3`
 ip_dst=`ip_to_hex 172 20 11 12`
 ttl=09

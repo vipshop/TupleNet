@@ -84,7 +84,7 @@ def init_lsp_ingress_clause(options):
         )
 
 
-    if options.has_key('ENABLE_UNTUNNEL'):
+    if options.has_key('ENABLE_UNTUNNEL') and options.has_key('dsrport'):
         # NOTE: it helps reduce time-cost
         _lsp_lrp_ls_changed(LS, LRP, State) <= (
             ls_array(LS, UUID_LS, State1) &
@@ -107,8 +107,8 @@ def init_lsp_ingress_clause(options):
             match.ip_proto(Match) &
             # output packet to local port which is an internal port.
             # packet goes into tcpip stack
-            action.mod_dl_dst(options['br-int_mac'], Action1) &
-            action.output('LOCAL', Action2) &
+            action.mod_dl_dst(options['dsrport']['mac'], Action1) &
+            action.output(options['dsrport']['ofport'], Action2) &
             (Action == Action1 + Action2)
             )
 

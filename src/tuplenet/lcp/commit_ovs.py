@@ -71,6 +71,40 @@ def ovs_ofctl_addflows_batch(br, flows):
 def ovs_vsctl(*args):
     return call_ovsprog("ovs-vsctl", list(args))
 
+def ovs_get_iface_property(iface, col_name):
+    try:
+        p = ovs_vsctl('get', 'interface', iface, col_name)
+        p = p.strip("\"")
+    except:
+        return
+    return p
+
+def create_ovsport(br, portname, port_type, properties = {}):
+    plist = ['{}={}'.format(k,v) for k,v in properties.items()]
+    cmd = ['add-port', br, portname, '--', 'set', 'interface',
+           portname, 'type={}'.format(port_type)] + plist
+    try:
+        ovs_vsctl(*cmd)
+    except Exception as err:
+        logger.error('cannot create ovsport %s, err:%s', portname, err)
+        return False
+    return True
+
+def delete_ovsport(portname):
+    try:
+        ovs_vsctl('del-port', portname)
+    except Exception as err:
+        logger.warning("failed to delete ovsport %s, err:%s", portname, err)
+        return False
+    return True
+
+def is_br_exist(br):
+    try:
+        ovs_vsctl('br-exists', br)
+    except:
+        return False
+    return True
+
 def parse_map(map_list):
     ret_map = {}
     if map_list[0] != 'map':
@@ -211,26 +245,27 @@ def system_id():
     if external_ids.has_key('system-id'):
         return external_ids['system-id']
 
+def is_ovsport_exist(portname):
+    name = ovs_get_iface_property(portname, 'name')
+    if name is None:
+        return False
+    return True
+
 def remove_tunnel_by_name(portname):
-    try:
-        ovs_vsctl('get', 'interface', portname, 'name')
-    except Exception as err:
-        # cannot found this port, return immedately
+    if not is_ovsport_exist(portname):
         logger.debug("port %s is not exist, no need to remove it", portname)
         return
-    try:
-        ovs_vsctl('del-port', 'br-int', portname)
-    except Exception as err:
-        logger.info("cannot delete tunnel port:%s", err)
+    if not delete_ovsport(portname):
+        logger.info("cannot delete tunnel port:%s", portname)
+        return
     logger.info("delete ovs tunnel port %s", portname)
     return
 
 def get_tunnel_chassis_id(portname):
-    try:
-        return ovs_vsctl('get', 'interface', portname,
-                         'external_ids:chassis-id').strip("\"")
-    except Exception as err:
+    chassis = ovs_get_iface_property(portname, 'external_ids:chassis-id')
+    if chassis is None:
         return ""
+    return chassis
 
 def chassis_ip_to_portname(ip):
     chassis_ip_int = struct.unpack("!L", socket.inet_aton(ip))[0]
@@ -241,64 +276,55 @@ def remove_tunnel_by_ip(ip):
     portname = chassis_ip_to_portname(ip)
     remove_tunnel_by_name(portname)
 
-def create_tunnel(ip, uuid):
+def create_tunnel(ip, uuid, br = 'br-int'):
     portname = chassis_ip_to_portname(ip)
     if get_tunnel_chassis_id(portname) == uuid:
         logger.info("found a exist tunnel ovsport has "
                     "same chassis-id and portname, skip adding tunnel ovsport")
-        return portname
+        return
     remove_tunnel_by_name(portname)
-    cmd = ['add-port', 'br-int', portname, '--', 'set', 'interface',
-           portname, 'type=geneve', 'options:remote_ip={}'.format(ip),
-           'options:key=flow', 'options:csum=true',
-           'external_ids:chassis-id={}'.format(uuid)]
     logger.info("adding ovs tunnel port %s", portname)
-    try:
-        ovs_vsctl(*cmd)
-    except Exception as err:
-        logger.error('cannot create tunnle, cmd:%s, err:%s', cmd, err)
-        return portname
+    if not create_ovsport(br, portname, 'geneve',
+                          {'options:remote_ip':ip,
+                           'options:key':'flow',
+                           'options:csum':'true',
+                           'external_ids:chassis-id':uuid}):
+        logger.error("cannot create tunnel port %s", portname)
+        return
 
     return portname
 
-def create_flowbased_tunnel(chassis_id):
+def create_flowbased_tunnel(chassis_id, br = 'br-int'):
     portname = "{}flowbased".format(TP_TUNNEL_PORT_NAME_PREFIX)
     remove_tunnel_by_name(portname)
-    cmd = ['add-port', 'br-int', portname, '--', 'set', 'interface',
-           portname, 'type=geneve', 'options:remote_ip=flow',
-           'options:key=flow', 'options:csum=true',
-           'external_ids:chassis-id={}'.format(chassis_id)]
     logger.info("adding  ovs tunnel port %s", portname)
-    try:
-        ovs_vsctl(*cmd)
-    except Exception as err:
-        logger.error('cannot create flow-based tunnle, cmd:%s, err:%s',
-                     cmd, err)
+    if not create_ovsport(br, portname, 'geneve',
+                          {'options:key':'flow',
+                           'options:remote_ip':'flow',
+                           'options:csum':'true',
+                           'external_ids:chassis-id':chassis_id}):
+        logger.error("cannot create tunnel port %s", portname)
+        return
+
     return portname
 
 
 def create_patchport(portname, peer_br, br = 'br-int'):
-    peer_portname = portname + "-peer"
-    try:
-        ovs_vsctl('br-exists', peer_br)
-    except:
+    if not is_br_exist(peer_br):
         logger.info("the bridge %s is not exist, would not create patchports",
                     peer_br)
         return
 
+    peer_portname = portname + "-peer"
     cmd = []
-    try:
-        ovs_vsctl('list', 'interface', portname)
-    except:
+    if not is_ovsport_exist(portname):
         cmd += ['--', 'add-port', br, portname,
                 '--', 'set', 'interface', portname, 'type=patch',
                 'options:peer={}'.format(peer_portname),
                 'external_ids:iface-id={}'.format(portname)
                ]
 
-    try:
-        ovs_vsctl('list', 'interface', peer_portname)
-    except:
+    if not is_ovsport_exist(peer_portname):
         cmd += ['--', 'add-port', peer_br, peer_portname,
                 '--', 'set', 'interface', peer_portname, 'type=patch',
                 'options:peer={}'.format(portname),
@@ -317,31 +343,23 @@ def create_patchport(portname, peer_br, br = 'br-int'):
 
 
 def delete_patchport(portname):
-    try:
-        peer_portname = ovs_vsctl('get', 'interface', portname,
-                                  'options:peer').strip("\"")
-    except Exception as err:
-        logger.warning("failed to get %s peer patchport information, err:%s",
-                       portname, err)
-        return
-    try:
-        ovs_vsctl('del-port', portname)
-    except Exception as err:
-        logger.warning("failed to delete patchport %s, err:%s", portname, err)
+    peer_portname = ovs_get_iface_property(portname, 'options:peer')
+    if peer_portname is None:
+        logger.warning("failed to get %s peer patchport information", portname)
         return
 
-    try:
-        ovs_vsctl('list', 'interface', peer_portname)
-    except Exception as err:
-        logger.warning("failed to find patchport %s, err:%s",
-                       peer_portname, err)
+    if not delete_ovsport(portname):
+        logger.warning("failed to delete patchport %s", portname)
+    else:
+        logger.info("removed patchport %s", portname)
+
+    if not is_ovsport_exist(peer_portname):
+        logger.warning("patchport %s is not exist", peer_portname)
         return
-    try:
-        ovs_vsctl('del-port', peer_portname)
-    except Exception as err:
-        logger.warning("failed to delete patchport %s, err:%s", peer_portname, err)
-        return
-    logger.info("removed patchport %s %s", portname, peer_portname)
+    if not delete_ovsport(peer_portname):
+        logger.warning("failed to delete patchport %s", peer_portname)
+    else:
+        logger.info("removed patchport %s", peer_portname)
 
 def commit_replaceflows(replace_flows, br = 'br-int'):
     # commit_replaceflows is only consumed by update_logical_view in booting
@@ -422,32 +440,40 @@ def _set_br_failmode(br, mode):
             logger.error("failed to config %s fail-mode into %s", br, mode)
             raise OVSToolErr("failed to config fail-mode")
 
-def _get_br_integration_mac(br):
-    try:
-        mac = ovs_vsctl('get', 'interface', br, 'mac_in_use')
-    except Exception:
-        logger.error("failed to get bridge %s's mac_in_use", br)
-        return
-    mac = mac.encode('ascii','ignore').replace('"', '')
-    return mac
+def create_br_int_dsrport(br):
+    dsr_port = br + '-dsrgw'
+    if is_ovsport_exist(dsr_port) is False:
+        if not create_ovsport(br, dsr_port, 'internal'):
+            logger.warning("failed to add internal port %s", dsr_port)
+            return
 
-def build_br_integration(br = 'br-int'):
-    try:
-        ovs_vsctl('br-exists', br)
+    mac = ovs_get_iface_property(dsr_port, 'mac_in_use')
+    ofport = ovs_get_iface_property(dsr_port, 'ofport')
+    if mac is None or ofport is None:
+        logger.error("failed to get bridge %s's mac_in_use or ofport", dsr_port)
+        return
+    return {'name':dsr_port, 'mac':mac, 'ofport':ofport}
+
+def build_br_integration(br = 'br-int', dsr_port = None):
+    if is_br_exist(br):
         logger.info("the bridge %s is exist", br)
-        _set_br_failmode(br, 'secure')
-        # if we hit no issue, then it means the bridge is exist
-        return _get_br_integration_mac(br)
-    except Exception as err:
-        logger.info("the bridge %s is not exist, try to create a new one", br)
+        try:
+            _set_br_failmode(br, 'secure')
+            # if we hit no issue, then it means the bridge is exist
+            return br
+        except Exception as err:
+            logger.info("failed to config %s to secure mode, err:%s", br, err)
+            raise OVSToolErr("failed to config secure mode")
+        else:
+            return br
+
     try:
         ovs_vsctl('add-br', br, '--', 'set', 'Bridge', br, 'fail-mode=secure')
         logger.info("create bridge %s for integration", br)
     except Exception as err:
-        logger.error("failed to create %s", br)
+        logger.error("failed to create %s, err:%s", br, err)
         raise OVSToolErr("failed to create integration bridge")
-
-    return _get_br_integration_mac(br)
+    return br
 
 def set_tunnel_tlv(vipclass = 0xffee, br = 'br-int'):
     while True:
