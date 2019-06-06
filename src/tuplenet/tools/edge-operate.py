@@ -9,6 +9,8 @@ py_third_dir = os.path.join(ppparent_dir, 'py_third')
 sys.path = [parent_dir, py_third_dir] + sys.path
 from lcp import link_master as lm
 from lcp import commit_ovs as cm
+from pyDatalog import pyDatalog
+
 
 logger = logging.getLogger('')
 TUPLENET_DIR = ""
@@ -18,10 +20,83 @@ wmaster = None
 system_id = ""
 HOST_BR_PHY = ""
 HOST_BR_INT = 'br-int'
-entity_zoo = {}
+entity_list = []
 
 class TPToolErr(Exception):
     pass
+
+class LSwitch(pyDatalog.Mixin):
+    def __init__(self, uuid):
+        super(LSwitch, self).__init__()
+        self.uuid = uuid
+        self.name = uuid
+    def __repr__(self):
+        return self.uuid
+
+class LRouter(pyDatalog.Mixin):
+    def __init__(self, uuid, chassis = None):
+        super(LRouter, self).__init__()
+        self.uuid = uuid
+        self.chassis = chassis
+        self.name = uuid
+    def __repr__(self):
+        return "%s:(chassis:%s)" %(self.uuid, self.chassis)
+
+class LSPort(pyDatalog.Mixin):
+    def __init__(self, uuid, ip, mac, parent, chassis = None, peer = None):
+        super(LSPort, self).__init__()
+        self.uuid = uuid
+        self.ip = ip
+        self.mac = mac
+        self.parent = parent
+        self.chassis = chassis
+        self.peer = peer
+        self.name = uuid
+
+    def __repr__(self):
+        return "%s:(ip:%s, parent:%s)" % (self.uuid, self.ip, self.parent)
+
+class LRPort(pyDatalog.Mixin):
+    def __init__(self, uuid, ip, prefix, mac, parent,
+                 chassis = None, peer = None):
+        super(LRPort, self).__init__()
+        self.uuid = uuid
+        self.ip = ip
+        self.prefix = int(prefix)
+        self.mac = mac
+        self.parent = parent
+        self.chassis = chassis
+        self.peer = peer
+        self.name = uuid
+
+    def __repr__(self):
+        return "%s:(ip:%s/%d, parent:%s)" % (self.uuid, self.ip,
+                        self.prefix, self.parent)
+
+class LStaticRoute(pyDatalog.Mixin):
+    def __init__(self, uuid, ip, prefix, next_hop, outport, parent):
+        super(LStaticRoute, self).__init__()
+        self.uuid = uuid
+        self.ip = ip
+        self.prefix = int(prefix)
+        self.next_hop = next_hop
+        self.outport = outport
+        self.parent = parent
+        self.name = uuid
+
+    def __repr__(self):
+        return self.uuid
+
+class Chassis(pyDatalog.Mixin):
+    def __init__(self, uuid, ip, tick):
+        super(Chassis, self).__init__()
+        self.uuid = uuid
+        self.ip = ip
+        self.tick = tick
+        self.name = uuid
+
+    def __repr__(self):
+        return self.uuid
 
 def init_logger():
     global logger
@@ -36,7 +111,6 @@ def init_logger():
     logger.setLevel(logging.DEBUG)
     logger.addHandler(console)
     logger.info("")
-
 
 
 def ecmp_execute_cmds(cmd_tpctl_list, cmd_first = None, cmd_final = None):
@@ -57,197 +131,166 @@ def tpctl_execute(cmd_list):
         cmd.insert(1, endpoint_cmd)
         cm.call_popen(cmd, commu='yes\n', shell=False)
 
+def update_entity(entity_list, add_pool):
+    if add_pool.has_key('LS'):
+        for path, value_set in add_pool['LS'].items():
+            path = path.split('/')
+            entity_id = path[-1]
+            entity_list.append(LSwitch(entity_id))
 
-class TPObject:
-    def __init__(self, name, properties):
-        self.__setattr__('name', name)
-        for k,v in properties.items():
-            self.__setattr__(k, v)
+    if add_pool.has_key('LR'):
+        for path, value_set in add_pool['LR'].items():
+            path = path.split('/')
+            entity_id = path[-1]
+            entity_list.append(LRouter(entity_id, value_set.get('chassis')))
 
+    if add_pool.has_key('lsp'):
+        for path, value_set in add_pool['lsp'].items():
+            path = path.split('/')
+            entity_id = path[-1]
+            parent = path[-3]
+            entity_list.append(LSPort(entity_id, value_set['ip'],
+                                      value_set['mac'], parent,
+                                      value_set.get('chassis'),
+                                      value_set.get('peer')))
 
-    def __setattr__(self, name, value):
-        self.__dict__[name] = value
+    if add_pool.has_key('lrp'):
+        for path, value_set in add_pool['lrp'].items():
+            path = path.split('/')
+            entity_id = path[-1]
+            parent = path[-3]
+            entity_list.append(LRPort(entity_id, value_set['ip'],
+                                      value_set['prefix'],
+                                      value_set['mac'], parent,
+                                      value_set.get('chassis'),
+                                      value_set.get('peer')))
 
-    def __getattr__(self, name):
-        if name == 'ip_int':
-            ip = self.__dict__.get('ip')
-            return struct.unpack("!L", socket.inet_aton(ip))[0]
-        return self.__dict__.get(name)
+    if add_pool.has_key('lsr'):
+        for path, value_set in add_pool['lsr'].items():
+            path = path.split('/')
+            entity_id = path[-1]
+            parent = path[-3]
+            entity_list.append(LStaticRoute(entity_id, value_set['ip'],
+                                      value_set['prefix'],
+                                      value_set['next_hop'],
+                                      value_set['outport'],
+                                      parent))
 
-    def __str__(self):
-        ret = self.name + ":"
-        for k,v in self.__dict__.items():
-            ret += "{}={}, ".format(k,v)
-        return ret
-
-    def __hash__(self):
-        return hash(str([self.name, self.type, self.parent]))
-
-    def __eq__(self, other):
-        return str(self) == str(other)
-
-    __repr__ = __str__
-
-
-def update_entity_data(add_pool):
-    if add_pool is not None:
-        for etype,entity_dict in add_pool.items():
-            if not entity_zoo.has_key(etype):
-                entity_zoo[etype] = {}
-            for k, entity in entity_dict.items():
-                parent,type,key = k.split('/')[-3:]
-                type = k.split('/')[-2]
-                entity_zoo[etype][key] = TPObject(key, entity)
-                entity_zoo[etype][key].type = type
-                entity_zoo[etype][key].parent = parent
+    if add_pool.has_key('chassis'):
+        for path, value_set in add_pool['chassis'].items():
+            path = path.split('/')
+            entity_id = path[-1]
+            parent = path[-3]
+            entity_list.append(Chassis(entity_id, value_set['ip'],
+                                       value_set['tick']))
 
 
 def sync_etcd_data(etcd_endpoints):
     global wmaster
     wmaster = lm.WatchMaster(etcd_endpoints, TUPLENET_DIR)
     data_type, add_pool, del_pool = wmaster.read_remote_kvdata()
-    update_entity_data(add_pool)
+    update_entity(entity_list, add_pool)
 
-def find_all_edge_nodes():
-    edges = []
-    lr_set = entity_zoo.get('LR')
-    if lr_set is None:
-        return edges
+pyDatalog.create_terms('X,Y,Z')
+pyDatalog.create_terms('LR, LS, LSP, LRP, LSR')
+pyDatalog.create_terms('LR1, LS1, LSP1, LRP1, LSR1')
+pyDatalog.create_terms('LR2, LS2, LSP2, LRP2, LSR2')
+pyDatalog.create_terms('LR3, LS3, LSP3, LRP3, LSR3')
+pyDatalog.create_terms('LS_OUT, LSP_OUT_TO_EDGE, LRP_EDGE_TO_OUT, LR_EDGE')
+pyDatalog.create_terms('LRP_EDGE_TO_INNER, LSP_INNER_TO_EDGE, LS_INNER')
+pyDatalog.create_terms('LSP_INNER_TO_CEN, LRP_CEN_TO_INNER, LR_CEN')
+pyDatalog.create_terms('LSR_VIRT, LSR_EDGE, LSR_OUT')
+def datalog_lr_central():
+    LRouter.uuid[X] == Y
+    if len(X.data) != 1:
+        raise TPToolErr("failed to know central LR")
+    return X.v()
 
-    for lr in lr_set.values():
-        if lr.chassis is not None:
-            edges.append(lr)
-    return edges
+def datalog_check_port_occupied_ip(ips):
+    for ip in ips:
+        LSPort.ip[X] == ip
+        if len(X.data) != 0:
+            raise TPToolErr("ip %s was occupied by other lsp" % ip)
+        LRPort.ip[X] == ip
+        if len(X.data) != 0:
+            raise TPToolErr("ip %s was occupied by other lrp" % ip)
 
-def _get_link_ls(lr):
-    linked_ls = []
-    lrp_set = entity_zoo.get('lrp')
-    lsp_set = entity_zoo.get('lsp')
-    ls_set = entity_zoo.get('LS')
-    if lrp_set is None or \
-       lsp_set is None or ls_set is None:
-        return linked_ls
+def datalog_check_chassis_exist(system_id):
+    Chassis.uuid[X] == system_id
+    if len(X.data) != 1:
+        raise TPToolErr("chassis %s is not registed in etcd" % system_id)
 
-    for lrp in lrp_set.values():
-        if lrp.parent != lr.name:
-            continue
-        lsp = lsp_set.get(lrp.peer)
-        if lsp is None:
-            continue
-        ls = ls_set.get(lsp.parent)
-        if ls is None:
-            continue
-        linked_ls.append(ls)
-    return linked_ls
+def datalog_check_chassis_is_edge():
+    LRouter.chassis[X] == system_id
+    if len(X.data) == 0:
+        raise TPToolErr("chassis %s is an edge already" % system_id)
 
-def is_chassis_is_edge():
-    edges = find_all_edge_nodes()
-    for edge in edges:
-        if edge.chassis == system_id:
-            return True
-    return False
-
-def find_all_patchports():
-    patchports = []
-    lsp_set = entity_zoo.get('lsp')
-    if lsp_set is None:
-        return patchports
-
-    for lsp in lsp_set.values():
-        if lsp.ip == "255.255.255.255":
-            patchports.append(lsp)
-    return patchports
-
-def is_ip_occupied(ip):
-    lsp_set = entity_zoo.get('lsp')
-    lrp_set = entity_zoo.get('lrp')
-    if lrp_set is not None:
-        for lrp in lrp_set.values():
-            if lrp.ip == ip:
-                return True
-
-    if lsp_set is not None:
-        for lsp in lsp_set.values():
-            if lsp.ip == ip:
-                return True
-    return False
-
-def find_ls_patchport(ls):
-    lsp_set = entity_zoo.get('lsp')
-    if lsp_set is None:
-        return None
-    for lsp in lsp_set.values():
-        if lsp.ip == "255.255.255.255" and lsp.parent == ls.name:
-            return lsp
-
-def find_ls_lr_ls(edges, patchports):
-    ls_lr_ls = []
-    for edge in edges:
-        linked_ls = set(_get_link_ls(edge))
-        if len(linked_ls) != 2:
-            raise TPToolErr("edge %s linked to more then 2 ls" % edge.name)
-        for ls in linked_ls:
-            for pport in patchports:
-                if pport.parent == ls.name:
-                    ls_lr_ls.append((ls, edge, (linked_ls-set([ls])).pop()))
-    return ls_lr_ls
-
-
-def find_central_LR(inner_ls):
-    lr_set = entity_zoo.get('LR')
-    lsp_set = entity_zoo.get('lsp')
-    lrp_set = entity_zoo.get('lrp')
-    if lr_set is None or lsp_set is None or lrp_set is None:
-        return None
-
-    for lsp in lsp_set.values():
-        if lsp.parent != inner_ls.name:
-            continue
-        lrp = lrp_set.get(lsp.peer)
-        if lrp is None:
-            continue
-        lr = lr_set.get(lrp.parent)
-        # should skip edge node, inner_ls link to edge and central lr
-        if lr is None or lr.chassis is not None:
-            continue
-        return lr
-
-def _is_to_ext_lsr(lsr, out):
-    lrp_set = entity_zoo.get('lrp')
-    lsp_set = entity_zoo.get('lsp')
-    lsr_outport = lrp_set[lsr.outport]
-    lsp = lsp_set[lsr_outport.peer]
-    if lsp.parent == out.name:
+def datalog_is_entity_exist(uuid):
+    LSwitch.uuid[X] == uuid
+    if len(X.data) != 0:
+        return True
+    LRouter.uuid[X] == uuid
+    if len(X.data) != 0:
+        return True
+    LSPort.uuid[X] == uuid
+    if len(X.data) != 0:
+        return True
+    LRPort.uuid[X] == uuid
+    if len(X.data) != 0:
+        return True
+    LStaticRoute.uuid[X] == uuid
+    if len(X.data) != 0:
         return True
     return False
 
-def find_lsr_in_lr(lr, is_edge = False, out = None):
-    lsr_set = entity_zoo.get('lsr')
-    if lsr_set is None:
-        raise TPToolErr("cannot found any lsr")
+pyDatalog.create_terms('dl_LS_has_patchport')
+dl_LS_has_patchport(LS) <= (
+    (LSPort.ip[LSP] == '255.255.255.255') &
+    (LSwitch.uuid[LS] == LSPort.parent[LSP])
+    )
+pyDatalog.create_terms('dl_edge_LR_peer_LS')
+dl_edge_LR_peer_LS(LR, LRP, LS, LSP) <= (
+    (LRouter.chassis[LR] != None) &
+    (LRouter.uuid[LR] == LRPort.parent[LRP]) &
+    (LRPort.uuid[LRP] == LSPort.peer[LSP]) &
+    (LSPort.parent[LSP] == LSwitch.uuid[LS])
+    )
 
-    lsr_array = []
-    for lsr in lsr_set.values():
-        if lsr.parent == lr.name:
-            lsr_array.append(lsr)
-    if len(lsr_array) == 0:
-        raise TPToolErr("lr %s has no lsr", lr.name)
-    if not is_edge:
-        return lsr_array
+pyDatalog.create_terms('dl_edge_LR_peer_LR')
+dl_edge_LR_peer_LR(LR, LRP, LR1, LRP1) <= (
+    dl_edge_LR_peer_LS(LR, LRP, LS, LSP) &
+    (LSPort.parent[LSP1] == LSwitch.uuid[LS]) &
+    (LSPort.peer[LSP1] == LRPort.uuid[LRP1]) &
+    (LRPort.peer[LRP1] == LSPort.uuid[LSP1]) &
+    (LRouter.uuid[LR1] == LRPort.parent[LRP1]) &
+    (LR != LR1)
+    )
 
-    # edge's lsr
-    if len(lsr_array) != 2:
-        raise TPToolErr("lr %s has not lsr", lr.name)
-    alsr, blsr = lsr_array[:]
-    if _is_to_ext_lsr(alsr, out) == True and _is_to_ext_lsr(blsr, out) == False:
-        to_ext_lsr = alsr
-        to_virt_lsr = blsr
-    elif _is_to_ext_lsr(alsr, out) == False and _is_to_ext_lsr(blsr, out) == True:
-        to_ext_lsr = blsr
-        to_virt_lsr = alsr
-    else:
-        raise TPToolErr("cannot distinguish to_ext and to_virt lsr")
-    return [to_virt_lsr, to_ext_lsr]
+pyDatalog.create_terms('dl_ecmp_road')
+dl_ecmp_road(LS_OUT, LSP_OUT_TO_EDGE, LRP_EDGE_TO_OUT, LR_EDGE,
+             LRP_EDGE_TO_INNER, LSP_INNER_TO_EDGE, LS_INNER,
+             LRP_CEN_TO_INNER, LR_CEN, LSR_VIRT, LSR_OUT, LSR_EDGE
+             ) <= (
+    dl_edge_LR_peer_LS(LR_EDGE, LRP_EDGE_TO_OUT,
+                       LS_OUT, LSP_OUT_TO_EDGE) &
+    dl_LS_has_patchport(LS_OUT) &
+
+    dl_edge_LR_peer_LS(LR_EDGE, LRP_EDGE_TO_INNER,
+                       LS_INNER, LSP_INNER_TO_EDGE) &
+    (LS_OUT != LS_INNER) &
+
+    dl_edge_LR_peer_LR(LR_EDGE, LRP_EDGE_TO_INNER, LR_CEN, LRP_CEN_TO_INNER) &
+
+    (LStaticRoute.parent[LSR_VIRT] == LRouter.uuid[LR_EDGE]) &
+    (LStaticRoute.outport[LSR_VIRT] == LRPort.uuid[LRP_EDGE_TO_INNER]) &
+
+    (LStaticRoute.parent[LSR_OUT] == LRouter.uuid[LR_EDGE]) &
+    (LStaticRoute.outport[LSR_OUT] == LRPort.uuid[LRP_EDGE_TO_OUT]) &
+
+    (LStaticRoute.parent[LSR_EDGE] == LRouter.uuid[LR_CEN]) &
+    (LStaticRoute.outport[LSR_EDGE] == LRPort.uuid[LRP_CEN_TO_INNER])
+    )
+
 
 def new_entity_name(etype, prefix_name):
     i = 1
@@ -255,7 +298,7 @@ def new_entity_name(etype, prefix_name):
     while True:
         name = "tp_{}{}".format(prefix_name, i)
         i += 1
-        if entity_zoo.has_key(etype) and entity_zoo[etype].has_key(name):
+        if datalog_is_entity_exist(name):
             continue
         return name
 
@@ -306,106 +349,25 @@ def _cmd_del_lsr(lr_name, lsr_name):
     cmd = "tpctl lsr del {} {}".format(lr_name, lsr_name)
     return cmd
 
-
-def _find_lrp_by_vip(vip):
-    lrp_set = entity_zoo.get('lrp')
-    if lrp_set is None:
-        return None
-    for lrp in lrp_set.values():
-        if lrp.ip == vip:
-            return lrp
-
-
 def _gen_lrp_property(ip_int, prefix):
-    lrp_set = entity_zoo.get('lrp')
     mprefix = 32 - prefix
     max_ip_int = ((ip_int >> mprefix) << mprefix) + (0xffffffff >> prefix)
     min_ip_int = ((ip_int >> mprefix) << mprefix)
 
-    if lrp_set is None:
-        ip = socket.inet_ntoa(struct.pack('I',socket.htonl(max_ip_int - 1)))
-        return ip, prefix
-
     for ip_int in xrange(max_ip_int-1, min_ip_int, -1):
-        conflict = False
-        for lrp in lrp_set.values():
-            if lrp.ip_int == ip_int:
-                conflict = True
-                break
-        if conflict is False:
-            ip = socket.inet_ntoa(struct.pack('I',socket.htonl(ip_int)))
+        try:
+            ip = socket.inet_ntoa(struct.pack("!I", ip_int))
+            datalog_check_port_occupied_ip([ip])
+        except:
+            continue
+        else:
             return ip, prefix
     raise TPToolErr("cannot found a lrp due to ip confict")
 
 
-def _add_ecmp_road(central_lr, inner_ls, edge, outside,
-                   central_lsr, edge_to_virt_lsr,
-                   edge_to_ext_lsr, vip, vip_prefix):
-    lsp_set = entity_zoo.get('lsp')
-    lrp_set = entity_zoo.get('lrp')
-
-    tp_cmd_list = []
-    # create LS and LR command
-    out_ls_name = new_entity_name('LS', 'outside')
-    tp_cmd_list.append(_cmd_new_ls(out_ls_name))
-    edge_lr_name = new_entity_name('LR', 'edge')
-    tp_cmd_list.append(_cmd_new_lr(edge_lr_name, system_id))
-    inner_ls_name = new_entity_name('LS', 'm')
-    tp_cmd_list.append(_cmd_new_ls(inner_ls_name))
-
-    #create patch port
-    patchport = new_entity_name('lsp', out_ls_name + "-patchport")
-    tp_cmd_list.append(_cmd_new_patchport(out_ls_name, patchport,
-                                          system_id, HOST_BR_PHY))
-
-    # create link command
-    # lrp_cen_to_m is an exist lrp which link to a inner ls
-    lrp_cen_to_m = lrp_set[central_lsr.outport]
-    central_ip, central_prefix = _gen_lrp_property(lrp_cen_to_m.ip_int,
-                                                   int(lrp_cen_to_m.prefix))
-    tp_cmd_list.append(_cmd_new_link(central_lr.name, inner_ls_name,
-                                     central_ip, central_prefix))
-
-    # all edge_port(link to inner_ls has same ip and prefix)
-    edge_port = lrp_set[edge_to_virt_lsr.outport]
-    tp_cmd_list.append(_cmd_new_link(edge_lr_name, inner_ls_name,
-                                     edge_port.ip, edge_port.prefix))
-
-    tp_cmd_list.append(_cmd_new_link(edge_lr_name, out_ls_name,
-                                     vip, vip_prefix))
-
-    # create lsr command
-    outport = '{}_to_{}'.format(edge_lr_name, inner_ls_name)
-    tp_cmd_list.append(_cmd_new_lsr(edge_lr_name, edge_to_virt_lsr.ip,
-                                    edge_to_virt_lsr.prefix,
-                                    central_ip, outport))
-
-    outport = '{}_to_{}'.format(edge_lr_name, out_ls_name)
-    tp_cmd_list.append(_cmd_new_lsr(edge_lr_name, edge_to_ext_lsr.ip,
-                                    edge_to_ext_lsr.prefix,
-                                    edge_to_ext_lsr.next_hop, outport))
-
-    # NOTE: this lsr should be add in last stage. once lsr was add then
-    # traffic may be redirect to this edge node
-    outport = '{}_to_{}'.format(central_lr.name, inner_ls_name)
-    tp_cmd_list.append(_cmd_new_lsr(central_lr.name,
-                                    central_lsr.ip, central_lsr.prefix,
-                                    edge_port.ip, outport))
-
-    print("tpctl will executes following commands")
-    print('\n'.join(tp_cmd_list))
-    is_execute = raw_input(("Please verify tpctl commands and press "
-                            "yes to add an ecmp path:"))
-    if is_execute == 'yes':
-        ecmp_execute_cmds(tp_cmd_list[:len(tp_cmd_list) - 1],
-                          cmd_final=tp_cmd_list[-1])
-        print("Done")
-    else:
-        sys.exit(0)
-
-
-def _init_ecmp_road(central_lr, vip, vip_prefix, virt_ip, virt_prefix,
-                    inner_ip, inner_prefix, ext_gw):
+def _init_ecmp_road(should_wait, central_lr, vip, vip_prefix, virt_ip,
+                    virt_prefix, out_net, out_prefix, inner_ip, inner_prefix,
+                    edge_net, edge_net_prefix, ext_gw):
     tp_cmd_list = []
     # create LS and LR command
     out_ls_name = new_entity_name('LS', 'outside')
@@ -432,20 +394,20 @@ def _init_ecmp_road(central_lr, vip, vip_prefix, virt_ip, virt_prefix,
     if central_lr_ip == inner_ip:
         raise Exception(("failed to allocate ip for "
                          "central_lr port, please revise inner ip"))
-    tp_cmd_list.append(_cmd_new_link(central_lr.name, inner_ls_name,
+    tp_cmd_list.append(_cmd_new_link(central_lr, inner_ls_name,
                                      central_lr_ip, inner_prefix))
 
     # create lsr command
     outport = "{}_to_{}".format(edge_lr_name, out_ls_name)
-    tp_cmd_list.append(_cmd_new_lsr(edge_lr_name, '0.0.0.0', 0,
+    tp_cmd_list.append(_cmd_new_lsr(edge_lr_name, out_net, out_prefix,
                                     ext_gw, outport))
 
     outport = "{}_to_{}".format(edge_lr_name, inner_ls_name)
     tp_cmd_list.append(_cmd_new_lsr(edge_lr_name, virt_ip, virt_prefix,
                                     central_lr_ip, outport))
 
-    outport = "{}_to_{}".format(central_lr.name, inner_ls_name)
-    tp_cmd_list.append(_cmd_new_lsr(central_lr.name, '0.0.0.0', 0,
+    outport = "{}_to_{}".format(central_lr, inner_ls_name)
+    tp_cmd_list.append(_cmd_new_lsr(central_lr, edge_net, edge_net_prefix,
                                     inner_ip, outport))
 
     print("tpctl will executes following commands")
@@ -453,136 +415,84 @@ def _init_ecmp_road(central_lr, vip, vip_prefix, virt_ip, virt_prefix,
     is_execute = raw_input(("Please verify tpctl commands and press "
                             "yes to init an ecmp path:"))
     if is_execute == 'yes':
-        ecmp_execute_cmds(tp_cmd_list)
+        if should_wait:
+            ecmp_execute_cmds(tp_cmd_list[:-1], cmd_final=tp_cmd_list[-1])
+        else:
+            ecmp_execute_cmds(tp_cmd_list)
         print("Done")
     else:
         sys.exit(0)
 
 
-def init_ecmp_road(vip, vip_prefix, virt_ip, virt_prefix,
-                   inner_ip, inner_prefix, ext_gw):
-    if is_ip_occupied(vip):
-        raise TPToolErr("vip %s was occupied by other lsp/lrp" % vip)
-    if is_chassis_is_edge():
-        raise TPToolErr("chassis %s is an edge already" % system_id)
-    lrp_set = entity_zoo.get('lrp', {})
-    lsp_set = entity_zoo.get('lsp', {})
-    lr_set = entity_zoo.get('LR')
-    if lr_set is None or len(lr_set) != 1:
-        raise TPToolErr("do not know the candidate LR-central")
 
-    for lrp in lrp_set.values():
-        if lrp.ip == vip or \
-           lrp.ip == inner_ip or lrp.ip == ext_gw:
-            raise TPToolErr("lrp %s has duplicate ip", lrp)
-
-    for lsp in lsp_set.values():
-        if lsp.ip == vip or \
-           lsp.ip == inner_ip or lsp.ip == ext_gw:
-            raise TPToolErr("lsp %s has duplicate ip", lsp)
-
-    central_lr = lr_set.values()[0]
-    _init_ecmp_road(central_lr, vip, vip_prefix, virt_ip, virt_prefix,
-                    inner_ip, inner_prefix, ext_gw)
-
-
-def _remove_ecmp_road(out, edge, inner, central_lr):
+def _remove_ecmp_road(should_wait, out, edge, inner, central_lr,
+                      central_lsr, central_lrp):
     outport_name = "{}_to_{}".format(central_lr.name, inner.name)
-    lrp_set = entity_zoo.get('lrp')
     tp_cmd_list = []
     tp_cmd_list.append(_cmd_del_lr(edge.name))
     tp_cmd_list.append(_cmd_del_ls(inner.name))
     tp_cmd_list.append(_cmd_del_ls(out.name))
 
-    found = False
-    for lrp in lrp_set.values():
-        if lrp.name == outport_name and lrp.parent == central_lr.name:
-            found = True
-            tp_cmd_list.append(_cmd_del_lrp(central_lr.name, lrp.name))
-            break
-    if found is False:
-        raise TPToolErr("error in founding central LR lrp")
+    tp_cmd_list.insert(0, _cmd_del_lsr(central_lr.name, central_lsr.name))
+    tp_cmd_list.insert(0, _cmd_del_lrp(central_lr.name, central_lrp.name))
 
-    lsr_set = entity_zoo.get('lsr')
-    found = False
-    for lsr in lsr_set.values():
-        if lsr.outport == outport_name and lsr.parent == central_lr.name:
-            found = True
-            # NOTE: this lsr should be the first command which help to
-            # redirect traffic to other edge
-            tp_cmd_list.insert(0, _cmd_del_lsr(central_lr.name, lsr.name))
-            break
-    if found is False:
-        raise TPToolErr("failed to found central LR's lsr(forward to edge)")
-
-    patchport = find_ls_patchport(out)
-    if patchport is None:
-        raise TPToolErr("failed to search lr %s patchport", out.name)
 
     print("tpctl will executes following commands")
     print('\n'.join(tp_cmd_list))
     is_execute = raw_input(("Please verify tpctl commands and press "
                             "yes to remove a ecmp path:"))
     if is_execute == 'yes':
-        ecmp_execute_cmds(tp_cmd_list[1:], cmd_first = tp_cmd_list[0])
+        if should_wait:
+            ecmp_execute_cmds(tp_cmd_list[1:], cmd_first = tp_cmd_list[0])
+        else:
+            ecmp_execute_cmds(tp_cmd_list)
         print("Done")
     else:
         sys.exit(0)
 
 
 def remove_ecmp_road(vip):
-    edges = find_all_edge_nodes()
-    patchports = find_all_patchports()
-    ls_lr_ls_list = find_ls_lr_ls(edges, patchports)
-    prev_lr_central = None
-    for out,edge,inner in ls_lr_ls_list:
-        # sanity check central LR
-        lr_central = find_central_LR(inner)
-        if prev_lr_central is not None and prev_lr_central is not lr_central:
-            raise TPToolErr("Get two central LR, %s  %s" %
-                            (lr_central, prev_lr_central))
-        prev_lr_central = lr_central
-
-    if lr_central is None:
-        raise TPToolErr("failed to search central lr")
-
+    dl_ecmp_road(LS_OUT, LSP_OUT_TO_EDGE, LRP_EDGE_TO_OUT, LR_EDGE,
+                 LRP_EDGE_TO_INNER, LSP_INNER_TO_EDGE, LS_INNER,
+                 LRP_CEN_TO_INNER, LR_CEN, LSR_VIRT, LSR_OUT, LSR_EDGE)
+    ecmp_road = zip(LS_OUT.data, LRP_EDGE_TO_OUT.data,
+                    LR_EDGE.data, LS_INNER.data,
+                    LR_CEN.data, LSR_EDGE.data, LRP_CEN_TO_INNER.data)
     found = False
-    lrp = _find_lrp_by_vip(vip)
-    if lrp is not None:
-        for out,edge,inner in ls_lr_ls_list:
-            if edge.name == lrp.parent:
-                found = True
-                _remove_ecmp_road(out, edge, inner, lr_central)
-                break
+    for out, lrp_edge_to_out, edge, inner, \
+        lr_central, lsr_central, lrp_central in ecmp_road:
+        if lrp_edge_to_out.ip == vip:
+            found = True
+            should_wait = False if len(ecmp_road) == 1 else True
+            _remove_ecmp_road(should_wait, out, edge, inner, lr_central,
+                              lsr_central, lrp_central)
+            break
     if found is False:
         raise TPToolErr("failed to search ecmp path by using vip:%s" % vip)
 
 def add_ecmp_road(vip, vip_prefix):
-    if is_ip_occupied(vip):
-        raise TPToolErr("vip %s was occupied by other lsp/lrp" % vip)
-    if is_chassis_is_edge():
-        raise TPToolErr("chassis %s is an edge already" % system_id)
-    edges = find_all_edge_nodes()
-    patchports = find_all_patchports()
-    ls_lr_ls_list = find_ls_lr_ls(edges, patchports)
-    prev_lr_central = None
-    for out,edge,inner in ls_lr_ls_list:
-        # sanity check central LR
-        lr_central = find_central_LR(inner)
-        if prev_lr_central is not None and prev_lr_central is not lr_central:
-            raise TPToolErr("Get two central LR, %s  %s" %
-                            (lr_central, prev_lr_central))
-        prev_lr_central = lr_central
+    datalog_check_port_occupied_ip([vip])
+    dl_ecmp_road(LS_OUT, LSP_OUT_TO_EDGE, LRP_EDGE_TO_OUT, LR_EDGE,
+                 LRP_EDGE_TO_INNER, LSP_INNER_TO_EDGE, LS_INNER,
+                 LRP_CEN_TO_INNER, LR_CEN, LSR_VIRT, LSR_OUT, LSR_EDGE)
+    if len(LS_OUT.data) == 0:
+        raise TPToolErr("failed to found exist ecmp road")
 
-    # it take a assumption that all lsr in central_lr is similar(has
-    # same ip,prefix,next_hop)
-    central_lsr = find_lsr_in_lr(prev_lr_central)[0] # only get one
-    out,edge,inner = ls_lr_ls_list[0] # only get the first path of edge route
-    edge_to_virt_lsr, edge_to_ext_lsr = find_lsr_in_lr(edge, True, out)
-    _add_ecmp_road(prev_lr_central, inner, edge, out,
-                   central_lsr, edge_to_virt_lsr, edge_to_ext_lsr,
-                   vip, vip_prefix)
+    _init_ecmp_road(True, LR_CEN.v().uuid, vip, vip_prefix,
+                    LSR_VIRT.v().ip, LSR_VIRT.v().prefix,
+                    LSR_OUT.v().ip, LSR_OUT.v().prefix,
+                    LRP.v().ip, LRP.v().prefix,
+                    LSR_EDGE.v().ip, LSR_EDGE.v().prefix,
+                    LSR_OUT.v().next_hop)
 
+def init_ecmp_road(vip, vip_prefix, virt_ip, virt_prefix,
+                   inner_ip, inner_prefix, ext_gw):
+    datalog_check_port_occupied_ip([vip, inner_ip, ext_gw])
+    central_lr = datalog_lr_central()
+    _init_ecmp_road(False, central_lr.name, vip, vip_prefix,
+                    virt_ip, virt_prefix,
+                    '0.0.0.0', 0, inner_ip, inner_prefix,
+                    '0.0.0.0', 0, ext_gw)
 
 def sanity_check_options(options):
     if options.op not in ['add', 'init', 'remove']:
@@ -626,23 +536,19 @@ def sanity_check_options(options):
 def check_env(options):
     global system_id
     system_id = cm.system_id()
-    if system_id == "":
-        raise TPToolErr("failed to get ovs system-id")
-
-    if options.phy_br == 'br-int':
-        raise TPToolErr("phy_br should not be a tuplenet bridge")
-    try:
-        cm.ovs_vsctl('get', 'bridge', options.phy_br, 'datapath_id')
-    except Exception:
-        raise TPToolErr("please check if we have ovs bridge %s" % options.phy_br)
 
     # remove operation do NOT need to check if etcd has chassis or local openvswitch has system-id
     if options.op == 'init' or options.op == 'add':
-        chassis_set = entity_zoo.get('chassis')
-        if chassis_set is None:
-            raise TPToolErr("etcd side has no chassis list")
-        if not chassis_set.has_key(system_id):
-            raise TPToolErr("cannot found %s in chassis list" % system_id)
+        if system_id is None or system_id == "":
+            raise TPToolErr("failed to get ovs system-id")
+        datalog_check_chassis_exist(system_id)
+        if options.phy_br == 'br-int':
+            raise TPToolErr("phy_br should not be a tuplenet bridge")
+        try:
+            cm.ovs_vsctl('get', 'bridge', options.phy_br, 'datapath_id')
+        except Exception:
+            raise TPToolErr("please check if we have ovs bridge %s" %
+                            options.phy_br)
 
     try:
         tpctl_execute(['tpctl --help'])

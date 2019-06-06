@@ -177,7 +177,7 @@ remove_ecmp_road()
     tuplenet_setenv $sim_id
     echo "yes" |  PATH=$PATH:$CONTROL_BIN_PATH/bin/  $PYTHON ../tuplenet/tools/edge-operate.py --endpoint $etcd_client_specs \
                        --prefix $tuplenet_prefix --op=remove \
-                       --phy_br=br0 --vip=$vip || return 1
+                       --vip=$vip || return 1
 }
 
 tp_add_patchport()
