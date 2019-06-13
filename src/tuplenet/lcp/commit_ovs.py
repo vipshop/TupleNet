@@ -231,19 +231,12 @@ def insert_ovs_ipfix(br = 'br-int'):
         raise OVSToolErr('failed to alter ipfix record: ' + str(e))
 
 def system_id():
-    cmd = ['ovsdb-client', '-v', 'transact',
-           '["Open_vSwitch",{"op":"select", \
-             "table":"Open_vSwitch","columns":["external_ids"], \
-             "where":[]}]']
     try:
-        json_str = call_popen(cmd, shell=False)
+        sysid = ovs_vsctl('get', 'Open_vSwitch', '.', 'external_ids:system-id')
+        return sysid.strip("\"")
     except Exception:
         logger.error('failed to get system-id')
         return
-    output = json.loads(json_str)[0]
-    external_ids = parse_map(output['rows'][0]['external_ids'])
-    if external_ids.has_key('system-id'):
-        return external_ids['system-id']
 
 def is_ovsport_exist(portname):
     name = ovs_get_iface_property(portname, 'name')
