@@ -28,6 +28,7 @@ func (b *TuplenetAPI) AddStaticRoute() {
 	cidrString := m.Cidr
 	nextHop := m.NextHop
 	outPort := m.OutPort
+	logger.Debugf("AddStaticRoute get param route %s rName %s cider %s nexthop %s outport %s", routerName, rName, cidrString, nextHop, outPort)
 
 	if routerName == "" || rName == "" || cidrString == "" || nextHop == "" || outPort == "" {
 		logger.Errorf("AddStaticRoute get param failed route %s rName %s cider %s nexthop %s outport %s", routerName, rName, cidrString, nextHop, outPort)
@@ -41,9 +42,10 @@ func (b *TuplenetAPI) AddStaticRoute() {
 	// perform some early checking, avoid reading db if any error
 	ip, prefix, err := comm.ParseCIDR(cidrString)
 	if err != nil {
-		logger.Errorf("AddStaticRoute parse cidr failed route %s cider %s", routerName, cidrString)
+		addStr := fmt.Sprintf("AddStaticRoute parse cidr failed route %s cider %s", routerName, cidrString)
+		logger.Errorf(addStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = fmt.Sprintf("AddStaticRoute parse cidr failed route %s cider %s", routerName, cidrString)
+		res.Message = addStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
@@ -79,15 +81,16 @@ func (b *TuplenetAPI) AddStaticRoute() {
 
 	r := router.CreateStaticRoute(rName, ip, prefix, nextHop, outPort)
 	if err = controller.Save(r); err != nil {
-		logger.Errorf("AddStaticRoute failed %s route %s rName %s cider %s nexthop %s outport %s", err, routerName, rName, cidrString, nextHop, outPort)
+		addStr := fmt.Sprintf("AddStaticRoute failed %s route %s rName %s cider %s nexthop %s outport %s", err, routerName, rName, cidrString, nextHop, outPort)
+		logger.Errorf(addStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = fmt.Sprintf("add static route failed", err)
+		res.Message = addStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
 	}
 
-	logger.Debugf("AddStaticRoute success route %s rName %s cider %s nexthop %s outport %s", routerName, rName, cidrString, nextHop, outPort)
+	logger.Infof("AddStaticRoute success route %s rName %s cider %s nexthop %s outport %s", routerName, rName, cidrString, nextHop, outPort)
 	res.Code = http.StatusOK
 	res.Message = "add static route success"
 	b.Data["json"] = res
@@ -106,6 +109,7 @@ func (b *TuplenetAPI) ShowStaticRoute() {
 	json.Unmarshal(body, &m)
 	name := m.Route
 	rName := m.RName
+	logger.Debugf("ShowStaticRoute get param route name %s rName %s", name, rName)
 
 	if name == "" {
 		logger.Errorf("ShowStaticRoute get param failed route name %s rName %s", name, rName)
@@ -118,9 +122,10 @@ func (b *TuplenetAPI) ShowStaticRoute() {
 
 	router, err := controller.GetRouter(name)
 	if err != nil {
-		logger.Errorf("ShowStaticRoute get route failed route name %s rName %s err %s", name, rName, err)
+		showStr := fmt.Sprintf("get route failed route name %s rName %s err %s", name, rName, err)
+		logger.Errorf(showStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = fmt.Sprintf("get route failed route name %s rName %s ", name, rName)
+		res.Message = showStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
@@ -130,9 +135,10 @@ func (b *TuplenetAPI) ShowStaticRoute() {
 		// show all ports
 		srs, err = controller.GetRouterStaticRoutes(router)
 		if err != nil {
-			logger.Errorf("ShowStaticRoute get static route failed route name %s rName %s err %s", name, rName, err)
+			showStr := fmt.Sprintf("get static route failed route name %s rName %s err %s", name, rName, err)
+			logger.Errorf(showStr)
 			res.Code = http.StatusInternalServerError
-			res.Message = fmt.Sprintf("get static route failed route name %s rName %s", name, rName)
+			res.Message = showStr
 			b.Data["json"] = res
 			b.ServeJSON()
 			return
@@ -140,9 +146,10 @@ func (b *TuplenetAPI) ShowStaticRoute() {
 	} else {
 		r, err := controller.GetRouterStaticRoute(router, rName)
 		if err != nil {
-			logger.Errorf("ShowStaticRoute get static route failed route name %s rName %s err %s", name, rName, err)
+			showStr := fmt.Sprintf("get static route failed route name %s rName %s err %s", name, rName, err)
+			logger.Errorf(showStr)
 			res.Code = http.StatusInternalServerError
-			res.Message = fmt.Sprintf("get static route failed route name %s rName %s", name, rName)
+			res.Message = showStr
 			b.Data["json"] = res
 			b.ServeJSON()
 			return
@@ -169,6 +176,7 @@ func (b *TuplenetAPI) DelStaticRoute() {
 	json.Unmarshal(body, &m)
 	name := m.Route
 	rName := m.RName
+	logger.Debugf("DelStaticRoute get param route %s rName %s", name, rName)
 
 	if name == "" || rName == "" {
 		logger.Errorf("DelStaticRoute get param failed route %s rName %s", name, rName)
@@ -181,8 +189,10 @@ func (b *TuplenetAPI) DelStaticRoute() {
 
 	router, err := controller.GetRouter(name)
 	if err != nil {
+		delStr := fmt.Sprintf("DelStaticRoute get route failed route %s rName %s error %s", name, rName, err)
+		logger.Errorf(delStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = fmt.Sprintf("DelStaticRoute get route failed route %s rName %s error %s", name, rName, err)
+		res.Message = delStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
@@ -190,8 +200,10 @@ func (b *TuplenetAPI) DelStaticRoute() {
 
 	r, err := controller.GetRouterStaticRoute(router, rName)
 	if err != nil {
+		delStr := fmt.Sprintf("DelStaticRoute get static route failed route %s rName %s error %s", name, rName, err)
+		logger.Errorf(delStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = fmt.Sprintf("DelStaticRoute get static route failed route %s rName %s error %s", name, rName, err)
+		res.Message = delStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
@@ -199,15 +211,18 @@ func (b *TuplenetAPI) DelStaticRoute() {
 
 	err = controller.Delete(false, r)
 	if err != nil {
+		delStr := fmt.Sprintf("DelStaticRoute delete failed route %s rName %s error %s", name, rName, err)
+		logger.Errorf(delStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = fmt.Sprintf("DelStaticRoute delete failed route %s rName %s error %s", name, rName, err)
+		res.Message = delStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
 	}
 
+	logger.Infof("DelStaticRoute delete success route %s rName %s", name, rName)
 	res.Code = http.StatusOK
-	res.Message = fmt.Sprintf("DelStaticRoute success route %s rName %s", name, rName)
+	res.Message = "DelStaticRoute success"
 	b.Data["json"] = res
 	b.ServeJSON()
 }

@@ -42,9 +42,10 @@ func (b *TuplenetAPI) AddSwitch() {
 		return
 	}
 	if err := controller.Save(logicaldev.NewSwitch(name)); err != nil {
-		logger.Errorf("AddSwitch %s failed %s", name, err)
+		addStr := fmt.Sprintf("AddSwitch %s failed %s", name, err)
+		logger.Errorf(addStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = fmt.Sprintf("AddSwitch %s failed %s", name, err)
+		res.Message = addStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
@@ -52,7 +53,7 @@ func (b *TuplenetAPI) AddSwitch() {
 
 	logger.Debugf("AddSwitch success switch %s", name)
 	res.Code = http.StatusOK
-	res.Message = fmt.Sprintf("AddSwitch success switch %s", name)
+	res.Message = "AddSwitch success"
 	b.Data["json"] = res
 	b.ServeJSON()
 }
@@ -74,9 +75,10 @@ func (b *TuplenetAPI) ShowSwitch() {
 	if name == "" {
 		switches, err = controller.GetSwitches()
 		if err != nil {
-			logger.Errorf("ShowSwitch get all switch failed %s", err)
+			showStr := fmt.Sprintf("ShowSwitch get all switch failed %s", err)
+			logger.Errorf(showStr)
 			res.Code = http.StatusInternalServerError
-			res.Message = fmt.Sprintf("ShowSwitch get all switch failed %s", err)
+			res.Message = showStr
 			b.Data["json"] = res
 			b.ServeJSON()
 			return
@@ -84,9 +86,10 @@ func (b *TuplenetAPI) ShowSwitch() {
 	} else {
 		s, err := controller.GetSwitch(name)
 		if err != nil {
-			logger.Errorf("ShowSwitch get switch name %s failed %s", name, err)
+			showStr := fmt.Sprintf("ShowSwitch get switch name %s failed %s", name, err)
+			logger.Errorf(showStr)
 			res.Code = http.StatusInternalServerError
-			res.Message = fmt.Sprintf("ShowSwitch get switch name %s failed %s", name, err)
+			res.Message = showStr
 			b.Data["json"] = res
 			b.ServeJSON()
 			return
@@ -126,9 +129,10 @@ func (b *TuplenetAPI) DelSwitch() {
 
 	swtch, err := controller.GetSwitch(name)
 	if err != nil {
-		logger.Errorf("DelSwitch get switch %s failed %s", name, err)
+		delStr := fmt.Sprintf("DelSwitch get switch %s failed %s", name, err)
+		logger.Errorf(delStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = fmt.Sprintf("DelSwitch get switch %s failed %s", name, err)
+		res.Message = delStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
@@ -136,9 +140,10 @@ func (b *TuplenetAPI) DelSwitch() {
 
 	ports, err := controller.GetSwitchPorts(swtch)
 	if err != nil {
-		logger.Errorf("DelSwitch get switch %s ports failed %s", name, err)
+		delStr := fmt.Sprintf("DelSwitch get switch %s ports failed %s", name, err)
+		logger.Errorf(delStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = fmt.Sprintf("DelSwitch get switch %s ports failed %s", name, err)
+		res.Message = delStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
@@ -150,17 +155,19 @@ func (b *TuplenetAPI) DelSwitch() {
 		if recursive {
 			err := controller.Delete(true, swtch)
 			if err != nil {
-				logger.Errorf("DelSwitch remove switch name %s switch %v failed %s", name, swtch, err)
+				delStr := fmt.Sprintf("DelSwitch remove switch name %s switch %v failed %s", name, swtch, err)
+				logger.Errorf(delStr)
 				res.Code = http.StatusInternalServerError
-				res.Message = fmt.Sprintf("DelSwitch remove switch name %s switch %v failed %s", name, swtch, err)
+				res.Message = delStr
 				b.Data["json"] = res
 				b.ServeJSON()
 				return
 			}
 		} else {
-			logger.Errorf("DelSwitch failed switch name %s there are remaining ports, consider use recursive param with true", name)
+			delStr := fmt.Sprintf("DelSwitch failed switch name %s there are remaining ports, consider use recursive param with true", name)
+			logger.Errorf(delStr)
 			res.Code = http.StatusInternalServerError
-			res.Message = fmt.Sprintf("DelSwitch failed switch name %s there are remaining ports, consider use recursive param with true", name)
+			res.Message = delStr
 			b.Data["json"] = res
 			b.ServeJSON()
 			return
@@ -168,9 +175,10 @@ func (b *TuplenetAPI) DelSwitch() {
 	} else {
 		err = controller.Delete(false, swtch)
 		if err != nil {
-			logger.Errorf("DelSwitch failed switch name %s err %s", name, err)
+			delStr := fmt.Sprintf("DelSwitch failed switch name %s err %s", name, err)
+			logger.Errorf(delStr)
 			res.Code = http.StatusInternalServerError
-			res.Message = fmt.Sprintf("DelSwitch failed switch name %s err %s", name, err)
+			res.Message = delStr
 			b.Data["json"] = res
 			b.ServeJSON()
 			return
@@ -179,7 +187,7 @@ func (b *TuplenetAPI) DelSwitch() {
 
 	logger.Debugf("DelSwitch success switch %s ", name)
 	res.Code = http.StatusOK
-	res.Message = fmt.Sprintf("DelSwitch success switch %s ", name)
+	res.Message = "DelSwitch success"
 	b.Data["json"] = res
 	b.ServeJSON()
 }
@@ -187,7 +195,7 @@ func (b *TuplenetAPI) DelSwitch() {
 // operate on logical switch port(lsp)
 func (b *TuplenetAPI) AddSwitchPort() {
 	var (
-		m   SwitchRequest
+		m   SwitchPortRequest
 		res Response
 	)
 
@@ -234,27 +242,30 @@ func (b *TuplenetAPI) AddSwitchPort() {
 
 	swtch, err := controller.GetSwitch(switchName)
 	if err != nil {
-		logger.Errorf("AddSwitchPort get switch failed switch %s err %s", switchName, err)
+		addStr := fmt.Sprintf("AddSwitchPort get switch failed switch %s err %s", switchName, err)
+		logger.Errorf(addStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = fmt.Sprintf("AddSwitchPort get switch failed switch %s err %s", switchName, err)
+		res.Message = addStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
 	}
 
 	if _, err = controller.GetSwitchPort(swtch, portName); err != nil && errors.Cause(err) != etcd3.ErrKeyNotFound {
-		logger.Errorf("AddSwitchPort get switch port failed switch %s porrName ip %s mac %s peer %s err %s", switchName, portName, ip, mac, peer, err)
+		addStr := fmt.Sprintf("AddSwitchPort get switch port failed switch %s port name %s ip %s mac %s peer %s err %s", switchName, portName, ip, mac, peer, err)
+		logger.Errorf(addStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = fmt.Sprintf("AddSwitchPort get switch port failed switch %s port name %s ip %s mac %s peer %s err %s", switchName, portName, ip, mac, peer, err)
+		res.Message = addStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
 	}
 
 	if mac == "" {
-		logger.Errorf("AddSwitchPort switch name %s port name %s ip %s peer %s mac is null", switchName, portName, ip, peer)
+		addStr := fmt.Sprintf("AddSwitchPort switch name %s port name %s ip %s peer %s mac is null", switchName, portName, ip, peer)
+		logger.Errorf(addStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = fmt.Sprintf("AddSwitchPort switch name %s port name %s ip %s peer %s mac is null", switchName, portName, ip, peer)
+		res.Message = addStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
@@ -264,9 +275,10 @@ func (b *TuplenetAPI) AddSwitchPort() {
 	port.PeerRouterPortName = peer
 
 	if err = controller.Save(port); err != nil {
-		logger.Errorf("AddSwitchPort switch name %s port name %s ip %s mac %s peer %s", switchName, portName, ip, mac, peer)
+		addStr := fmt.Sprintf("AddSwitchPort switch name %s port name %s ip %s mac %s peer %s err %s", switchName, portName, ip, mac, peer, err)
+		logger.Errorf(addStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = fmt.Sprintf("AddSwitchPort switch name %s port name %s ip %s mac %s peer %s err %s", switchName, portName, ip, mac, peer, err)
+		res.Message = addStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
@@ -274,7 +286,7 @@ func (b *TuplenetAPI) AddSwitchPort() {
 
 	logger.Debugf("AddSwitchPort success switch %s portName %s ip %s mac %s peer %s", switchName, portName, ip, mac, peer)
 	res.Code = http.StatusOK
-	res.Message = fmt.Sprintf("AddSwitchPort success switch %s portName %s ip %s mac %s peer %s", switchName, portName, ip, mac, peer)
+	res.Message = "AddSwitchPort success"
 	b.Data["json"] = res
 	b.ServeJSON()
 
@@ -282,7 +294,7 @@ func (b *TuplenetAPI) AddSwitchPort() {
 
 func (b *TuplenetAPI) ShowSwitchPort() {
 	var (
-		m     SwitchRequest
+		m     SwitchPortRequest
 		res   Response
 		ports []*logicaldev.SwitchPort
 	)
@@ -303,9 +315,10 @@ func (b *TuplenetAPI) ShowSwitchPort() {
 	}
 	swtch, err := controller.GetSwitch(switchName)
 	if err != nil {
-		logger.Errorf("ShowSwitchPort get switch %s failed %s", switchName, err)
+		showStr := fmt.Sprintf("ShowSwitchPort get switch %s failed %s", switchName, err)
+		logger.Errorf(showStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = fmt.Sprintf("ShowSwitchPort get switch %s failed %s", switchName, err)
+		res.Message = showStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
@@ -315,9 +328,10 @@ func (b *TuplenetAPI) ShowSwitchPort() {
 		// show all ports
 		ports, err = controller.GetSwitchPorts(swtch)
 		if err != nil {
-			logger.Errorf("ShowSwitchPort switch %s get all switch port failed %s ", switchName, err)
+			showStr := fmt.Sprintf("ShowSwitchPort switch %s get all switch port failed %s ", switchName, err)
+			logger.Errorf(showStr)
 			res.Code = http.StatusInternalServerError
-			res.Message = fmt.Sprintf("ShowSwitchPort switch %s get all switch port failed %s ", switchName, err)
+			res.Message = showStr
 			b.Data["json"] = res
 			b.ServeJSON()
 			return
@@ -325,9 +339,10 @@ func (b *TuplenetAPI) ShowSwitchPort() {
 	} else {
 		port, err := controller.GetSwitchPort(swtch, portName)
 		if err != nil {
-			logger.Errorf("ShowSwitchPort switch %s get switch port %s failed %s ", switchName, portName, err)
+			showStr := fmt.Sprintf("ShowSwitchPort switch %s get switch port %s failed %s ", switchName, portName, err)
+			logger.Errorf(showStr)
 			res.Code = http.StatusInternalServerError
-			res.Message = fmt.Sprintf("ShowSwitchPort switch %s get switch port %s failed %s ", switchName, portName, err)
+			res.Message = showStr
 			b.Data["json"] = res
 			b.ServeJSON()
 			return
@@ -346,7 +361,7 @@ func (b *TuplenetAPI) ShowSwitchPort() {
 
 func (b *TuplenetAPI) DelSwitchPort() {
 	var (
-		m   SwitchRequest
+		m   SwitchPortRequest
 		res Response
 	)
 
@@ -366,9 +381,10 @@ func (b *TuplenetAPI) DelSwitchPort() {
 	}
 	swtch, err := controller.GetSwitch(switchName)
 	if err != nil {
-		logger.Errorf("DelSwitchPort switch %s failed %s ", switchName, err)
+		delStr := fmt.Sprintf("DelSwitchPort switch %s failed %s ", switchName, err)
+		logger.Errorf(delStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = fmt.Sprintf("DelSwitchPort switch %s failed %s ", switchName, err)
+		res.Message = delStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
@@ -376,9 +392,10 @@ func (b *TuplenetAPI) DelSwitchPort() {
 
 	port, err := controller.GetSwitchPort(swtch, portName)
 	if err != nil {
-		logger.Errorf("DelSwitchPort switch %s get switch port %s failed %s ", switchName, portName, err)
+		delStr := fmt.Sprintf("DelSwitchPort switch %s get switch port %s failed %s ", switchName, portName, err)
+		logger.Errorf(delStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = fmt.Sprintf("DelSwitchPort switch %s get switch port %s failed %s ", switchName, portName, err)
+		res.Message = delStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
@@ -386,9 +403,10 @@ func (b *TuplenetAPI) DelSwitchPort() {
 
 	err = controller.Delete(false, port)
 	if err != nil {
-		logger.Errorf("DelSwitchPort switch %s delete port %s failed %s ", switchName, portName, err)
+		delStr := fmt.Sprintf("DelSwitchPort switch %s delete port %s failed %s ", switchName, portName, err)
+		logger.Errorf(delStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = fmt.Sprintf("DelSwitchPort switch %s delete port %s failed %s ", switchName, portName, err)
+		res.Message = delStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
@@ -396,7 +414,7 @@ func (b *TuplenetAPI) DelSwitchPort() {
 
 	logger.Debugf("DelSwitchPort switch %s port %s deleted", switchName, portName)
 	res.Code = http.StatusOK
-	res.Message = fmt.Sprintf("DelSwitchPort switch %s port %s deleted", switchName, portName)
+	res.Message = "DelSwitchPort switch success"
 	b.Data["json"] = res
 	b.ServeJSON()
 }

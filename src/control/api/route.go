@@ -54,15 +54,16 @@ func (b *TuplenetAPI) AddRoute() {
 
 	r := logicaldev.NewRouter(name, chassis)
 	if err = controller.Save(r); err != nil {
-		logger.Errorf("AddRoute %s create failed %s ", name, err)
+		addStr := fmt.Sprintf("AddRoute %s create route failed %s ", name, err)
+		logger.Errorf(addStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = fmt.Sprintf("route create failed %s", err)
+		res.Message = addStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
 	}
 
-	logger.Debugf("AddRoute %s created", name)
+	logger.Infof("AddRoute %s created", name)
 	res.Code = http.StatusOK
 	res.Message = "add route success"
 	b.Data["json"] = res
@@ -94,9 +95,10 @@ func (b *TuplenetAPI) LinkSwitch() {
 
 	ip, prefix, err := comm.ParseCIDR(cidrString)
 	if err != nil {
-		logger.Errorf("LinkSwitch parse cidr failed route %s switch %s cider string %s", routerName, switchName, cidrString)
+		linkStr := fmt.Sprintf("LinkSwitch parse cidr failed route %s switch %s cider string %s", routerName, switchName, cidrString)
+		logger.Errorf(linkStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = fmt.Sprintf("LinkSwitch parse cidr failed route %s switch %s cider string %s", routerName, switchName, cidrString)
+		res.Message = fmt.Sprintf(linkStr)
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
@@ -105,9 +107,10 @@ func (b *TuplenetAPI) LinkSwitch() {
 
 	router, err := controller.GetRouter(routerName)
 	if err != nil {
-		logger.Errorf("LinkSwitch get route message failed  %s route name %s switch name %s cider string %s", err, routerName, switchName, cidrString)
+		linkStr := fmt.Sprintf("LinkSwitch get route failed  %s route name %s switch name %s cider string %s", err, routerName, switchName, cidrString)
+		logger.Errorf(linkStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = "get route message failed"
+		res.Message = linkStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
@@ -115,9 +118,10 @@ func (b *TuplenetAPI) LinkSwitch() {
 
 	swtch, err := controller.GetSwitch(switchName)
 	if err != nil {
-		logger.Errorf("LinkSwitch get switch message failed  %s route name %s switch name %s cider string %s", err, routerName, switchName, cidrString)
+		linkStr := fmt.Sprintf("LinkSwitch get switch failed  %s route name %s switch name %s cider string %s", err, routerName, switchName, cidrString)
+		logger.Errorf(linkStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = "get switch message failed"
+		res.Message = linkStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
@@ -125,9 +129,10 @@ func (b *TuplenetAPI) LinkSwitch() {
 
 	spName := switchName + "_to_" + routerName
 	if _, err = controller.GetSwitchPort(swtch, spName); err != nil && errors.Cause(err) != etcd3.ErrKeyNotFound {
-		logger.Errorf("LinkSwitch get etcd key failed  %s route name %s switch name %s cider string %s", err, routerName, switchName, cidrString)
+		linkStr := fmt.Sprintf("LinkSwitch get switch port failed  %s route name %s switch name %s cider string %s", err, routerName, switchName, cidrString)
+		logger.Errorf(linkStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = "get switchName etcd key failed"
+		res.Message = linkStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
@@ -135,9 +140,10 @@ func (b *TuplenetAPI) LinkSwitch() {
 
 	rpName := routerName + "_to_" + switchName
 	if _, err = controller.GetRouterPort(router, rpName); err != nil && errors.Cause(err) != etcd3.ErrKeyNotFound {
-		logger.Errorf("LinkSwitch get etcd key failed  %s route name %s switch name %s cider string %s", err, routerName, switchName, cidrString)
+		linkStr := fmt.Sprintf("LinkSwitch get route port failed  %s route name %s switch name %s cider string %s", err, routerName, switchName, cidrString)
+		logger.Errorf(linkStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = "get routerName etcd key failed"
+		res.Message = linkStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
@@ -148,15 +154,16 @@ func (b *TuplenetAPI) LinkSwitch() {
 	rp.Link(sp)
 
 	if err = controller.Save(sp, rp); err != nil {
-		logger.Errorf("LinkSwitch failed %s route name %s switch name %s cider string %s", err, routerName, switchName, cidrString)
+		linkStr := fmt.Sprintf("LinkSwitch failed %s route name %s switch name %s cider string %s", err, routerName, switchName, cidrString)
+		logger.Errorf(linkStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = fmt.Sprintf("link switch failed %s", err)
+		res.Message = linkStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
 	}
 
-	logger.Debugf("LinkSwitch link success route name %s switch name %s cider string %s", routerName, switchName, cidrString)
+	logger.Infof("LinkSwitch link success route name %s switch name %s cider string %s", routerName, switchName, cidrString)
 	res.Code = http.StatusOK
 	res.Message = "link switch success"
 	b.Data["json"] = res
@@ -190,8 +197,10 @@ func (b *TuplenetAPI) ShowRouter() {
 		// show all ports
 		routers, err = controller.GetRouters()
 		if err != nil {
+			showStr := fmt.Sprintf("get routes failed %s", err)
+			logger.Errorf(showStr)
 			res.Code = http.StatusInternalServerError
-			res.Message = fmt.Sprintf("get routes failed %s", err)
+			res.Message = showStr
 			b.Data["json"] = res
 			b.ServeJSON()
 			return
@@ -199,8 +208,10 @@ func (b *TuplenetAPI) ShowRouter() {
 	} else {
 		router, err := controller.GetRouter(name)
 		if err != nil {
+			showStr := fmt.Sprintf("get routes failed %s", err)
+			logger.Errorf(showStr)
 			res.Code = http.StatusInternalServerError
-			res.Message = fmt.Sprintf("get routes failed %s", err)
+			res.Message = showStr
 			b.Data["json"] = res
 			b.ServeJSON()
 			return
@@ -239,9 +250,10 @@ func (b *TuplenetAPI) DelRouter() {
 	}
 	router, err := controller.GetRouter(name)
 	if err != nil {
-		logger.Errorf("DelRouter get route failed %s", err)
+		delStr := fmt.Sprintf("DelRouter get route failed %s", err)
+		logger.Errorf(delStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = fmt.Sprintf("DelRouter get route failed %s", err)
+		res.Message = delStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
@@ -249,9 +261,10 @@ func (b *TuplenetAPI) DelRouter() {
 
 	ports, err := controller.GetRouterPorts(router)
 	if err != nil {
-		logger.Errorf("DelRouter get route port failed %s", err)
+		delStr := fmt.Sprintf("DelRouter get route port failed %s", err)
+		logger.Errorf(delStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = fmt.Sprintf("DelRouter get route port failed %s", err)
+		res.Message = delStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
@@ -259,9 +272,10 @@ func (b *TuplenetAPI) DelRouter() {
 
 	srs, err := controller.GetRouterStaticRoutes(router)
 	if err != nil {
-		logger.Errorf("DelRouter get static route failed %s", err)
+		delStr := fmt.Sprintf("DelRouter get static route failed %s", err)
+		logger.Errorf(delStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = fmt.Sprintf("DelRouter get static route failed %s", err)
+		res.Message = delStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
@@ -269,20 +283,21 @@ func (b *TuplenetAPI) DelRouter() {
 
 	if len(ports) != 0 || len(srs) != 0 { // for router with ports and static routes, it depends
 		if recursive {
-			logger.Infof("DelRouter begin recursive delete route %s", router)
 			err := controller.Delete(true, router)
 			if err != nil {
-				logger.Errorf("DelRouter failed route %s %v", name, err)
+				delStr := fmt.Sprintf("DelRouter failed route %s %v", name, err)
+				logger.Errorf(delStr)
 				res.Code = http.StatusInternalServerError
-				res.Message = fmt.Sprintf("DelRouter failed route %s %v", name, err)
+				res.Message = delStr
 				b.Data["json"] = res
 				b.ServeJSON()
 				return
 			}
 		} else {
-			logger.Errorf("DelRouter failed route %s there are remaining ports or static routes, consider using recursive?", name)
+			delStr := fmt.Sprintf("DelRouter failed route %s there are remaining ports or static routes, consider recursive?", name)
+			logger.Errorf(delStr)
 			res.Code = http.StatusInternalServerError
-			res.Message = fmt.Sprintf("DelRouter failed route %s there are remaining ports or static routes, consider recursive?", name)
+			res.Message = delStr
 			b.Data["json"] = res
 			b.ServeJSON()
 			return
@@ -290,16 +305,17 @@ func (b *TuplenetAPI) DelRouter() {
 	} else {
 		err := controller.Delete(false, router)
 		if err != nil {
-			logger.Errorf("DelRouter failed route %s %v", name, err)
+			delStr := fmt.Sprintf("DelRouter failed route %s %v", name, err)
+			logger.Errorf(delStr)
 			res.Code = http.StatusInternalServerError
-			res.Message = fmt.Sprintf("DelRouter failed route %s %v", name, err)
+			res.Message = delStr
 			b.Data["json"] = res
 			b.ServeJSON()
 			return
 		}
 	}
 
-	logger.Debugf("DelRouter success route %s recursive %v", name, recursive)
+	logger.Infof("DelRouter success route %s recursive %v", name, recursive)
 	res.Message = fmt.Sprintf("route %s deleted", name)
 	res.Code = http.StatusOK
 	b.Data["json"] = res
@@ -330,8 +346,10 @@ func (b *TuplenetAPI) ShowRouterPort() {
 
 	router, err := controller.GetRouter(name)
 	if err != nil {
+		showStr := fmt.Sprintf("ShowRouterPort get route failed %s route %s portName %s", err, name, portName)
+		logger.Errorf(showStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = fmt.Sprintf("ShowRouterPort get route failed %s route %s portName %s", err, name, portName)
+		res.Message = showStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
@@ -341,8 +359,10 @@ func (b *TuplenetAPI) ShowRouterPort() {
 		// show all ports
 		ports, err = controller.GetRouterPorts(router)
 		if err != nil {
+			showStr := fmt.Sprintf("ShowRouterPort get route port failed %s route %s portName %s", err, name, portName)
+			logger.Errorf(showStr)
 			res.Code = http.StatusInternalServerError
-			res.Message = fmt.Sprintf("ShowRouterPort get route port failed %s route %s portName %s", err, name, portName)
+			res.Message = showStr
 			b.Data["json"] = res
 			b.ServeJSON()
 			return
@@ -350,8 +370,10 @@ func (b *TuplenetAPI) ShowRouterPort() {
 	} else {
 		port, err := controller.GetRouterPort(router, portName)
 		if err != nil {
+			showStr := fmt.Sprintf("ShowRouterPort get route port failed %s route %s portName %s", err, name, portName)
+			logger.Errorf(showStr)
 			res.Code = http.StatusInternalServerError
-			res.Message = fmt.Sprintf("ShowRouterPort get route port failed %s route %s portName %s", err, name, portName)
+			res.Message = showStr
 			b.Data["json"] = res
 			b.ServeJSON()
 			return
@@ -393,9 +415,10 @@ func (b *TuplenetAPI) AddRouterPort() {
 	}
 	ip, prefix, err := comm.ParseCIDR(cidr)
 	if err != nil {
-		logger.Errorf("AddRouterPort parse cidr failed route %s cider string %s", name, cidr)
+		delStr := fmt.Sprintf("AddRouterPort parse cidr failed route %s cider string %s", name, cidr)
+		logger.Errorf(delStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = fmt.Sprintf("AddRouterPort parse cidr failed route %s cider string %s", name, cidr)
+		res.Message = delStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
@@ -405,9 +428,10 @@ func (b *TuplenetAPI) AddRouterPort() {
 	} else {
 		err := comm.ValidateMAC(mac)
 		if err != nil {
-			logger.Errorf("AddRouterPort mac invalid route %s mac %s", name, mac)
+			delStr := fmt.Sprintf("AddRouterPort mac invalid route %s mac %s", name, mac)
+			logger.Errorf(delStr)
 			res.Code = http.StatusInternalServerError
-			res.Message = fmt.Sprintf("AddRouterPort mac invalid route %s mac %s", name, mac)
+			res.Message = delStr
 			b.Data["json"] = res
 			b.ServeJSON()
 			return
@@ -416,9 +440,10 @@ func (b *TuplenetAPI) AddRouterPort() {
 
 	router, err := controller.GetRouter(name)
 	if err != nil {
-		logger.Errorf("AddRouterPort get route %s failed %s", name, err)
+		delStr := fmt.Sprintf("AddRouterPort get route %s failed %s", name, err)
+		logger.Errorf(delStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = fmt.Sprintf("AddRouterPort get route %s failed %s", name, err)
+		res.Message = delStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
@@ -426,9 +451,10 @@ func (b *TuplenetAPI) AddRouterPort() {
 
 	_, err = controller.GetRouterPort(router, portName)
 	if err != nil && errors.Cause(err) != etcd3.ErrKeyNotFound {
-		logger.Errorf("AddRouterPort get route %s port %s failed %s", name, portName, err)
+		delStr := fmt.Sprintf("AddRouterPort get route %s port %s failed %s", name, portName, err)
+		logger.Errorf(delStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = fmt.Sprintf("AddRouterPort get route %s port %s failed %s", name, portName, err)
+		res.Message = delStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
@@ -439,17 +465,18 @@ func (b *TuplenetAPI) AddRouterPort() {
 
 	err = controller.Save(port)
 	if err != nil {
-		logger.Errorf("AddRouterPort save route %s port %s ip %s prefix %d mac %s failed %s", name, portName, ip, prefix, mac, err)
+		addStr := fmt.Sprintf("AddRouterPort save route %s port %s ip %s prefix %d mac %s failed %s", name, portName, ip, prefix, mac, err)
+		logger.Errorf(addStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = fmt.Sprintf("AddRouterPort save route %s port %s ip %s prefix %d mac %s failed %s", name, portName, ip, prefix, mac, err)
+		res.Message = addStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
 	}
 
-	logger.Debugf("AddRouterPort success route %s port %s ip %s prefix %d mac %s", name, portName, ip, prefix, mac)
+	logger.Infof("AddRouterPort success route %s port %s ip %s prefix %d mac %s", name, portName, ip, prefix, mac)
 	res.Code = http.StatusOK
-	res.Message = fmt.Sprintf("AddRouterPort success router %s port %s created", name, portName)
+	res.Message = "AddRouterPort success"
 	b.Data["json"] = res
 	b.ServeJSON()
 }
@@ -477,9 +504,10 @@ func (b *TuplenetAPI) DelRouterPort() {
 
 	router, err := controller.GetRouter(name)
 	if err != nil {
-		logger.Errorf("DelRouterPort get route %s failed %s", name, err)
+		delStr := fmt.Sprintf("DelRouterPort get route %s failed %s", name, err)
+		logger.Errorf(delStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = fmt.Sprintf("DelRouterPort get route %s failed %s", name, err)
+		res.Message = delStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
@@ -487,9 +515,10 @@ func (b *TuplenetAPI) DelRouterPort() {
 
 	port, err := controller.GetRouterPort(router, portName)
 	if err != nil {
-		logger.Errorf("DelRouterPort get route %s portName %s failed %s", name, portName, err)
+		delStr := fmt.Sprintf("DelRouterPort get route %s portName %s failed %s", name, portName, err)
+		logger.Errorf(delStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = fmt.Sprintf("DelRouterPort get route %s portName %s failed %s", name, portName, err)
+		res.Message = delStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
@@ -497,17 +526,18 @@ func (b *TuplenetAPI) DelRouterPort() {
 
 	err = controller.Delete(false, port)
 	if err != nil {
-		logger.Errorf("DelRouterPort delete route %s portName %s failed %s", name, portName, err)
+		delStr := fmt.Sprintf("DelRouterPort delete route %s portName %s failed %s", name, portName, err)
+		logger.Errorf(delStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = fmt.Sprintf("DelRouterPort delete route %s portName %s failed %s", name, portName, err)
+		res.Message = delStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
 	}
 
-	logger.Debugf("DelRouterPort success router %s portName %s ", name, portName)
+	logger.Infof("DelRouterPort success router %s portName %s ", name, portName)
 	res.Code = http.StatusOK
-	res.Message = fmt.Sprintf("DelRouterPort success router %s portName %s ", name, portName)
+	res.Message = "DelRouterPort success"
 	b.Data["json"] = res
 	b.ServeJSON()
 }

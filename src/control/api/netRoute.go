@@ -28,6 +28,7 @@ func (b *TuplenetAPI) AddNAT() {
 	cidr := m.Cidr
 	xlateType := m.XlateType
 	xlateIP := m.XlateIP
+	logger.Debugf("AddNAT get param route %s natName %s cidr %s xlateType %s xlateIP %s", name, natName, cidr, xlateType, xlateIP)
 
 	if name == "" || natName == "" || cidr == "" || xlateType == "" || xlateIP == "" {
 		logger.Errorf("AddNAT get param failed route %s natName %s cidr %s xlateType %s xlateIP %s", name, natName, cidr, xlateType, xlateIP)
@@ -39,27 +40,30 @@ func (b *TuplenetAPI) AddNAT() {
 	}
 	ip, prefix, err := comm.ParseCIDR(cidr)
 	if err != nil {
-		logger.Errorf("AddNAT parse cidr failed route %s cider string %s", name, cidr)
+		addStr := fmt.Sprintf("AddNAT parse cidr failed route %s cider string %s", name, cidr)
+		logger.Errorf(addStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = fmt.Sprintf("AddNAT parse cidr failed route %s cider string %s", name, cidr)
+		res.Message = addStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
 	}
 	// if xlateType neither snat or dnat return failed
 	if xlateType != "snat" && xlateType != "dnat" {
-		logger.Errorf("AddNAT invalid translate type, must be snat/dnat: %s", xlateType)
+		addStr := fmt.Sprintf("AddNAT invalid translate type, must be snat/dnat: %s", xlateType)
+		logger.Errorf(addStr)
 		res.Code = http.StatusBadRequest
-		res.Message = fmt.Sprintf("AddNAT invalid translate type, must be snat/dnat: %s", xlateType)
+		res.Message = addStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
 	}
 
 	if net.ParseIP(xlateIP) == nil {
-		logger.Errorf("AddNAT invalid translate IP: %s", xlateIP)
+		addStr := fmt.Sprintf("AddNAT invalid translate IP: %s", xlateIP)
+		logger.Errorf(addStr)
 		res.Code = http.StatusBadRequest
-		res.Message = fmt.Sprintf("AddNAT invalid translate IP: %s", xlateIP)
+		res.Message = addStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
@@ -67,9 +71,10 @@ func (b *TuplenetAPI) AddNAT() {
 
 	router, err := controller.GetRouter(name)
 	if err != nil {
-		logger.Errorf("AddNAT get route failed %s", err)
+		addStr := fmt.Sprintf("AddNAT get route failed %s", err)
+		logger.Errorf(addStr)
 		res.Code = http.StatusBadRequest
-		res.Message = fmt.Sprintf("AddNAT get route failed %s", err)
+		res.Message = addStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
@@ -77,18 +82,20 @@ func (b *TuplenetAPI) AddNAT() {
 
 	_, err = controller.GetRouterNAT(router, natName)
 	if err != nil && errors.Cause(err) != etcd3.ErrKeyNotFound {
-		logger.Errorf("AddNAT get route failed %s", err)
+		addStr := fmt.Sprintf("AddNAT get route failed %s", err)
+		logger.Errorf(addStr)
 		res.Code = http.StatusBadRequest
-		res.Message = fmt.Sprintf("AddNAT get route failed %s", err)
+		res.Message = addStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
 	}
 
 	if err == nil {
-		logger.Warnf("AddNAT route %s nat %s exists", name, natName)
+		addStr := fmt.Sprintf("AddNAT route %s nat %s exists", name, natName)
+		logger.Warnf(addStr)
 		res.Code = http.StatusOK
-		res.Message = fmt.Sprintf("AddNAT route %s nat %s exists", name, natName)
+		res.Message = addStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
@@ -97,17 +104,18 @@ func (b *TuplenetAPI) AddNAT() {
 	nat := router.CreateNAT(natName, ip, prefix, xlateType, xlateIP)
 	err = controller.Save(nat)
 	if err != nil {
-		logger.Errorf("AddNAT create nat failed %s", err)
+		addStr := fmt.Sprintf("AddNAT create nat failed %s", err)
+		logger.Errorf(addStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = fmt.Sprintf("AddNAT create nat failed %s", err)
+		res.Message = addStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
 	}
 
-	logger.Debugf("AddNAT success route %s natName %s cidr %s xlateType %s xlateIP %s", name, natName, cidr, xlateType, xlateIP)
+	logger.Infof("AddNAT success route %s natName %s cidr %s xlateType %s xlateIP %s", name, natName, cidr, xlateType, xlateIP)
 	res.Code = http.StatusOK
-	res.Message = fmt.Sprintf("AddNAT success route %s nat %s ", name, natName)
+	res.Message = "AddNAT success"
 	b.Data["json"] = res
 	b.ServeJSON()
 
@@ -124,6 +132,7 @@ func (b *TuplenetAPI) DelNAT() {
 	json.Unmarshal(body, &m)
 	name := m.Route
 	natName := m.NatName
+	logger.Debugf("DelNAT get param route %s natName %s", name, natName)
 
 	if name == "" || natName == "" {
 		logger.Errorf("DelNAT get param failed route %s natName %s", name, natName)
@@ -135,9 +144,10 @@ func (b *TuplenetAPI) DelNAT() {
 	}
 	router, err := controller.GetRouter(name)
 	if err != nil {
-		logger.Errorf("DelNAT get route failed %s", err)
+		delStr := fmt.Sprintf("DelNAT get route failed %s", err)
+		logger.Errorf(delStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = fmt.Sprintf("DelNAT get route failed %s", err)
+		res.Message = delStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
@@ -145,9 +155,10 @@ func (b *TuplenetAPI) DelNAT() {
 
 	port, err := controller.GetRouterNAT(router, natName)
 	if err != nil {
-		logger.Errorf("DelNAT get route nat failed %s", err)
+		delStr := fmt.Sprintf("DelNAT get route nat failed %s", err)
+		logger.Errorf(delStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = fmt.Sprintf("DelNAT get route nat failed %s", err)
+		res.Message = delStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
@@ -155,17 +166,18 @@ func (b *TuplenetAPI) DelNAT() {
 
 	err = controller.Delete(false, port)
 	if err != nil {
-		logger.Errorf("DelNAT delete failed %s", err)
+		delStr := fmt.Sprintf("DelNAT delete failed %s", err)
+		logger.Errorf(delStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = fmt.Sprintf("DelNAT delete failed %s", err)
+		res.Message = delStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
 	}
 
-	logger.Debugf("DelNAT router %s NAT %s deleted", name, natName)
+	logger.Infof("DelNAT router %s NAT %s deleted", name, natName)
 	res.Code = http.StatusOK
-	res.Message = fmt.Sprintf("DelNAT router %s NAT %s deleted", name, natName)
+	res.Message = "DelNAT success"
 	b.Data["json"] = res
 	b.ServeJSON()
 }
@@ -182,6 +194,7 @@ func (b *TuplenetAPI) ShowNAT() {
 	json.Unmarshal(body, &m)
 	name := m.Route
 	natName := m.NatName
+	logger.Debugf("ShowNAT get param route %s natName %s", name, natName)
 
 	if name == "" {
 		logger.Errorf("ShowNAT get param failed route %s ", name)
@@ -193,9 +206,10 @@ func (b *TuplenetAPI) ShowNAT() {
 	}
 	router, err := controller.GetRouter(name)
 	if err != nil {
-		logger.Errorf("ShowNAT get route failed %s", err)
+		showStr := fmt.Sprintf("ShowNAT get route failed %s", err)
+		logger.Errorf(showStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = fmt.Sprintf("ShowNAT get route failed %s", err)
+		res.Message = showStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
@@ -204,9 +218,10 @@ func (b *TuplenetAPI) ShowNAT() {
 	if natName == "" { // show all nats
 		nats, err = controller.GetRouterNATs(router)
 		if err != nil {
-			logger.Errorf("ShowNAT get route nats failed %s", err)
+			showStr := fmt.Sprintf("ShowNAT get route nats failed %s", err)
+			logger.Errorf(showStr)
 			res.Code = http.StatusInternalServerError
-			res.Message = fmt.Sprintf("ShowNAT get route nats failed %s", err)
+			res.Message = showStr
 			b.Data["json"] = res
 			b.ServeJSON()
 			return
@@ -214,9 +229,10 @@ func (b *TuplenetAPI) ShowNAT() {
 	} else {
 		nat, err := controller.GetRouterNAT(router, natName)
 		if err != nil {
-			logger.Errorf("ShowNAT get route nat failed %s", err)
+			showStr := fmt.Sprintf("ShowNAT get route nat failed %s", err)
+			logger.Errorf(showStr)
 			res.Code = http.StatusInternalServerError
-			res.Message = fmt.Sprintf("ShowNAT get route nat failed %s", err)
+			res.Message = showStr
 			b.Data["json"] = res
 			b.ServeJSON()
 			return

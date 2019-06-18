@@ -7,9 +7,15 @@ import (
 	"github.com/vipshop/tuplenet/control/logger"
 	"os/exec"
 	"fmt"
-	"os"
 	"io"
+	"bytes"
 )
+
+type Edge interface {
+	AddEdge()
+	DelEdge()
+	InitEdge()
+}
 
 /*
    the api must run in a tuplenet edge node ; default edge add shell is /apps/svr/vip-tuplenet/src/tuplenet/tools/edge-operate.py use env EDGE_SHELL_PATH to change
@@ -17,8 +23,9 @@ import (
 
 func (b *TuplenetAPI) InitEdge() {
 	var (
-		m   EdgeRequest
-		res Response
+		m              EdgeRequest
+		res            Response
+		stdout, stderr bytes.Buffer
 	)
 
 	body, _ := ioutil.ReadAll(b.Ctx.Request.Body)
@@ -28,6 +35,7 @@ func (b *TuplenetAPI) InitEdge() {
 	virt := m.Virt   //  the whole virtual network(like:5.5.5.5/16)
 	vip := m.Vip     //  the virtual ip(like:2.2.2.2/24) of edge node
 	extGw := m.ExtGw // extGw the physical gateway ip address
+	logger.Debugf("InitEdge get param phyBr %s inner %s virt %s vip %s extGw %s", phyBr, inner, virt, vip, extGw)
 
 	if phyBr == "" || inner == "" || virt == "" || vip == "" || extGw == "" {
 		logger.Errorf("InitEdge get param failed phyBr %s inner %s virt %s vip %s extGw %s", phyBr, inner, virt, vip, extGw)
@@ -40,26 +48,26 @@ func (b *TuplenetAPI) InitEdge() {
 
 	endPointArg := "--endpoint=" + etcdHost
 	preFixArg := EdgeEtcdPrefix(etcdPrefix)
-	opArg := "--op=init"
 	vipArg := "--vip=" + vip
 	phyBrArg := "--phy_br=" + phyBr
 	virtArg := "--virt=" + virt
 	innerArg := "--inner=" + inner
 	extGwArg := "--ext_gw=" + extGw
 
-	cmd := exec.Command(edgeShellPath, endPointArg, preFixArg, opArg, vipArg, phyBrArg, virtArg, innerArg, extGwArg)
+	cmd := exec.Command(edgeShellPath, endPointArg, preFixArg, "--op=init", vipArg, phyBrArg, virtArg, innerArg, extGwArg)
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
 
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
 	stdin, _ := cmd.StdinPipe()
 	defer stdin.Close()
 	err := cmd.Start()
 	io.WriteString(stdin, "yes\n")
 
 	if err != nil {
-		logger.Errorf("InitEdge failed phyBr %s inner %s virt %s vip %s extGw %s err %s out %s", phyBr, inner, virt, vip, extGw, cmd.Stderr, cmd.Stdout)
+		initStr := fmt.Sprintf("InitEdge failed phyBr %s inner %s virt %s vip %s extGw %s err %s outErr %s outStr %s", phyBr, inner, virt, vip, extGw, err, stderr.Bytes(), stdout.Bytes())
+		logger.Errorf(initStr)
 		res.Code = http.StatusBadRequest
-		res.Message = fmt.Sprintf("InitAdge failed phyBr %s inner %s virt %s vip %s extGw %s err %s out %s", phyBr, inner, virt, vip, extGw, cmd.Stderr, cmd.Stdout)
+		res.Message = initStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
@@ -67,16 +75,17 @@ func (b *TuplenetAPI) InitEdge() {
 	}
 	err = cmd.Wait()
 	if err != nil {
-		logger.Errorf("InitEdge failed phyBr %s inner %s virt %s vip %s extGw %s err %s out %s", phyBr, inner, virt, vip, extGw, cmd.Stderr, cmd.Stdout)
+		initStr := fmt.Sprintf("InitEdge failed phyBr %s inner %s virt %s vip %s extGw %s err %s outErr %s outStr %s", phyBr, inner, virt, vip, extGw, err, stderr.Bytes(), stdout.Bytes())
+		logger.Errorf(initStr)
 		res.Code = http.StatusBadRequest
-		res.Message = fmt.Sprintf("InitAdge failed phyBr %s inner %s virt %s vip %s extGw %s err %s out %s", phyBr, inner, virt, vip, extGw, cmd.Stderr, cmd.Stdout)
+		res.Message = initStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
 
 	}
 
-	logger.Debugf("InitEdge success phyBr %s inner %s virt %s vip %s extGw %s", phyBr, inner, virt, vip, extGw)
+	logger.Infof("InitEdge success phyBr %s inner %s virt %s vip %s extGw %s", phyBr, inner, virt, vip, extGw)
 	res.Code = http.StatusOK
 	res.Message = "InitEdge success "
 	b.Data["json"] = res
@@ -86,14 +95,16 @@ func (b *TuplenetAPI) InitEdge() {
 
 func (b *TuplenetAPI) AddEdge() {
 	var (
-		m   EdgeRequest
-		res Response
+		m              EdgeRequest
+		res            Response
+		stdout, stderr bytes.Buffer
 	)
 
 	body, _ := ioutil.ReadAll(b.Ctx.Request.Body)
 	json.Unmarshal(body, &m)
 	vip := m.Vip //  the virtual ip(like:2.2.2.2/24) of edge node
 	phyBr := m.PhyBr
+	logger.Debugf("AddEdge get param vip %s phyBr %s", vip, phyBr)
 
 	if vip == "" || phyBr == "" {
 		logger.Errorf("AddEdge get param failed vip %s phyBr %s", vip, phyBr)
@@ -106,20 +117,21 @@ func (b *TuplenetAPI) AddEdge() {
 
 	endPointArg := "--endpoint=" + etcdHost
 	preFixArg := EdgeEtcdPrefix(etcdPrefix)
-	opArg := "--op=add"
 	phyBrArg := "--phy_br=" + phyBr
 	vipArg := "--vip=" + vip
-	cmd := exec.Command(edgeShellPath, endPointArg, preFixArg, opArg, vipArg, phyBrArg)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd := exec.Command(edgeShellPath, endPointArg, preFixArg, "--op=add", vipArg, phyBrArg)
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
 	stdin, _ := cmd.StdinPipe()
 	defer stdin.Close()
 	err := cmd.Start()
 	io.WriteString(stdin, "yes\n")
 	if err != nil {
-		logger.Errorf("AddEdge failed vip %s err %s out %s", vip, cmd.Stderr, cmd.Stdout)
+		addStr := fmt.Sprintf("AddEdge failed vip %s err %s outErr %s outStr %s", vip, err, stderr.Bytes(), stdout.Bytes())
+		logger.Errorf(addStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = fmt.Sprintf("AddEdge failed vip %s err %s", vip, cmd.Stderr)
+		res.Message = addStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
@@ -127,15 +139,16 @@ func (b *TuplenetAPI) AddEdge() {
 	}
 	err = cmd.Wait()
 	if err != nil {
-		logger.Errorf("AddEdge failed vip %s err %s out %s", vip, cmd.Stderr, cmd.Stdout)
+		addStr := fmt.Sprintf("AddEdge wait response failed vip %s err %s outErr %s outStr %s", vip, err, stderr.Bytes(), stdout.Bytes())
+		logger.Errorf(addStr)
 		res.Code = http.StatusInternalServerError
-		res.Message = fmt.Sprintf("AddEdge failed vip %s err %s", vip, cmd.Stderr)
+		res.Message = addStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
 
 	}
-	logger.Debugf("AddEdge success vip %s phyBr %s", vip, phyBr)
+	logger.Infof("AddEdge success vip %s phyBr %s", vip, phyBr)
 	res.Code = http.StatusOK
 	res.Message = "AddEdge success "
 	b.Data["json"] = res
@@ -145,13 +158,15 @@ func (b *TuplenetAPI) AddEdge() {
 
 func (b *TuplenetAPI) DelEdge() {
 	var (
-		m   EdgeRequest
-		res Response
+		m              EdgeRequest
+		res            Response
+		stdout, stderr bytes.Buffer
 	)
 
 	body, _ := ioutil.ReadAll(b.Ctx.Request.Body)
 	json.Unmarshal(body, &m)
 	vip := m.Vip //  the virtual ip(like:2.2.2.2/24) of edge node
+	logger.Debugf("DelEdge get param vip %s", vip)
 
 	if vip == "" {
 		logger.Errorf("DelEdge get param failed vip %s", vip)
@@ -164,21 +179,20 @@ func (b *TuplenetAPI) DelEdge() {
 
 	endPointArg := "--endpoint=" + etcdHost
 	preFixArg := EdgeEtcdPrefix(etcdPrefix)
-	opArg := "--op=remove"
 	vipArg := "--vip=" + vip
-	cmd := exec.Command(edgeShellPath, endPointArg, preFixArg, opArg, vipArg)
-
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd := exec.Command(edgeShellPath, endPointArg, preFixArg, "--op=remove", vipArg)
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
 	stdin, _ := cmd.StdinPipe()
 	defer stdin.Close()
 	err := cmd.Start()
 	io.WriteString(stdin, "yes\n")
 
 	if err != nil {
-		logger.Errorf("DelEdge failed vip %s err %s out %s", vip, cmd.Stderr, cmd.Stdout)
+		delStr := fmt.Sprintf("DelEdge exec command failed vip %s err %s outErr %s outStr %s", vip, stderr.Bytes(), stdout.Bytes())
+		logger.Errorf(delStr)
 		res.Code = http.StatusBadRequest
-		res.Message = fmt.Sprintf("DelEdge failed vip %s err %s", vip, cmd.Stderr)
+		res.Message = fmt.Sprintf(delStr)
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
@@ -187,15 +201,16 @@ func (b *TuplenetAPI) DelEdge() {
 
 	err = cmd.Wait()
 	if err != nil {
-		logger.Errorf("DelEdge failed vip %s err %s out %s", vip, cmd.Stderr, cmd.Stdout)
+		delStr := fmt.Sprintf("DelEdge wait response failed vip %s err %s outErr %s outStr %s", vip, err, stderr.Bytes(), stdout.Bytes())
+		logger.Errorf(delStr)
 		res.Code = http.StatusBadRequest
-		res.Message = fmt.Sprintf("DelEdge failed vip %s err %s", vip, cmd.Stderr)
+		res.Message = delStr
 		b.Data["json"] = res
 		b.ServeJSON()
 		return
 
 	}
-	logger.Debugf("DelEdge success vip %s", vip)
+	logger.Infof("DelEdge success vip %s", vip)
 	res.Code = http.StatusOK
 	res.Message = "DelEdge success "
 	b.Data["json"] = res

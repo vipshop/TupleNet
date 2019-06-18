@@ -33,6 +33,7 @@ func init() {
 	}
 	if controller, err = etcd3.NewController([]string{etcdHost}, etcdPrefix, false); err != nil {
 		logger.Errorf("init connect etcd service failed %s", err)
+		return
 	}
 	edgeShellPath = os.Getenv("EDGE_SHELL_PATH")
 	if edgeShellPath == "" {
@@ -92,11 +93,15 @@ type NetRequest struct {
 
 type SwitchRequest struct {
 	Switch    string `json:switch`
-	PortName  string `json:"portName,omitempty"`
-	IP        string `json:"ip,omitempty"`
-	Peer      string `json:"peer,omitempty"`
-	Mac       string `json:"mac,omitempty"`
 	Recursive bool   `json:"recursive,omitempty"` // force delete all ports and switch
+}
+
+type SwitchPortRequest struct {
+	Switch   string `json:switch`
+	PortName string `json:"portName,omitempty"`
+	IP       string `json:"ip,omitempty"`
+	Peer     string `json:"peer,omitempty"`
+	Mac      string `json:"mac,omitempty"`
 }
 
 type Response struct {
