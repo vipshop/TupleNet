@@ -1,7 +1,6 @@
 package api
 
 import (
-	"net/http"
 	"io/ioutil"
 	"encoding/json"
 	"github.com/vipshop/tuplenet/control/logger"
@@ -24,7 +23,6 @@ type Edge interface {
 func (b *TuplenetAPI) InitEdge() {
 	var (
 		m              EdgeRequest
-		res            Response
 		stdout, stderr bytes.Buffer
 	)
 
@@ -39,10 +37,7 @@ func (b *TuplenetAPI) InitEdge() {
 
 	if phyBr == "" || inner == "" || virt == "" || vip == "" || extGw == "" {
 		logger.Errorf("InitEdge get param failed phyBr %s inner %s virt %s vip %s extGw %s", phyBr, inner, virt, vip, extGw)
-		res.Code = http.StatusBadRequest
-		res.Message = "request phyBr inner virt vip and extGw param"
-		b.Data["json"] = res
-		b.ServeJSON()
+		b.BadResponse("request phyBr inner virt vip and extGw param")
 		return
 	}
 
@@ -66,37 +61,24 @@ func (b *TuplenetAPI) InitEdge() {
 	if err != nil {
 		initStr := fmt.Sprintf("InitEdge failed phyBr %s inner %s virt %s vip %s extGw %s err %s outErr %s outStr %s", phyBr, inner, virt, vip, extGw, err, stderr.Bytes(), stdout.Bytes())
 		logger.Errorf(initStr)
-		res.Code = http.StatusBadRequest
-		res.Message = initStr
-		b.Data["json"] = res
-		b.ServeJSON()
+		b.InternalServerErrorResponse(initStr)
 		return
-
 	}
 	err = cmd.Wait()
 	if err != nil {
 		initStr := fmt.Sprintf("InitEdge failed phyBr %s inner %s virt %s vip %s extGw %s err %s outErr %s outStr %s", phyBr, inner, virt, vip, extGw, err, stderr.Bytes(), stdout.Bytes())
 		logger.Errorf(initStr)
-		res.Code = http.StatusBadRequest
-		res.Message = initStr
-		b.Data["json"] = res
-		b.ServeJSON()
+		b.InternalServerErrorResponse(initStr)
 		return
-
 	}
 
 	logger.Infof("InitEdge success phyBr %s inner %s virt %s vip %s extGw %s", phyBr, inner, virt, vip, extGw)
-	res.Code = http.StatusOK
-	res.Message = "InitEdge success "
-	b.Data["json"] = res
-	b.ServeJSON()
-
+	b.NormalResponse("InitEdge success")
 }
 
 func (b *TuplenetAPI) AddEdge() {
 	var (
 		m              EdgeRequest
-		res            Response
 		stdout, stderr bytes.Buffer
 	)
 
@@ -108,10 +90,7 @@ func (b *TuplenetAPI) AddEdge() {
 
 	if vip == "" || phyBr == "" {
 		logger.Errorf("AddEdge get param failed vip %s phyBr %s", vip, phyBr)
-		res.Code = http.StatusBadRequest
-		res.Message = "request vip and phyBr param"
-		b.Data["json"] = res
-		b.ServeJSON()
+		b.BadResponse("request vip and phyBr param")
 		return
 	}
 
@@ -129,37 +108,24 @@ func (b *TuplenetAPI) AddEdge() {
 	io.WriteString(stdin, "yes\n")
 	if err != nil {
 		addStr := fmt.Sprintf("AddEdge failed vip %s err %s outErr %s outStr %s", vip, err, stderr.Bytes(), stdout.Bytes())
-		logger.Errorf(addStr)
-		res.Code = http.StatusInternalServerError
-		res.Message = addStr
-		b.Data["json"] = res
-		b.ServeJSON()
+		b.InternalServerErrorResponse(addStr)
 		return
-
 	}
 	err = cmd.Wait()
 	if err != nil {
 		addStr := fmt.Sprintf("AddEdge wait response failed vip %s err %s outErr %s outStr %s", vip, err, stderr.Bytes(), stdout.Bytes())
 		logger.Errorf(addStr)
-		res.Code = http.StatusInternalServerError
-		res.Message = addStr
-		b.Data["json"] = res
-		b.ServeJSON()
+		b.InternalServerErrorResponse(addStr)
 		return
-
 	}
-	logger.Infof("AddEdge success vip %s phyBr %s", vip, phyBr)
-	res.Code = http.StatusOK
-	res.Message = "AddEdge success "
-	b.Data["json"] = res
-	b.ServeJSON()
 
+	logger.Infof("AddEdge success vip %s phyBr %s", vip, phyBr)
+	b.NormalResponse("AddEdge success")
 }
 
 func (b *TuplenetAPI) DelEdge() {
 	var (
 		m              EdgeRequest
-		res            Response
 		stdout, stderr bytes.Buffer
 	)
 
@@ -170,10 +136,7 @@ func (b *TuplenetAPI) DelEdge() {
 
 	if vip == "" {
 		logger.Errorf("DelEdge get param failed vip %s", vip)
-		res.Code = http.StatusBadRequest
-		res.Message = "request vip param"
-		b.Data["json"] = res
-		b.ServeJSON()
+		b.BadResponse("request vip param")
 		return
 	}
 
@@ -191,29 +154,18 @@ func (b *TuplenetAPI) DelEdge() {
 	if err != nil {
 		delStr := fmt.Sprintf("DelEdge exec command failed vip %s err %s outErr %s outStr %s", vip, stderr.Bytes(), stdout.Bytes())
 		logger.Errorf(delStr)
-		res.Code = http.StatusBadRequest
-		res.Message = fmt.Sprintf(delStr)
-		b.Data["json"] = res
-		b.ServeJSON()
+		b.InternalServerErrorResponse(delStr)
 		return
-
 	}
 
 	err = cmd.Wait()
 	if err != nil {
 		delStr := fmt.Sprintf("DelEdge wait response failed vip %s err %s outErr %s outStr %s", vip, err, stderr.Bytes(), stdout.Bytes())
 		logger.Errorf(delStr)
-		res.Code = http.StatusBadRequest
-		res.Message = delStr
-		b.Data["json"] = res
-		b.ServeJSON()
+		b.InternalServerErrorResponse(delStr)
 		return
-
 	}
-	logger.Infof("DelEdge success vip %s", vip)
-	res.Code = http.StatusOK
-	res.Message = "DelEdge success "
-	b.Data["json"] = res
-	b.ServeJSON()
 
+	logger.Infof("DelEdge success vip %s", vip)
+	b.NormalResponse("DelEdge success")
 }

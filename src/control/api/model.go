@@ -5,6 +5,7 @@ import (
 	"github.com/astaxie/beego"
 	"github.com/vipshop/tuplenet/control/logger"
 	"github.com/vipshop/tuplenet/control/controllers/etcd3"
+	"net/http"
 )
 
 var (
@@ -49,6 +50,30 @@ func EdgeEtcdPrefix(etcdPrefix string) string {
 		preFixArg = "--prefix=" + etcdPrefix
 	}
 	return preFixArg
+}
+
+func (b *TuplenetAPI) BadResponse(param string) {
+	var res Response
+	res.Code = http.StatusBadRequest
+	res.Message = param
+	b.Data["json"] = res
+	b.ServeJSON()
+}
+
+func (b *TuplenetAPI) InternalServerErrorResponse(param string) {
+	var res Response
+	res.Code = http.StatusInternalServerError
+	res.Message = param
+	b.Data["json"] = res
+	b.ServeJSON()
+}
+
+func (b *TuplenetAPI) NormalResponse(param interface{}) {
+	var res Response
+	res.Code = http.StatusOK
+	res.Message = param
+	b.Data["json"] = res
+	b.ServeJSON()
 }
 
 type TuplenetAPI struct {
