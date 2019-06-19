@@ -17,8 +17,12 @@ type Edge interface {
 }
 
 /*
-   the api must run in a tuplenet edge node ; default edge add shell is /apps/svr/vip-tuplenet/src/tuplenet/tools/edge-operate.py use env EDGE_SHELL_PATH to change
+   the edge api must run in a tuplenet edge node ; default edge add shell is /apps/svr/vip-tuplenet/src/tuplenet/tools/edge-operate.py use env EDGE_SHELL_PATH to change
 */
+var (
+	preFixArg   = EdgeEtcdPrefix(etcdPrefix)
+	endPointArg = "--endpoint=" + etcdHost
+)
 
 func (b *TuplenetAPI) InitEdge() {
 	var (
@@ -41,14 +45,11 @@ func (b *TuplenetAPI) InitEdge() {
 		return
 	}
 
-	endPointArg := "--endpoint=" + etcdHost
-	preFixArg := EdgeEtcdPrefix(etcdPrefix)
 	vipArg := "--vip=" + vip
 	phyBrArg := "--phy_br=" + phyBr
 	virtArg := "--virt=" + virt
 	innerArg := "--inner=" + inner
 	extGwArg := "--ext_gw=" + extGw
-
 	cmd := exec.Command(edgeShellPath, endPointArg, preFixArg, "--op=init", vipArg, phyBrArg, virtArg, innerArg, extGwArg)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -94,8 +95,6 @@ func (b *TuplenetAPI) AddEdge() {
 		return
 	}
 
-	endPointArg := "--endpoint=" + etcdHost
-	preFixArg := EdgeEtcdPrefix(etcdPrefix)
 	phyBrArg := "--phy_br=" + phyBr
 	vipArg := "--vip=" + vip
 	cmd := exec.Command(edgeShellPath, endPointArg, preFixArg, "--op=add", vipArg, phyBrArg)
@@ -140,8 +139,6 @@ func (b *TuplenetAPI) DelEdge() {
 		return
 	}
 
-	endPointArg := "--endpoint=" + etcdHost
-	preFixArg := EdgeEtcdPrefix(etcdPrefix)
 	vipArg := "--vip=" + vip
 	cmd := exec.Command(edgeShellPath, endPointArg, preFixArg, "--op=remove", vipArg)
 	cmd.Stdout = &stdout
