@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/vipshop/tuplenet/control/logicaldev"
 	"gopkg.in/urfave/cli.v1"
+	"net"
 	"sort"
 )
 
@@ -35,10 +36,26 @@ func showChassis(ctx *cli.Context) error {
 	return nil
 }
 
-func delChassis(ctx *cli.Context) error {
-	checkArgsThenConnect(ctx, 1, 1, "require a name")
+func delChassisByIP(ip string) error {
+	chs, err := controller.GetChassises()
+	if err != nil {
+		failf("failed to get chassis by ip %s: %v", ip, err)
+	}
 
-	name := ctx.Args().Get(0)
+	cnt := 0
+	for _, ch := range chs {
+		if ch.IP == ip {
+			cnt++
+			delChassisByName(ch.Name)
+		}
+	}
+	if cnt == 0 {
+		failf("failed to get chassis by ip %s", ip)
+	}
+	return nil
+}
+
+func delChassisByName(name string) error {
 	chassis, err := controller.GetChassis(name)
 	if err != nil {
 		fail(err)
@@ -50,5 +67,16 @@ func delChassis(ctx *cli.Context) error {
 	}
 
 	fmt.Printf("%s deleted\n", name)
+	return nil
+}
+
+func delChassis(ctx *cli.Context) error {
+	checkArgsThenConnect(ctx, 1, 1, "require a name or ip")
+	name := ctx.Args().Get(0)
+	if net.ParseIP(name) != nil {
+		delChassisByIP(name)
+	} else {
+		delChassisByName(name)
+	}
 	return nil
 }
