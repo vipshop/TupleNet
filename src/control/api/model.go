@@ -9,16 +9,19 @@ import (
 )
 
 var (
-	controller    *etcd3.Controller
-	etcdHost      string
-	etcdPrefix    string
-	edgeShellPath string
+	controller                                             *etcd3.Controller
+	etcdHost                                               string
+	etcdPrefix                                             string
+	edgeShellPath                                          string
+	ovsTmpDir                                              string
+	edgePrefix, endPointArg                                string
+	ovsDir, ovsLog, ovsDbdir, ovsSysConfDir, ovsPkgDatadir string
 )
 
 // set auth string
 const (
 	defaultEtcdpoints    = "127.0.0.1:2379"
-	defaultEtcdPrefix    = "/tuplenet"
+	defaultEtcdPrefix    = "/tuplenet/"
 	defaultEdgeShellPath = "src/tuplenet/tools/edge-operate.py"
 )
 
@@ -40,16 +43,14 @@ func init() {
 	if edgeShellPath == "" {
 		edgeShellPath = defaultEdgeShellPath
 	}
-}
-
-func EdgeEtcdPrefix(etcdPrefix string) string {
-	var preFixArg string
-	if etcdPrefix == defaultEtcdPrefix {
-		preFixArg = "--prefix=" + etcdPrefix + "/"
-	} else {
-		preFixArg = "--prefix=" + etcdPrefix
-	}
-	return preFixArg
+	ovsTmpDir = os.Getenv("OVS_TMP_DIR")
+	edgePrefix = "--prefix=" + etcdPrefix
+	endPointArg = "--endpoint=" + etcdHost
+	ovsDir = "OVS_RUNDIR=" + ovsTmpDir
+	ovsLog = "OVS_LOGDIR=" + ovsTmpDir
+	ovsDbdir = "OVS_DBDIR=" + ovsTmpDir
+	ovsSysConfDir = "OVS_SYSCONFDIR=" + ovsTmpDir
+	ovsPkgDatadir = "OVS_PKGDATADIR=" + ovsTmpDir
 }
 
 func (b *TuplenetAPI) BadResponse(param string) {

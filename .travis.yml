@@ -22,7 +22,9 @@ install:
     - ./boot.sh && ./configure CPPFLAGS=-I/usr/include/openvswitch && make
     - cd -
     - cd src/control
-    - ./build.sh
+    - wget https://github.com/etcd-io/etcd/releases/download/v3.1.20/etcd-v3.1.20-linux-amd64.tar.gz
+    - tar -xf etcd-v3.1.20-linux-amd64.tar.gz
+    - export PATH=$PATH:`pwd`/etcd-v3.1.20-linux-amd64/ && ./build.sh
     - cd -
 
 script:

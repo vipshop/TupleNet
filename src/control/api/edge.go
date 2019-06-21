@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"bytes"
+	"os"
 )
 
 type Edge interface {
@@ -19,10 +20,6 @@ type Edge interface {
 /*
    the edge api must run in a tuplenet edge node ; default edge add shell is /apps/svr/vip-tuplenet/src/tuplenet/tools/edge-operate.py use env EDGE_SHELL_PATH to change
 */
-var (
-	preFixArg   = EdgeEtcdPrefix(etcdPrefix)
-	endPointArg = "--endpoint=" + etcdHost
-)
 
 func (b *TuplenetAPI) InitEdge() {
 	var (
@@ -50,7 +47,11 @@ func (b *TuplenetAPI) InitEdge() {
 	virtArg := "--virt=" + virt
 	innerArg := "--inner=" + inner
 	extGwArg := "--ext_gw=" + extGw
-	cmd := exec.Command(edgeShellPath, endPointArg, preFixArg, "--op=init", vipArg, phyBrArg, virtArg, innerArg, extGwArg)
+	cmd := exec.Command("python", edgeShellPath, endPointArg, edgePrefix, "--op=init", vipArg, phyBrArg, virtArg, innerArg, extGwArg)
+	// for test case use specific ovs dir, not use default ovs-vsctl get Open_Vswitch . external_ids:system-id
+	if ovsTmpDir != "" {
+		cmd.Env = append(os.Environ(), ovsDir, ovsLog, ovsDbdir, ovsSysConfDir, ovsPkgDatadir)
+	}
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
@@ -97,7 +98,10 @@ func (b *TuplenetAPI) AddEdge() {
 
 	phyBrArg := "--phy_br=" + phyBr
 	vipArg := "--vip=" + vip
-	cmd := exec.Command(edgeShellPath, endPointArg, preFixArg, "--op=add", vipArg, phyBrArg)
+	cmd := exec.Command("python", edgeShellPath, endPointArg, etcdPrefix, "--op=add", vipArg, phyBrArg)
+	if ovsTmpDir != "" {
+		cmd.Env = append(os.Environ(), ovsDir, ovsLog, ovsDbdir, ovsSysConfDir, ovsPkgDatadir)
+	}
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
@@ -131,6 +135,7 @@ func (b *TuplenetAPI) DelEdge() {
 	body, _ := ioutil.ReadAll(b.Ctx.Request.Body)
 	json.Unmarshal(body, &m)
 	vip := m.Vip //  the virtual ip(like:2.2.2.2/24) of edge node
+
 	logger.Debugf("DelEdge get param vip %s", vip)
 
 	if vip == "" {
@@ -140,7 +145,10 @@ func (b *TuplenetAPI) DelEdge() {
 	}
 
 	vipArg := "--vip=" + vip
-	cmd := exec.Command(edgeShellPath, endPointArg, preFixArg, "--op=remove", vipArg)
+	cmd := exec.Command("python", edgeShellPath, endPointArg, edgePrefix, "--op=remove", vipArg)
+	if ovsTmpDir != "" {
+		cmd.Env = append(os.Environ(), ovsDir, ovsLog, ovsDbdir, ovsSysConfDir, ovsPkgDatadir)
+	}
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	stdin, _ := cmd.StdinPipe()

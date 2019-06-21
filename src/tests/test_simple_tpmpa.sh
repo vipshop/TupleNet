@@ -6,23 +6,33 @@ env_init ${0##*/} # 0##*/ is the filename
 
 # setup and run tpmpa
 pmsg "building tpmpa and run it"
-export tuplenet_prefix=/test_simple_tpmpa.sh/
-export ETCD_PREFIX=/test_simple_tpmpa.sh/
+tuplenet_init  test_simple_tpmpa.sh
+export ETCD_PREFIX=${tuplenet_prefix}
 export ETCD_HOSTS=${etcd_client_specs}
-export EDGE_SHELL_PATH=../tuplenet/tools/edge-operate.py
-chmod 755 ../tuplenet/tools/edge-operate.py
-export AUTH_STRING=YWZhc2Zhc2Zhc2Z3cXJ0cTUxMjVmZ2Znbm82NzgwZmFm
+export AUTH_STRING="YWZhc2Zhc2Zhc2Z3cXJ0cTUxMjVmZ2Znbm82NzgwZmFm"
+export EDGE_SHELL_PATH="../tuplenet/tools/edge-operate.py"
+export PATH=../control/bin/:$PATH
+
+on_tpmpa_exit()
+{
+    (echo "$1"; cat $test_path/cleanup) > $test_path/cleanup.tmp
+    mv $test_path/cleanup.tmp $test_path/cleanup
+}
 
 sim_create hv1 || exit_test
 net_create phy || exit_test
 net_join phy hv1 || exit_test
-
 GATEWAY=1 ONDEMAND=0 start_tuplenet_daemon hv1 192.168.100.3
-
 sleep 5
 ovs_setenv hv1
-bash ./run_tpmpa.sh  -use-vendor
-sleep 10
+export OVS_TMP_DIR=$ovs_dir
+
+
+echo "run tpmpa process"
+../control/bin/tpmpa &
+pid=`ps axu|grep tpmpa|awk '/control\/bin\/tpmpa/{print $2}'`
+on_tpmpa_exit  "kill ${pid} 2>/dev/null; sleep 2; kill -9 ${pid} 2>/dev/null"
+sleep 5
 
 jsonHead="Content-Type:application/json"
 authHead="X-TUPLENET-AUTH:YWZhc2Zhc2Zhc2Z3cXJ0cTUxMjVmZ2Znbm82NzgwZmFm"
@@ -184,6 +194,5 @@ echo -e "\033[34m #del edge node# \033[0m"
 curl -s -H  ${jsonHead} -X POST ${address}/api/v1/edge_del | grep 'Code":401' || exit_test
 curl -s -H  ${jsonHead} -H  ${authHead} -X POST ${address}/api/v1/edge_del | grep 'Code":400' || exit_test
 curl -s -H  ${jsonHead} -H  ${authHead} -X POST ${address}/api/v1/edge_del -d '{"vip":"10.189.114.206/22"}'| grep 'Code":200' || exit_test
-
 
 pass_test
