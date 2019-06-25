@@ -319,6 +319,27 @@ CH-A:
 equal_str "$result" "$expected" || exit_test
 (tpctl ch del CH-A | grep 'CH-A deleted') || exit_test
 
+etcdctl --endpoints ${etcd_client_specs} put ${DATA_STORE_PREFIX}/entity_view/chassis/CH-B 'ip=10.199.211.132,tick=1524118021' || exit_test
+(tpctl ch del "10.199.211.132" | grep 'CH-B deleted') || exit_test
+
+etcdctl --endpoints ${etcd_client_specs} put ${DATA_STORE_PREFIX}/entity_view/chassis/CH-A 'ip=10.199.211.133,tick=1524118021' || exit_test
+etcdctl --endpoints ${etcd_client_specs} put ${DATA_STORE_PREFIX}/entity_view/chassis/CH-B 'ip=10.199.211.133,tick=1524118021' || exit_test
+etcdctl --endpoints ${etcd_client_specs} put ${DATA_STORE_PREFIX}/entity_view/chassis/CH-C 'ip=10.199.211.134,tick=1524118021' || exit_test
+etcdctl --endpoints ${etcd_client_specs} put ${DATA_STORE_PREFIX}/entity_view/chassis/CH-D 'ip=10.199.211.134,tick=1524118021' || exit_test
+result="`tpctl ch del "10.199.211.133"`"
+(echo "$result" | grep 'CH-A deleted') || exit_test
+(echo "$result" | grep 'CH-B deleted') || exit_test
+! (echo "$result" | grep 'CH-C deleted') || exit_test
+! (echo "$result" | grep 'CH-D deleted') || exit_test
+
+result="`tpctl ch del "10.199.211.134"`"
+(echo "$result" | grep 'CH-C deleted') || exit_test
+(echo "$result" | grep 'CH-D deleted') || exit_test
+
+(tpctl ch del "12.12.11.12" | grep 'failed to get chassis by ip') || exit_test
+(tpctl ch del "CH-K" | grep 'unable to get chassis') || exit_test
+
+
 # inject conflicted data and test
 tpctl ls add LS-A || exit_test
 tpctl lsp add LS-A LSP-A-1 192.168.0.1 || exit_test
