@@ -21,6 +21,7 @@ type Switch interface {
 	AddSwitchPort()
 	ShowSwitchPort()
 	DelSwitchPort()
+	AddPatchPort()
 }
 
 func (b *TuplenetAPI) AddSwitch() {
@@ -317,4 +318,65 @@ func (b *TuplenetAPI) DelSwitchPort() {
 
 	logger.Debugf("DelSwitchPort switch %s port %s deleted", switchName, portName)
 	b.NormalResponse("DelSwitchPort  success")
+}
+
+func (b *TuplenetAPI) AddPatchPort()  {
+	var (
+		m SwitchPatchPortRequest
+	)
+
+	body, _ := ioutil.ReadAll(b.Ctx.Request.Body)
+	json.Unmarshal(body, &m)
+	switchName := m.Switch
+	portName := m.PortName
+	chassis := m.Chassis
+	peer := m.Peer
+	mac := "ff:ff:ff:ff:ff:ee"
+	ip := "255.255.255.255"
+
+	logger.Debugf("AddPatchPort get param switch %s portName %s chassis %s peer %s", switchName, portName, chassis, peer)
+
+	if switchName == "" || portName == "" || chassis == "" || peer == "" {
+		logger.Errorf("AddPatchPort get param failed switch %s portName %s chassis %s peer %s", switchName, portName, chassis, peer)
+		b.BadResponse("request switch portName chassis and peer param")
+		return
+	}
+
+	swtch, err := controller.GetSwitch(switchName)
+	if err != nil {
+		patchStr := fmt.Sprintf("AddPatchPort get switch %s failed %s ", switchName, err)
+		logger.Errorf(patchStr)
+		b.InternalServerErrorResponse(patchStr)
+		return
+	}
+
+	_, err = controller.GetSwitchPort(swtch, portName)
+	if err != nil && errors.Cause(err) != etcd3.ErrKeyNotFound {
+		patchStr := fmt.Sprintf("AddPatchPort get switch %s port %s failed %s ", switchName, portName, err)
+		logger.Errorf(patchStr)
+		b.InternalServerErrorResponse(patchStr)
+		return
+	}
+
+	if err == nil {
+		patchStr := fmt.Sprintf("AddPatchPort switch %s port %s exists", switchName, portName)
+		logger.Warnf(patchStr)
+		b.NormalResponse(patchStr)
+		return
+	}
+
+	port := swtch.CreatePort(portName, ip, mac)
+	port.PeerRouterPortName = peer
+	port.Chassis = chassis
+	err = controller.Save(port)
+	if err != nil {
+		patchStr := fmt.Sprintf("AddPatchPort switch %s port %s chassis %s peer %s failed %s ", switchName, portName, chassis, peer, err)
+		logger.Errorf(patchStr)
+		b.InternalServerErrorResponse(patchStr)
+		return
+	}
+
+	patchStr := fmt.Sprintf("AddPatchPort switch %s port %s chassis %s peer %s success", switchName, portName, chassis, peer)
+	logger.Infof(patchStr)
+	b.NormalResponse(patchStr)
 }

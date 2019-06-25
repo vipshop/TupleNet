@@ -177,6 +177,20 @@ post_400_request /api/v1/link_switch  '{"route":"LR-edge6","cidr":"192.168.41.0/
 post_400_request /api/v1/link_switch  '{"route":"LR-edge6","switch":"outside6"}'
 post_200_request /api/v1/link_switch  '{"route":"LR-edge6","switch":"outside6","cidr":"192.168.41.0/24"}'
 
+echo -e "\033[34m #test add switch patch port# \033[0m"
+post_401_request /api/v1/patch_port_add
+post_400_request /api/v1/patch_port_add
+post_400_request /api/v1/patch_port_add  '{"portName":"patchport-outside6","chassis":"hv1","peer":"LR-edge6_to_outside7"}'
+post_400_request /api/v1/patch_port_add  '{"switch":"outside6","chassis":"hv1","peer":"LR-edge6_to_outside7"}'
+post_400_request /api/v1/patch_port_add  '{"switch":"outside6","portName":"patchport-outside6","peer":"LR-edge6_to_outside7"}'
+post_400_request /api/v1/patch_port_add  '{"switch":"outside6","portName":"patchport-outside6","chassis":"hv1"}'
+post_200_request /api/v1/patch_port_add  '{"switch":"outside6","portName":"patchport-outside6","chassis":"hv1","peer":"LR-edge6_to_outside7"}'
+
+echo -e "\033[34m #test chassis show # \033[0m"
+post_401_request /api/v1/chassis_show
+post_200_request /api/v1/chassis_show
+post_200_request /api/v1/chassis_show '{"chassis":"hv1"}'
+
 echo -e "\033[34m #test del switch port# \033[0m"
 post_401_request /api/v1/switch_port_del
 post_400_request /api/v1/switch_port_del
@@ -240,5 +254,11 @@ echo -e "\033[34m #del edge node# \033[0m"
 post_401_request /api/v1/edge_del
 post_400_request /api/v1/edge_del
 post_200_request /api/v1/edge_del  '{"vip":"10.189.114.206/22"}'
+
+echo -e "\033[34m #test chassis del # \033[0m"
+post_401_request /api/v1/chassis_del
+post_400_request /api/v1/chassis_del
+post_200_request /api/v1/chassis_del '{"chassis":"hv1"}'
+post_500_request /api/v1/chassis_del '{"chassis":"127.0.0.1"}'
 
 pass_test

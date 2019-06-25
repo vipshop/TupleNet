@@ -63,5 +63,8 @@ func initRouters() {
 	beego.Router("/api/v1/edge_add", &api.TuplenetAPI{}, "post:AddEdge")
 	beego.Router("/api/v1/edge_del", &api.TuplenetAPI{}, "post:DelEdge")
 	beego.Router("/api/v1/version", &api.TuplenetAPI{}, "get:Version")
+	beego.Router("/api/v1/patch_port_add", &api.TuplenetAPI{}, "post:AddPatchPort")
+	beego.Router("/api/v1/chassis_show", &api.TuplenetAPI{}, "post:ShowChassis")
+	beego.Router("/api/v1/chassis_del", &api.TuplenetAPI{}, "post:DelChassis")
 	logger.Infof("init routers finish")
 }

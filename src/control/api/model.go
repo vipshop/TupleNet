@@ -122,6 +122,17 @@ type SwitchRequest struct {
 	Recursive bool   `json:"recursive,omitempty"` // force delete all ports and switch
 }
 
+type SwitchPatchPortRequest struct {
+	Switch   string `json:switch`
+	PortName string `json:"portName,omitempty"`
+	Chassis  string `json:"chassis,omitempty"`
+	Peer     string `json:"peer,omitempty"`
+}
+
+type ChassisRequest struct {
+	Name string `json:name`
+}
+
 type SwitchPortRequest struct {
 	Switch   string `json:switch`
 	PortName string `json:"portName,omitempty"`
