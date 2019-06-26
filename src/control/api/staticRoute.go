@@ -4,7 +4,6 @@ import (
 	"net"
 	"fmt"
 	"sort"
-	"io/ioutil"
 	"encoding/json"
 	"github.com/pkg/errors"
 	"github.com/vipshop/tuplenet/control/comm"
@@ -19,17 +18,21 @@ func (b *TuplenetAPI) AddStaticRoute() {
 		m RouteStaticRequest
 	)
 
-	body, _ := ioutil.ReadAll(b.Ctx.Request.Body)
-	json.Unmarshal(body, &m)
+	err := json.NewDecoder(b.Ctx.Request.Body).Decode(&m)
+	if err != nil {
+		logger.Infof("AddStaticRoute decode body failed %s", err)
+		b.BadResponse("AddStaticRoute decode body failed please check param")
+		return
+	}
 	routerName := m.Route
 	rName := m.RName
 	cidrString := m.Cidr
 	nextHop := m.NextHop
 	outPort := m.OutPort
-	logger.Debugf("AddStaticRoute get param route %s rName %s cider %s nexthop %s outport %s", routerName, rName, cidrString, nextHop, outPort)
+	logger.Infof("AddStaticRoute get param route %s rName %s cider %s nexthop %s outport %s", routerName, rName, cidrString, nextHop, outPort)
 
 	if routerName == "" || rName == "" || cidrString == "" || nextHop == "" || outPort == "" {
-		logger.Errorf("AddStaticRoute get param failed route %s rName %s cider %s nexthop %s outport %s", routerName, rName, cidrString, nextHop, outPort)
+		logger.Infof("AddStaticRoute get param failed route %s rName %s cider %s nexthop %s outport %s", routerName, rName, cidrString, nextHop, outPort)
 		b.BadResponse("request route rName cidr nextHop and outPort param")
 		return
 	}
@@ -75,18 +78,14 @@ func (b *TuplenetAPI) AddStaticRoute() {
 
 func (b *TuplenetAPI) ShowStaticRoute() {
 	var (
-		m   RouteStaticRequest
 		srs []*logicaldev.StaticRoute
 	)
-
-	body, _ := ioutil.ReadAll(b.Ctx.Request.Body)
-	json.Unmarshal(body, &m)
-	name := m.Route
-	rName := m.RName
-	logger.Debugf("ShowStaticRoute get param route name %s rName %s", name, rName)
+	name := b.GetString("route")
+	rName := b.GetString("rName")
+	logger.Infof("ShowStaticRoute get param route name %s rName %s", name, rName)
 
 	if name == "" {
-		logger.Errorf("ShowStaticRoute get param failed route name %s rName %s", name, rName)
+		logger.Infof("ShowStaticRoute get param failed route name %s rName %s", name, rName)
 		b.BadResponse("request route param")
 		return
 	}
@@ -121,7 +120,7 @@ func (b *TuplenetAPI) ShowStaticRoute() {
 	}
 
 	sort.Slice(srs, func(i, j int) bool { return srs[i].Name < srs[j].Name })
-	logger.Debugf("ShowStaticRoute success route %s rName %s ", name, rName)
+	logger.Infof("ShowStaticRoute success route %s rName %s ", name, rName)
 	b.NormalResponse(srs)
 }
 
@@ -130,14 +129,18 @@ func (b *TuplenetAPI) DelStaticRoute() {
 		m RouteStaticRequest
 	)
 
-	body, _ := ioutil.ReadAll(b.Ctx.Request.Body)
-	json.Unmarshal(body, &m)
+	err := json.NewDecoder(b.Ctx.Request.Body).Decode(&m)
+	if err != nil {
+		logger.Infof("DelStaticRoute decode body failed %s", err)
+		b.BadResponse("DelStaticRoute decode body failed please check param")
+		return
+	}
 	name := m.Route
 	rName := m.RName
-	logger.Debugf("DelStaticRoute get param route %s rName %s", name, rName)
+	logger.Infof("DelStaticRoute get param route %s rName %s", name, rName)
 
 	if name == "" || rName == "" {
-		logger.Errorf("DelStaticRoute get param failed route %s rName %s", name, rName)
+		logger.Infof("DelStaticRoute get param failed route %s rName %s", name, rName)
 		b.BadResponse("request route and rName param")
 		return
 	}

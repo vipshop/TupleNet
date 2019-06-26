@@ -102,7 +102,6 @@ type RouteRequest struct {
 	Chassis   string `json:"chassis,omitempty"`
 	Switch    string `json:"switch,omitempty"`    // switch name
 	Cidr      string `json:"cidr,omitempty"`      // CIDR 0.0.0.0/24
-	All       bool   `josn:"all,omitempty"`       // get all route port message
 	Recursive bool   `json:"recursive,omitempty"` // force delete all ports and route
 	PortName  string `json:"portName,omitempty"`
 	Mac       string `json:"mac,omitempty"`
@@ -130,7 +129,7 @@ type SwitchPatchPortRequest struct {
 }
 
 type ChassisRequest struct {
-	Name string `json:name`
+	NameOrIP string `json:nameOrIP`
 }
 
 type SwitchPortRequest struct {

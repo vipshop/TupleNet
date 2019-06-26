@@ -3,7 +3,6 @@ package api
 import (
 	"net"
 	"fmt"
-	"io/ioutil"
 	"encoding/json"
 	"github.com/pkg/errors"
 	"github.com/vipshop/tuplenet/control/comm"
@@ -28,12 +27,17 @@ func (b *TuplenetAPI) AddSwitch() {
 	var (
 		m SwitchRequest
 	)
-	body, _ := ioutil.ReadAll(b.Ctx.Request.Body)
-	json.Unmarshal(body, &m)
+	err := json.NewDecoder(b.Ctx.Request.Body).Decode(&m)
+	if err != nil {
+		logger.Infof("AddSwitch decode body failed %s", err)
+		b.BadResponse("AddSwitch decode body failed please check param")
+		return
+	}
 	name := m.Switch
+	logger.Infof("AddSwitch get param switch %s", name)
 
 	if name == "" {
-		logger.Errorf("AddSwitch request switch param  %s", name)
+		logger.Infof("AddSwitch request switch param %s", name)
 		b.BadResponse("AddSwitch request switch param")
 		return
 	}
@@ -44,23 +48,18 @@ func (b *TuplenetAPI) AddSwitch() {
 		return
 	}
 
-	logger.Debugf("AddSwitch success switch %s", name)
+	logger.Infof("AddSwitch success switch %s", name)
 	b.NormalResponse("AddSwitch success")
 }
 
 func (b *TuplenetAPI) ShowSwitch() {
 	var (
-		m   SwitchRequest
-		err error
-	)
-
-	body, _ := ioutil.ReadAll(b.Ctx.Request.Body)
-	json.Unmarshal(body, &m)
-	name := m.Switch
-
-	var (
+		err      error
 		switches []*logicaldev.Switch
 	)
+	name := b.GetString("switch")
+	logger.Infof("ShowSwitch get param switch %s ", name)
+
 	if name == "" {
 		switches, err = controller.GetSwitches()
 		if err != nil {
@@ -82,7 +81,7 @@ func (b *TuplenetAPI) ShowSwitch() {
 	}
 
 	sort.Slice(switches, func(i, j int) bool { return switches[i].Name < switches[j].Name })
-	logger.Debugf("ShowSwitch success swtich %s", name)
+	logger.Infof("ShowSwitch success swtich %s", name)
 	b.NormalResponse(switches)
 }
 
@@ -91,14 +90,18 @@ func (b *TuplenetAPI) DelSwitch() {
 		m SwitchRequest
 	)
 
-	body, _ := ioutil.ReadAll(b.Ctx.Request.Body)
-	json.Unmarshal(body, &m)
+	err := json.NewDecoder(b.Ctx.Request.Body).Decode(&m)
+	if err != nil {
+		logger.Infof("DelSwitch decode body failed %s", err)
+		b.BadResponse("DelSwitch decode body failed please check param")
+		return
+	}
 	name := m.Switch
 	recursive := m.Recursive
-	logger.Debugf("DelSwitch request param switch %s recursive %v ", name, recursive)
+	logger.Infof("DelSwitch get param switch %s recursive %v ", name, recursive)
 
 	if name == "" {
-		logger.Errorf("DelSwitch request param failed switch %s recursive %v ", name, recursive)
+		logger.Infof("DelSwitch request param failed switch %s recursive %v ", name, recursive)
 		b.BadResponse("request switch param")
 		return
 	}
@@ -146,7 +149,7 @@ func (b *TuplenetAPI) DelSwitch() {
 		}
 	}
 
-	logger.Debugf("DelSwitch success switch %s ", name)
+	logger.Infof("DelSwitch success switch %s ", name)
 	b.NormalResponse("DelSwitch success")
 }
 
@@ -156,23 +159,27 @@ func (b *TuplenetAPI) AddSwitchPort() {
 		m SwitchPortRequest
 	)
 
-	body, _ := ioutil.ReadAll(b.Ctx.Request.Body)
-	json.Unmarshal(body, &m)
+	err := json.NewDecoder(b.Ctx.Request.Body).Decode(&m)
+	if err != nil {
+		logger.Infof("AddSwitchPort decode body failed %s", err)
+		b.BadResponse("AddSwitchPort decode body failed please check param")
+		return
+	}
 	switchName := m.Switch
 	portName := m.PortName
 	ip := m.IP
 	peer := m.Peer
 	mac := m.Mac
-	logger.Debugf("AddSwitchPort get param switch %s portName %s ip %s mac %s peer %s", switchName, portName, ip, mac, peer)
+	logger.Infof("AddSwitchPort get param switch %s portName %s ip %s mac %s peer %s", switchName, portName, ip, mac, peer)
 
 	if switchName == "" || ip == "" || portName == "" {
-		logger.Errorf("AddSwitchPort get param failed switch %s portName %s ip %s mac %s peer %s", switchName, portName, ip, mac, peer)
+		logger.Infof("AddSwitchPort get param failed switch %s portName %s ip %s mac %s peer %s", switchName, portName, ip, mac, peer)
 		b.BadResponse("request switch, portName and ip (mac) (peer) param")
 		return
 	}
 
 	if net.ParseIP(ip) == nil {
-		logger.Errorf("AddSwitchPort parse ip failed switch %s ip %s", switchName, ip)
+		logger.Infof("AddSwitchPort parse ip failed switch %s ip %s", switchName, ip)
 		b.BadResponse("invalid ip")
 		return
 	}
@@ -182,7 +189,7 @@ func (b *TuplenetAPI) AddSwitchPort() {
 		mac = comm.MacFromIP(ip)
 	} else {
 		if _, err := net.ParseMAC(mac); err != nil {
-			logger.Errorf("AddSwitchPort parse mac failed switch %s mac %s err %s", switchName, mac, err)
+			logger.Infof("AddSwitchPort parse mac failed switch %s mac %s err %s", switchName, mac, err)
 			b.BadResponse("invalid mac")
 			return
 		}
@@ -220,25 +227,21 @@ func (b *TuplenetAPI) AddSwitchPort() {
 		return
 	}
 
-	logger.Debugf("AddSwitchPort success switch %s portName %s ip %s mac %s peer %s", switchName, portName, ip, mac, peer)
+	logger.Infof("AddSwitchPort success switch %s portName %s ip %s mac %s peer %s", switchName, portName, ip, mac, peer)
 	b.NormalResponse("AddSwitchPort success")
 
 }
 
 func (b *TuplenetAPI) ShowSwitchPort() {
 	var (
-		m     SwitchPortRequest
 		ports []*logicaldev.SwitchPort
 	)
-
-	body, _ := ioutil.ReadAll(b.Ctx.Request.Body)
-	json.Unmarshal(body, &m)
-	switchName := m.Switch
-	portName := m.PortName
-	logger.Debugf("ShowSwitchPort get param switch %s portName %s ", switchName, portName)
+	switchName := b.GetString("switch")
+	portName := b.GetString("portName")
+	logger.Infof("ShowSwitchPort get param switch %s portName %s ", switchName, portName)
 
 	if switchName == "" {
-		logger.Errorf("ShowSwitchPort get param failed switch %s ", switchName)
+		logger.Infof("ShowSwitchPort get param failed switch %s ", switchName)
 		b.BadResponse("request switch param")
 		return
 	}
@@ -272,7 +275,7 @@ func (b *TuplenetAPI) ShowSwitchPort() {
 	}
 
 	sort.Slice(ports, func(i, j int) bool { return ports[i].Name < ports[j].Name })
-	logger.Debugf("ShowSwitchPort success switch %s get switch port %s ", switchName, portName)
+	logger.Infof("ShowSwitchPort success switch %s get switch port %s ", switchName, portName)
 	b.NormalResponse(ports)
 }
 
@@ -281,14 +284,18 @@ func (b *TuplenetAPI) DelSwitchPort() {
 		m SwitchPortRequest
 	)
 
-	body, _ := ioutil.ReadAll(b.Ctx.Request.Body)
-	json.Unmarshal(body, &m)
+	err := json.NewDecoder(b.Ctx.Request.Body).Decode(&m)
+	if err != nil {
+		logger.Infof("DelSwitchPort decode body failed %s", err)
+		b.BadResponse("DelSwitchPort decode body failed please check param")
+		return
+	}
 	switchName := m.Switch
 	portName := m.PortName
-	logger.Debugf("ShowSwitchPort get param switch %s portName %s", switchName, portName)
+	logger.Infof("ShowSwitchPort get param switch %s portName %s", switchName, portName)
 
 	if switchName == "" || portName == "" {
-		logger.Errorf("ShowSwitchPort get param failed switch %s portName %s", switchName, portName)
+		logger.Infof("ShowSwitchPort get param failed switch %s portName %s", switchName, portName)
 		b.BadResponse("request switch and portName param")
 		return
 	}
@@ -316,28 +323,31 @@ func (b *TuplenetAPI) DelSwitchPort() {
 		return
 	}
 
-	logger.Debugf("DelSwitchPort switch %s port %s deleted", switchName, portName)
+	logger.Infof("DelSwitchPort switch %s port %s deleted", switchName, portName)
 	b.NormalResponse("DelSwitchPort  success")
 }
 
-func (b *TuplenetAPI) AddPatchPort()  {
+func (b *TuplenetAPI) AddPatchPort() {
 	var (
 		m SwitchPatchPortRequest
 	)
 
-	body, _ := ioutil.ReadAll(b.Ctx.Request.Body)
-	json.Unmarshal(body, &m)
+	err := json.NewDecoder(b.Ctx.Request.Body).Decode(&m)
+	if err != nil {
+		logger.Infof("AddPatchPort decode body failed %s", err)
+		b.BadResponse("AddPatchPort decode body failed please check param")
+		return
+	}
 	switchName := m.Switch
 	portName := m.PortName
 	chassis := m.Chassis
 	peer := m.Peer
 	mac := "ff:ff:ff:ff:ff:ee"
 	ip := "255.255.255.255"
-
-	logger.Debugf("AddPatchPort get param switch %s portName %s chassis %s peer %s", switchName, portName, chassis, peer)
+	logger.Infof("AddPatchPort get param switch %s portName %s chassis %s peer %s", switchName, portName, chassis, peer)
 
 	if switchName == "" || portName == "" || chassis == "" || peer == "" {
-		logger.Errorf("AddPatchPort get param failed switch %s portName %s chassis %s peer %s", switchName, portName, chassis, peer)
+		logger.Infof("AddPatchPort get param failed switch %s portName %s chassis %s peer %s", switchName, portName, chassis, peer)
 		b.BadResponse("request switch portName chassis and peer param")
 		return
 	}

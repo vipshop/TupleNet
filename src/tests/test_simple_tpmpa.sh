@@ -27,16 +27,33 @@ echo "run tpmpa process"
 ../control/bin/tpmpa &
 pid=`ps axu|grep tpmpa|awk '/control\/bin\/tpmpa/{print $2}'`
 on_tpmpa_exit  "kill ${pid} 2>/dev/null; sleep 2; kill -9 ${pid} 2>/dev/null"
-sleep 5
 jsonHead="Content-Type:application/json"
 authHead="X-TUPLENET-AUTH:YWZhc2Zhc2Zhc2Z3cXJ0cTUxMjVmZ2Znbm82NzgwZmFm"
 address="http://127.0.0.1"
+
+get_200_request()
+{
+    local url=${address}$1
+    curl -s -X GET ${url} | grep "Code\":200" || exit_test
+}
+
+get_400_request()
+{
+ local url=${address}$1
+ curl -s -X GET ${url} | grep "Code\":400" || exit_test
+}
+
+get_500_request()
+{
+ local url=${address}$1
+ curl -s -X GET ${url} | grep "Code\":500" || exit_test
+}
 
 post_no_param_request()
 {
     local url=$1
     local grepStr=$2
-    curl -s -H ${jsonHead} -H ${authHead} -X POST ${url} | grep ${grepStr} || exit_test
+    curl -s -H ${jsonHead} -H ${authHead} -X POST ${url} | grep "${grepStr}" || exit_test
 }
 
 post_param_request()
@@ -44,7 +61,7 @@ post_param_request()
     local url=$1
     local param=$2
     local grepStr=$3
-    curl -s -H  ${jsonHead} -H ${authHead} -X POST ${url} -d "${param}" >> /tmp/a.txt #| grep ${grepStr} || exit_test
+    curl -s -H  ${jsonHead} -H ${authHead} -X POST ${url} -d "${param}" | grep "${grepStr}" || exit_test
 }
 
 post_401_request()
@@ -59,9 +76,9 @@ post_400_request()
     local param=$2
     if [ "${param}" == "" ]
     then
-        post_no_param_request ${url}  'Code":400'
+        post_no_param_request ${url}  "Code\":400"
      else
-        post_param_request ${url} "${param}" 'Code":400'
+        post_param_request ${url} "${param}" "Code\":400"
     fi
 }
 
@@ -71,9 +88,9 @@ post_200_request()
     local param=$2
     if [ "${param}" == "" ]
     then
-        post_no_param_request ${url} 'Code":200'
+        post_no_param_request ${url} "Code\":200"
      else
-        post_param_request ${url} "${param}" 'Code":200'
+        post_param_request ${url} "${param}" "Code\":200"
     fi
 }
 
@@ -95,10 +112,8 @@ post_400_request /api/v1/route_add
 post_200_request /api/v1/route_add  '{"route":"LR-edge6"}'
 
 echo -e "\033[34m #test route show# \033[0m"
-post_401_request /api/v1/route_show
-post_400_request /api/v1/route_show
-post_200_request /api/v1/route_show   '{"all":true}'
-post_200_request /api/v1/route_show  '{"route":"LR-edge6"}'
+get_200_request /api/v1/route_show
+get_200_request /api/v1/route_show?route=LR-edge6
 
 echo -e "\033[34m #test route port add# \033[0m"
 post_401_request /api/v1/route_port_add
@@ -109,10 +124,9 @@ post_400_request /api/v1/route_port_add  '{"route":"LR-edge6","cidr":"10.189.114
 post_200_request /api/v1/route_port_add  '{"route":"LR-edge6","cidr":"10.189.114.206/22","portName":"LR-edge6_to_outside7","peer":"outside7_to_LR-edge6"}'
 
 echo -e "\033[34m #test route port show# \033[0m"
-post_401_request /api/v1/route_port_show
-post_400_request /api/v1/route_port_show
-post_200_request /api/v1/route_port_show '{"route":"LR-edge6"}'
-post_200_request /api/v1/route_port_show '{"route":"LR-edge6","portName":"LR-edge6_to_outside7"}'
+get_400_request /api/v1/route_port_show
+get_200_request /api/v1/route_port_show?route=LR-edge6
+get_200_request /api/v1/route_port_show?route=LR-edge6&portName=LR-edge6_to_outside7
 
 echo -e "\033[34m #test route static add# \033[0m"
 post_401_request /api/v1/route_static_add
@@ -125,10 +139,9 @@ post_400_request /api/v1/route_static_add  '{"route":"LR-edge6","rName":"to_virt
 post_200_request /api/v1/route_static_add  '{"route":"LR-edge6","rName":"to_virt6","cidr":"192.168.40.0/24","nextHop":"100.80.10.206","outPort":"LR-edge6_to_m6"}'
 
 echo -e "\033[34m #test route static show# \033[0m"
-post_401_request /api/v1/route_static_show
-post_400_request /api/v1/route_static_show
-post_200_request /api/v1/route_static_show  '{"route":"LR-edge6"}'
-post_200_request /api/v1/route_static_show  '{"route":"LR-edge6","rName":"to_virt6"}'
+get_400_request /api/v1/route_static_show
+get_200_request /api/v1/route_static_show?route=LR-edge6
+get_200_request /api/v1/route_static_show?route=LR-edge6&rName=to_virt6
 
 echo -e "\033[34m #test route nat add# \033[0m"
 post_401_request /api/v1/route_nat_add
@@ -141,10 +154,9 @@ post_400_request /api/v1/route_nat_add  '{"route":"LR-edge6","natName":"snat_rul
 post_200_request /api/v1/route_nat_add  '{"route":"LR-edge6","natName":"snat_rule1","cidr":"192.168.40.0/24","xlateType":"snat","xlateIP":"10.189.114.206"}'
 
 echo -e "\033[34m #test route nat show# \033[0m"
-post_401_request  /api/v1/route_nat_show
-post_400_request  /api/v1/route_nat_show
-post_200_request  /api/v1/route_nat_show  '{"route":"LR-edge6"}'
-post_200_request  /api/v1/route_nat_show  '{"route":"LR-edge6","natName":"snat_rule1"}'
+get_400_request  /api/v1/route_nat_show
+get_200_request  /api/v1/route_nat_show?route=LR-edge6
+get_200_request  /api/v1/route_nat_show?route=LR-edge6&natName=snat_rule1
 
 echo -e "\033[34m #test switch add# \033[0m"
 post_401_request /api/v1/switch_add
@@ -152,9 +164,8 @@ post_400_request /api/v1/switch_add
 post_200_request /api/v1/switch_add  '{"switch":"outside6"}'
 
 echo -e "\033[34m #test switch show# \033[0m"
-post_401_request /api/v1/switch_show
-post_200_request /api/v1/switch_show
-post_200_request /api/v1/switch_show  '{"switch":"outside6"}'
+get_200_request /api/v1/switch_show
+get_200_request /api/v1/switch_show?switch=outside6
 
 echo -e "\033[34m #test switch port add# \033[0m"
 post_401_request /api/v1/switch_port_add
@@ -165,9 +176,9 @@ post_400_request /api/v1/switch_port_add   '{"switch":"outside6","portName":"pat
 post_200_request /api/v1/switch_port_add   '{"switch":"outside6","portName":"patchport-outside6","ip":"255.255.255.255"}'
 
 echo -e "\033[34m #test switch port show# \033[0m"
-post_401_request /api/v1/switch_port_show
-post_400_request /api/v1/switch_port_show
-post_200_request /api/v1/switch_port_show  '{"switch":"outside6"}'
+get_400_request /api/v1/switch_port_show
+get_200_request /api/v1/switch_port_show?switch=outside6
+get_200_request /api/v1/switch_port_show?switch=outside6&portName=patchport-outside6
 
 echo -e "\033[34m #test link-switch# \033[0m"
 post_401_request /api/v1/link_switch
@@ -187,9 +198,26 @@ post_400_request /api/v1/patch_port_add  '{"switch":"outside6","portName":"patch
 post_200_request /api/v1/patch_port_add  '{"switch":"outside6","portName":"patchport-outside6","chassis":"hv1","peer":"LR-edge6_to_outside7"}'
 
 echo -e "\033[34m #test chassis show # \033[0m"
-post_401_request /api/v1/chassis_show
-post_200_request /api/v1/chassis_show
-post_200_request /api/v1/chassis_show '{"chassis":"hv1"}'
+get_200_request /api/v1/chassis_show
+get_200_request /api/v1/chassis_show?name=hv1
+get_500_request /api/v1/chassis_show?name=hv2
+
+echo -e "\033[34m #first add edge node# \033[0m"
+post_401_request /api/v1/edge_add
+post_400_request /api/v1/edge_add
+post_400_request /api/v1/edge_add   '{"phyBr":"br0"}'
+post_400_request /api/v1/edge_add   '{"vip":"10.189.114.206/22"}'
+post_500_request /api/v1/edge_add   '{"vip":"10.189.114.206/22","phyBr":"br0"}'
+
+echo -e "\033[34m #init edge node# \033[0m"
+post_401_request /api/v1/edge_init
+post_400_request /api/v1/edge_init
+post_400_request /api/v1/edge_init  '{"inner":"100.80.10.206/24","virt":"100.80.10.202/24","vip":"10.189.114.207/22","extGw":"10.189.112.1"}'
+post_400_request /api/v1/edge_init  '{"phyBr":"br0","virt":"100.80.10.202/24","vip":"10.189.114.207/22","extGw":"10.189.112.1"}'
+post_400_request /api/v1/edge_init  '{"phyBr":"br0","inner":"100.80.10.206/24","vip":"10.189.114.207/22","extGw":"10.189.112.1"}'
+post_400_request /api/v1/edge_init  '{"phyBr":"br0","inner":"100.80.10.206/24","virt":"100.80.10.202/24","extGw":"10.189.112.1"}'
+post_400_request /api/v1/edge_init  '{"phyBr":"br0","inner":"100.80.10.206/24","virt":"100.80.10.202/24","vip":"10.189.114.207/22"}'
+post_200_request /api/v1/edge_init  '{"phyBr":"br0","inner":"100.80.10.206/24","virt":"100.80.10.202/24","vip":"10.189.114.207/22","extGw":"10.189.112.1"}'
 
 echo -e "\033[34m #test del switch port# \033[0m"
 post_401_request /api/v1/switch_port_del
@@ -228,37 +256,21 @@ post_400_request /api/v1/route_static_del  '{"rName":"to_virt6"}'
 post_400_request /api/v1/route_static_del  '{"route":"LR-edge6"}'
 post_200_request /api/v1/route_static_del  '{"route":"LR-edge6","rName":"to_virt6"}'
 
+echo -e "\033[34m #del edge node# \033[0m"
+post_401_request /api/v1/edge_del
+post_400_request /api/v1/edge_del
+post_200_request /api/v1/edge_del  '{"vip":"10.189.114.207/22"}'
+
 echo -e "\033[34m #test del route# \033[0m"
 post_401_request /api/v1/route_del
 post_400_request /api/v1/route_del
 post_200_request /api/v1/route_del  '{"route":"LR-edge6"}'
-
-echo -e "\033[34m #first add edge node# \033[0m"
-post_401_request /api/v1/edge_add
-post_400_request /api/v1/edge_add
-post_400_request /api/v1/edge_add   '{"phyBr":"br0"}'
-post_400_request /api/v1/edge_add   '{"vip":"10.189.114.206/22"}'
-post_500_request /api/v1/edge_add   '{"vip":"10.189.114.206/22","phyBr":"br0"}'
-
-echo -e "\033[34m #init edge node# \033[0m"
-post_401_request /api/v1/edge_init
-post_400_request /api/v1/edge_init
-post_400_request /api/v1/edge_init  '{"inner":"100.80.10.206/24","virt":"100.80.10.202/24","vip":"10.189.114.206/22","extGw":"10.189.112.1"}'
-post_400_request /api/v1/edge_init  '{"phyBr":"br0","virt":"100.80.10.202/24","vip":"10.189.114.206/22","extGw":"10.189.112.1"}'
-post_400_request /api/v1/edge_init  '{"phyBr":"br0","inner":"100.80.10.206/24","vip":"10.189.114.206/22","extGw":"10.189.112.1"}'
-post_400_request /api/v1/edge_init  '{"phyBr":"br0","inner":"100.80.10.206/24","virt":"100.80.10.202/24","extGw":"10.189.112.1"}'
-post_400_request /api/v1/edge_init  '{"phyBr":"br0","inner":"100.80.10.206/24","virt":"100.80.10.202/24","vip":"10.189.114.206/22"}'
-post_200_request /api/v1/edge_init  '{"phyBr":"br0","inner":"100.80.10.206/24","virt":"100.80.10.202/24","vip":"10.189.114.206/22","extGw":"10.189.112.1"}'
-
-echo -e "\033[34m #del edge node# \033[0m"
-post_401_request /api/v1/edge_del
-post_400_request /api/v1/edge_del
-post_200_request /api/v1/edge_del  '{"vip":"10.189.114.206/22"}'
+post_500_request /api/v1/route_del  '{"route":"LR-edge6","recursive":true}'
 
 echo -e "\033[34m #test chassis del # \033[0m"
 post_401_request /api/v1/chassis_del
 post_400_request /api/v1/chassis_del
-post_200_request /api/v1/chassis_del '{"chassis":"hv1"}'
-post_500_request /api/v1/chassis_del '{"chassis":"127.0.0.1"}'
+post_200_request /api/v1/chassis_del '{"nameOrIP":"hv1"}'
+post_500_request /api/v1/chassis_del '{"nameOrIP":"127.0.0.1"}'
 
 pass_test
