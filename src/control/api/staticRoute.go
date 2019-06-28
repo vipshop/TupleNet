@@ -2,7 +2,6 @@ package api
 
 import (
 	"net"
-	"fmt"
 	"sort"
 	"encoding/json"
 	"github.com/pkg/errors"
@@ -10,6 +9,7 @@ import (
 	"github.com/vipshop/tuplenet/control/logicaldev"
 	"github.com/vipshop/tuplenet/control/controllers/etcd3"
 	"github.com/vipshop/tuplenet/control/logger"
+	"net/http"
 )
 
 // operate on logical static route(lsr)
@@ -20,8 +20,7 @@ func (b *TuplenetAPI) AddStaticRoute() {
 
 	err := json.NewDecoder(b.Ctx.Request.Body).Decode(&m)
 	if err != nil {
-		logger.Infof("AddStaticRoute decode body failed %s", err)
-		b.BadResponse("AddStaticRoute decode body failed please check param")
+		b.Response(http.StatusBadRequest, "AddStaticRoute decode get param body failed %s", err)
 		return
 	}
 	routerName := m.Route
@@ -31,49 +30,41 @@ func (b *TuplenetAPI) AddStaticRoute() {
 	outPort := m.OutPort
 	logger.Infof("AddStaticRoute get param route %s rName %s cider %s nexthop %s outport %s", routerName, rName, cidrString, nextHop, outPort)
 
-	if routerName == "" || rName == "" || cidrString == "" || nextHop == "" || outPort == "" {
-		logger.Infof("AddStaticRoute get param failed route %s rName %s cider %s nexthop %s outport %s", routerName, rName, cidrString, nextHop, outPort)
-		b.BadResponse("request route rName cidr nextHop and outPort param")
+	if CheckNilParam(routerName, rName, cidrString, nextHop, outPort) {
+		b.Response(http.StatusBadRequest, "AddStaticRoute get param failed route %s rName %s cider %s nexthop %s outport %s", nil, routerName, rName, cidrString, nextHop, outPort)
 		return
 	}
 
 	// perform some early checking, avoid reading db if any error
 	ip, prefix, err := comm.ParseCIDR(cidrString)
 	if err != nil {
-		addStr := fmt.Sprintf("AddStaticRoute parse cidr failed route %s cider %s", routerName, cidrString)
-		logger.Errorf(addStr)
-		b.InternalServerErrorResponse(addStr)
+		b.Response(http.StatusBadRequest, "AddStaticRoute invalid cidr route %s cider %s failed %s", err, routerName, cidrString)
 		return
 	}
 
 	if net.ParseIP(nextHop) == nil {
-		logger.Errorf("AddStaticRoute parse next hop ip failed route %s nexthop %s ", routerName, nextHop)
-		b.InternalServerErrorResponse("parse nexthop ip failed")
+		b.Response(http.StatusBadRequest, "AddStaticRoute invalid nexthop  route %s nexthop %s ", nil, routerName, nextHop)
 		return
 	}
 
 	router, err := controller.GetRouter(routerName)
 	if err != nil {
-		logger.Errorf("AddStaticRoute get router failed %s route %s", err, routerName)
-		b.InternalServerErrorResponse("get router failed")
+		b.Response(http.StatusInternalServerError, "AddStaticRoute get router route %s failed %s", err, routerName)
 		return
 	}
 
 	if _, err = controller.GetRouterStaticRoute(router, rName); err != nil && errors.Cause(err) != etcd3.ErrKeyNotFound {
-		logger.Errorf("AddStaticRoute get static route failed %s route %s rName %s ", err, routerName, rName)
-		b.InternalServerErrorResponse("get static route failed")
+		b.Response(http.StatusInternalServerError, "AddStaticRoute route %s rName %s get static route failed %s", err, routerName, rName)
 		return
 	}
 
 	r := router.CreateStaticRoute(rName, ip, prefix, nextHop, outPort)
 	if err = controller.Save(r); err != nil {
-		addStr := fmt.Sprintf("AddStaticRoute failed %s route %s rName %s cider %s nexthop %s outport %s", err, routerName, rName, cidrString, nextHop, outPort)
-		b.InternalServerErrorResponse(addStr)
+		b.Response(http.StatusInternalServerError, "AddStaticRoute route %s rName %s cider %s nexthop %s outport %s failed %s ", err, routerName, rName, cidrString, nextHop, outPort)
 		return
 	}
 
-	logger.Infof("AddStaticRoute success route %s rName %s cider %s nexthop %s outport %s", routerName, rName, cidrString, nextHop, outPort)
-	b.NormalResponse("add static route success")
+	b.Response(http.StatusOK, "AddStaticRoute success route %s rName %s cider %s nexthop %s outport %s", nil, routerName, rName, cidrString, nextHop, outPort)
 }
 
 func (b *TuplenetAPI) ShowStaticRoute() {
@@ -84,35 +75,28 @@ func (b *TuplenetAPI) ShowStaticRoute() {
 	rName := b.GetString("rName")
 	logger.Infof("ShowStaticRoute get param route name %s rName %s", name, rName)
 
-	if name == "" {
-		logger.Infof("ShowStaticRoute get param failed route name %s rName %s", name, rName)
-		b.BadResponse("request route param")
+	if CheckNilParam(name) {
+		b.Response(http.StatusBadRequest, "ShowStaticRoute get param failed route name %s rName %s", nil, name, rName)
 		return
 	}
 
 	router, err := controller.GetRouter(name)
 	if err != nil {
-		showStr := fmt.Sprintf("get route failed route name %s rName %s err %s", name, rName, err)
-		logger.Errorf(showStr)
-		b.InternalServerErrorResponse(showStr)
+		b.Response(http.StatusInternalServerError, "ShowStaticRoute get route name %s rName %s route failed %s", err, name, rName)
 		return
 	}
 
-	if rName == "" {
+	if CheckNilParam(rName) {
 		// show all ports
 		srs, err = controller.GetRouterStaticRoutes(router)
 		if err != nil {
-			showStr := fmt.Sprintf("get static route failed route name %s rName %s err %s", name, rName, err)
-			logger.Errorf(showStr)
-			b.InternalServerErrorResponse(showStr)
+			b.Response(http.StatusInternalServerError, "ShowStaticRoute get all route name %s static route failed %s", err, name)
 			return
 		}
 	} else {
 		r, err := controller.GetRouterStaticRoute(router, rName)
 		if err != nil {
-			showStr := fmt.Sprintf("get static route failed route name %s rName %s err %s", name, rName, err)
-			logger.Errorf(showStr)
-			b.InternalServerErrorResponse(showStr)
+			b.Response(http.StatusInternalServerError, "ShowStaticRoute get route name %s rName %s static route failed %s", err, name, rName)
 			return
 		}
 
@@ -131,44 +115,35 @@ func (b *TuplenetAPI) DelStaticRoute() {
 
 	err := json.NewDecoder(b.Ctx.Request.Body).Decode(&m)
 	if err != nil {
-		logger.Infof("DelStaticRoute decode body failed %s", err)
-		b.BadResponse("DelStaticRoute decode body failed please check param")
+		b.Response(http.StatusBadRequest, "DelStaticRoute decode get param body failed %s", err)
 		return
 	}
 	name := m.Route
 	rName := m.RName
 	logger.Infof("DelStaticRoute get param route %s rName %s", name, rName)
 
-	if name == "" || rName == "" {
-		logger.Infof("DelStaticRoute get param failed route %s rName %s", name, rName)
-		b.BadResponse("request route and rName param")
+	if CheckNilParam(name, rName) {
+		b.Response(http.StatusBadRequest, "DelStaticRoute get param failed route %s rName %s", nil, name, rName)
 		return
 	}
 
 	router, err := controller.GetRouter(name)
 	if err != nil {
-		delStr := fmt.Sprintf("DelStaticRoute get route failed route %s rName %s error %s", name, rName, err)
-		logger.Errorf(delStr)
-		b.InternalServerErrorResponse(delStr)
+		b.Response(http.StatusInternalServerError, "DelStaticRoute get route failed route %s rName %s error %s", err, name, rName)
 		return
 	}
 
 	r, err := controller.GetRouterStaticRoute(router, rName)
 	if err != nil {
-		delStr := fmt.Sprintf("DelStaticRoute get static route failed route %s rName %s error %s", name, rName, err)
-		logger.Errorf(delStr)
-		b.InternalServerErrorResponse(delStr)
+		b.Response(http.StatusInternalServerError, "DelStaticRoute get static route failed route %s rName %s error %s", err, name, rName)
 		return
 	}
 
 	err = controller.Delete(false, r)
 	if err != nil {
-		delStr := fmt.Sprintf("DelStaticRoute delete failed route %s rName %s error %s", name, rName, err)
-		logger.Errorf(delStr)
-		b.InternalServerErrorResponse(delStr)
+		b.Response(http.StatusInternalServerError, "DelStaticRoute delete failed route %s rName %s error %s", err, name, rName)
 		return
 	}
 
-	logger.Infof("DelStaticRoute delete success route %s rName %s", name, rName)
-	b.NormalResponse("DelStaticRoute success")
+	b.Response(http.StatusOK, "DelStaticRoute success route %s rName %s", nil, name, rName)
 }

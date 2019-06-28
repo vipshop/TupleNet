@@ -2,7 +2,6 @@ package api
 
 import (
 	"net"
-	"fmt"
 	"sort"
 	"encoding/json"
 	"github.com/pkg/errors"
@@ -10,6 +9,7 @@ import (
 	"github.com/vipshop/tuplenet/control/logger"
 	"github.com/vipshop/tuplenet/control/logicaldev"
 	"github.com/vipshop/tuplenet/control/controllers/etcd3"
+	"net/http"
 )
 
 func (b *TuplenetAPI) AddNAT() {
@@ -20,73 +20,56 @@ func (b *TuplenetAPI) AddNAT() {
 
 	err = json.NewDecoder(b.Ctx.Request.Body).Decode(&m)
 	if err != nil {
-		logger.Infof("AddNAT decode body failed %s", err)
-		b.BadResponse("AddNAT decode body failed please check param")
+		b.Response(http.StatusBadRequest, "AddNAT decode get param body failed %s", err)
 		return
 	}
 	logger.Infof("AddNAT get param route %s natName %s cidr %s xlateType %s xlateIP %s", m.Route, m.NatName, m.Cidr, m.XlateType, m.XlateIP)
 
-	if m.Route == "" || m.NatName == "" || m.Cidr == "" || m.XlateType == "" || m.XlateIP == "" {
-		logger.Infof("AddNAT get param failed route %s natName %s cidr %s xlateType %s xlateIP %s", m.Route, m.NatName, m.Cidr, m.XlateType, m.XlateIP)
-		b.BadResponse("request route natName cidr xlateType and xlateIP param")
+	if CheckNilParam(m.Route, m.NatName, m.Cidr, m.XlateType, m.XlateIP) {
+		b.Response(http.StatusBadRequest, "AddNAT get param failed route %s natName %s cidr %s xlateType %s xlateIP %s", nil, m.Route, m.NatName, m.Cidr, m.XlateType, m.XlateIP)
 		return
 	}
 	ip, prefix, err := comm.ParseCIDR(m.Cidr)
 	if err != nil {
-		addStr := fmt.Sprintf("AddNAT parse cidr failed route %s cider string %s", m.Route, m.Cidr)
-		logger.Infof(addStr)
-		b.BadResponse(addStr)
+		b.Response(http.StatusBadRequest, "AddNAT get invalid cidr route %s cider string %s", nil, m.Route, m.Cidr)
 		return
 	}
 	// if xlateType neither snat or dnat return failed
 	if m.XlateType != "snat" && m.XlateType != "dnat" {
-		addStr := fmt.Sprintf("AddNAT invalid translate type, must be snat/dnat: %s", m.XlateType)
-		logger.Infof(addStr)
-		b.BadResponse(addStr)
+		b.Response(http.StatusBadRequest, "AddNAT invalid xlateType, must be snat/dnat: %s", nil, m.XlateType)
 		return
 	}
 
 	if net.ParseIP(m.XlateIP) == nil {
-		addStr := fmt.Sprintf("AddNAT invalid translate IP: %s", m.XlateIP)
-		logger.Infof(addStr)
-		b.BadResponse(addStr)
+		b.Response(http.StatusBadRequest, "AddNAT invalid xlateIP: %s", nil, m.XlateIP)
 		return
 	}
 
 	router, err := controller.GetRouter(m.Route)
 	if err != nil {
-		addStr := fmt.Sprintf("AddNAT get route failed %s", err)
-		logger.Errorf(addStr)
-		b.InternalServerErrorResponse(addStr)
+		b.Response(http.StatusInternalServerError, "AddNAT get route failed %s", err)
 		return
 	}
 
 	_, err = controller.GetRouterNAT(router, m.NatName)
 	if err != nil && errors.Cause(err) != etcd3.ErrKeyNotFound {
-		addStr := fmt.Sprintf("AddNAT get route failed %s", err)
-		logger.Errorf(addStr)
-		b.InternalServerErrorResponse(addStr)
+		b.Response(http.StatusInternalServerError, "AddNAT get route failed %s", err)
 		return
 	}
 
 	if err == nil {
-		addStr := fmt.Sprintf("AddNAT route %s nat %s exists", m.Route, m.NatName)
-		logger.Infof(addStr)
-		b.NormalResponse(addStr)
+		b.Response(http.StatusOK, "AddNAT route %s nat %s exists", nil, m.Route, m.NatName)
 		return
 	}
 
 	nat := router.CreateNAT(m.NatName, ip, prefix, m.XlateType, m.XlateIP)
 	err = controller.Save(nat)
 	if err != nil {
-		addStr := fmt.Sprintf("AddNAT create nat failed %s", err)
-		logger.Errorf(addStr)
-		b.InternalServerErrorResponse(addStr)
+		b.Response(http.StatusInternalServerError, "AddNAT create nat failed %s", err)
 		return
 	}
 
-	logger.Infof("AddNAT success route %s natName %s cidr %s xlateType %s xlateIP %s", m.Route, m.NatName, m.Cidr, m.XlateType, m.XlateIP)
-	b.NormalResponse("AddNAT success")
+	b.Response(http.StatusOK, "AddNAT success route %s natName %s cidr %s xlateType %s xlateIP %s", nil, m.Route, m.NatName, m.Cidr, m.XlateType, m.XlateIP)
 }
 
 func (b *TuplenetAPI) DelNAT() {
@@ -97,43 +80,33 @@ func (b *TuplenetAPI) DelNAT() {
 
 	err = json.NewDecoder(b.Ctx.Request.Body).Decode(&m)
 	if err != nil {
-		logger.Infof("DelNAT decode body failed %s", err)
-		b.BadResponse("DelNAT decode body failed please check param")
+		b.Response(http.StatusBadRequest, "DelNAT decode get param body failed %s", err)
 		return
 	}
 	logger.Infof("DelNAT get param route %s natName %s", m.Route, m.NatName)
 
-	if m.Route == "" || m.NatName == "" {
-		logger.Infof("DelNAT get param failed route %s natName %s", m.Route, m.NatName)
-		b.BadResponse("request route and natName param")
+	if CheckNilParam(m.Route, m.NatName) {
+		b.Response(http.StatusBadRequest, "DelNAT get param failed route %s natName %s", nil, m.Route, m.NatName)
 		return
 	}
 	router, err := controller.GetRouter(m.Route)
 	if err != nil {
-		delStr := fmt.Sprintf("DelNAT get route failed %s", err)
-		logger.Errorf(delStr)
-		b.InternalServerErrorResponse(delStr)
+		b.Response(http.StatusInternalServerError, "DelNAT get route failed %s", err)
 		return
 	}
 
 	port, err := controller.GetRouterNAT(router, m.NatName)
 	if err != nil {
-		delStr := fmt.Sprintf("DelNAT get route nat failed %s", err)
-		logger.Errorf(delStr)
-		b.InternalServerErrorResponse(delStr)
+		b.Response(http.StatusInternalServerError, "DelNAT get route nat failed %s", err)
 		return
 	}
 
 	err = controller.Delete(false, port)
 	if err != nil {
-		delStr := fmt.Sprintf("DelNAT delete failed %s", err)
-		logger.Errorf(delStr)
-		b.InternalServerErrorResponse(delStr)
+		b.Response(http.StatusInternalServerError, "DelNAT delete failed %s", err)
 		return
 	}
-
-	logger.Infof("DelNAT router %s NAT %s deleted", m.Route, m.NatName)
-	b.NormalResponse("DelNAT success")
+	b.Response(http.StatusOK, "DelNAT router %s NAT %s deleted", nil, m.Route, m.NatName)
 }
 
 func (b *TuplenetAPI) ShowNAT() {
@@ -146,33 +119,26 @@ func (b *TuplenetAPI) ShowNAT() {
 	natName := b.GetString("natName")
 	logger.Infof("ShowNAT get param route %s natName %s", route, natName)
 
-	if route == "" {
-		logger.Infof("ShowNAT get param failed route %s ", route)
-		b.BadResponse("request route param")
+	if CheckNilParam(route) {
+		b.Response(http.StatusBadRequest, "ShowNAT get param failed route %s ", nil, route)
 		return
 	}
 	router, err := controller.GetRouter(route)
 	if err != nil {
-		showStr := fmt.Sprintf("ShowNAT get route failed %s", err)
-		logger.Errorf(showStr)
-		b.InternalServerErrorResponse(showStr)
+		b.Response(http.StatusInternalServerError, "ShowNAT get route failed %s", err)
 		return
 	}
 
-	if natName == "" { // show all nats
+	if CheckNilParam(natName) { // show all nats
 		nats, err = controller.GetRouterNATs(router)
 		if err != nil {
-			showStr := fmt.Sprintf("ShowNAT get route nats failed %s", err)
-			logger.Errorf(showStr)
-			b.InternalServerErrorResponse(showStr)
+			b.Response(http.StatusInternalServerError, "ShowNAT get route nats failed %s", err)
 			return
 		}
 	} else {
 		nat, err := controller.GetRouterNAT(router, natName)
 		if err != nil {
-			showStr := fmt.Sprintf("ShowNAT get route nat failed %s", err)
-			logger.Errorf(showStr)
-			b.InternalServerErrorResponse(showStr)
+			b.Response(http.StatusInternalServerError, "ShowNAT get route nat failed %s", err)
 			return
 		}
 

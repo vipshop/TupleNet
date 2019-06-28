@@ -1,18 +1,13 @@
 package api
 
 import (
-	"fmt"
 	"encoding/json"
 	"github.com/vipshop/tuplenet/control/logger"
 	"github.com/vipshop/tuplenet/control/logicaldev"
 	"sort"
 	"net"
+	"net/http"
 )
-
-type Chassis interface {
-	ShowChassis()
-	DelChassis()
-}
 
 func (b *TuplenetAPI) ShowChassis() {
 	var (
@@ -22,20 +17,16 @@ func (b *TuplenetAPI) ShowChassis() {
 	name := b.GetString("name")
 	logger.Infof("ShowChassis get param %s", name)
 
-	if name  == "" { // no name provided show all chassises
+	if CheckNilParam(name) { // no name provided show all chassises
 		chs, err = controller.GetChassises()
 		if err != nil {
-			showStr := fmt.Sprintf("ShowChassis get all chassis failed %s ", err)
-			logger.Errorf(showStr)
-			b.InternalServerErrorResponse(showStr)
+			b.Response(http.StatusInternalServerError, "ShowChassis get all chassis failed %s ", err)
 			return
 		}
 	} else { // chassis name provided
 		chassis, err := controller.GetChassis(name)
 		if err != nil {
-			showStr := fmt.Sprintf("ShowChassis get %s chassis failed %s ", name, err)
-			logger.Errorf(showStr)
-			b.InternalServerErrorResponse(showStr)
+			b.Response(http.StatusInternalServerError, "ShowChassis get %s chassis failed %s ", err, name)
 			return
 		}
 
@@ -65,24 +56,20 @@ func (b *TuplenetAPI) DelChassis() {
 	)
 	err := json.NewDecoder(b.Ctx.Request.Body).Decode(&m)
 	if err != nil {
-		logger.Infof("DelChassis decode body failed %s", err)
-		b.BadResponse("DelChassis decode body failed please check param")
+		b.Response(http.StatusBadRequest, "DelChassis decode get param body failed %s", err)
 		return
 	}
 	logger.Infof("DelChassis get param %s", m.NameOrIP)
 
-	if m.NameOrIP == "" {
-		logger.Infof("DelChassis get param failed namOrIP %s", m.NameOrIP)
-		b.BadResponse("request nameOrIP param")
+	if CheckNilParam(m.NameOrIP) {
+		b.Response(http.StatusBadRequest, "DelChassis get param failed namOrIP %s", nil, m.NameOrIP)
 		return
 	}
 
 	if net.ParseIP(m.NameOrIP) != nil {
 		chs, err := controller.GetChassises()
 		if err != nil {
-			delStr := fmt.Sprintf("DelChassis ip %s get all chassis failed %s ", m.NameOrIP, err)
-			logger.Errorf(delStr)
-			b.InternalServerErrorResponse(delStr)
+			b.Response(http.StatusInternalServerError, "DelChassis ip %s get all chassis failed %s ", err, m.NameOrIP)
 			return
 		}
 
@@ -92,37 +79,28 @@ func (b *TuplenetAPI) DelChassis() {
 				cnt++
 				err := delChassisByName(ch.Name)
 				if err != nil {
-					delStr := fmt.Sprintf("DelChassis ip %s chassis %s failed %s ", m.NameOrIP, ch.Name, err)
-					logger.Errorf(delStr)
-					b.InternalServerErrorResponse(delStr)
+					b.Response(http.StatusInternalServerError, "DelChassis ip %s chassis %s failed %s ", err, m.NameOrIP, ch.Name)
 					return
 				}
 			}
 		}
 		if cnt == 0 {
-			delStr := fmt.Sprintf("DelChassis ip %s chassis failed no such ip in chassises", m.NameOrIP)
-			logger.Errorf(delStr)
-			b.InternalServerErrorResponse(delStr)
+			b.Response(http.StatusInternalServerError, "DelChassis ip %s chassis failed no such ip in chassises", nil, m.NameOrIP)
 			return
 		}
 	} else {
 		chassis, err := controller.GetChassis(m.NameOrIP)
 		if err != nil {
-			delStr := fmt.Sprintf("DelChassis get chassis %s failed %s ", m.NameOrIP, err)
-			logger.Errorf(delStr)
-			b.InternalServerErrorResponse(delStr)
+			b.Response(http.StatusInternalServerError, "DelChassis get chassis %s failed %s ", err, m.NameOrIP)
 			return
 		}
 
 		err = controller.Delete(false, chassis)
 		if err != nil {
-			delStr := fmt.Sprintf("DelChassis chassis %s failed %s ", m.NameOrIP, err)
-			logger.Errorf(delStr)
-			b.InternalServerErrorResponse(delStr)
+			b.Response(http.StatusInternalServerError, "DelChassis chassis %s failed %s ", err, m.NameOrIP)
 			return
 		}
 	}
 
-	logger.Infof("DelChassis chassis %s success", m.NameOrIP)
-	b.NormalResponse("DelChassis chassis success")
+	b.Response(http.StatusOK, "DelChassis chassis %s success", nil, m.NameOrIP)
 }

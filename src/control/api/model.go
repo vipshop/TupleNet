@@ -6,6 +6,7 @@ import (
 	"github.com/vipshop/tuplenet/control/logger"
 	"github.com/vipshop/tuplenet/control/controllers/etcd3"
 	"net/http"
+	"fmt"
 )
 
 var (
@@ -28,11 +29,11 @@ const (
 func init() {
 	var err error
 	etcdHost = os.Getenv("ETCD_HOSTS")
-	if etcdHost == "" {
+	if CheckNilParam(etcdHost) {
 		etcdHost = defaultEtcdpoints
 	}
 	etcdPrefix = os.Getenv("ETCD_PREFIX")
-	if etcdPrefix == "" {
+	if CheckNilParam(etcdPrefix)  {
 		etcdPrefix = defaultEtcdPrefix
 	}
 	if controller, err = etcd3.NewController([]string{etcdHost}, etcdPrefix, false); err != nil {
@@ -40,7 +41,7 @@ func init() {
 		return
 	}
 	edgeShellPath = os.Getenv("EDGE_SHELL_PATH")
-	if edgeShellPath == "" {
+	if CheckNilParam(edgeShellPath)  {
 		edgeShellPath = defaultEdgeShellPath
 	}
 	ovsTmpDir = os.Getenv("OVS_TMP_DIR")
@@ -53,20 +54,46 @@ func init() {
 	ovsPkgDatadir = "OVS_PKGDATADIR=" + ovsTmpDir
 }
 
-func (b *TuplenetAPI) BadResponse(param string) {
+func (b *TuplenetAPI) Response(statusCode int, fmtStr string, err error, arg ... interface{}) {
 	var res Response
-	res.Code = http.StatusBadRequest
-	res.Message = param
+	var resStr string
+	switch statusCode {
+	case http.StatusInternalServerError:
+		arg = append(arg, err)
+		resStr = fmt.Sprintf(fmtStr, arg...)
+		logger.Errorf(resStr)
+		res.Message = resStr
+	case http.StatusOK:
+		resStr = fmt.Sprintf(fmtStr, arg...)
+		logger.Infof(resStr)
+		res.Message = resStr
+	case http.StatusBadRequest:
+		if err != nil {
+			arg = append(arg, err)
+			resStr = fmt.Sprintf(fmtStr, arg...)
+			logger.Infof(resStr)
+			res.Message = resStr
+		} else {
+			resStr = fmt.Sprintf(fmtStr, arg...)
+			logger.Infof(resStr)
+			res.Message = resStr
+		}
+	}
+	res.Code = statusCode
 	b.Data["json"] = res
 	b.ServeJSON()
 }
 
-func (b *TuplenetAPI) InternalServerErrorResponse(param string) {
-	var res Response
-	res.Code = http.StatusInternalServerError
-	res.Message = param
-	b.Data["json"] = res
-	b.ServeJSON()
+func CheckNilParam(param string, params ...string) bool {
+	if param == "" {
+		return true
+	}
+	for _, v := range params {
+		if v == "" {
+			return true
+		}
+	}
+	return false
 }
 
 func (b *TuplenetAPI) NormalResponse(param interface{}) {
