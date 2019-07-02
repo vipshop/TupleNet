@@ -22,7 +22,6 @@ net_join phy hv1 || exit_test
 GATEWAY=1 ONDEMAND=0 start_tuplenet_daemon hv1 192.168.100.3
 wait_for_brint  #wait tuplenet start
 ovs_setenv hv1
-export OVS_TMP_DIR=$ovs_dir
 pmsg_green "run tpmpa process"
 ../control/bin/tpmpa &
 pid=$!

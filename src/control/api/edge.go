@@ -6,7 +6,6 @@ import (
 	"os/exec"
 	"io"
 	"bytes"
-	"os"
 	"net/http"
 	"context"
 	"time"
@@ -42,9 +41,6 @@ func (b *TuplenetAPI) InitEdge() {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "python", edgeShellPath, endPointArg, edgePrefix, "--op=init", vipArg, phyBrArg, virtArg, innerArg, extGwArg)
 	// for test case use specific ovs dir, not use default ovs-vsctl get Open_Vswitch . external_ids:system-id
-	if !CheckNilParam(ovsTmpDir) {
-		cmd.Env = append(os.Environ(), ovsDir, ovsLog, ovsDbdir, ovsSysConfDir, ovsPkgDatadir)
-	}
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
@@ -88,9 +84,6 @@ func (b *TuplenetAPI) AddEdge() {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "python", edgeShellPath, endPointArg, edgePrefix, "--op=add", vipArg, phyBrArg)
-	if !CheckNilParam(ovsTmpDir) {
-		cmd.Env = append(os.Environ(), ovsDir, ovsLog, ovsDbdir, ovsSysConfDir, ovsPkgDatadir)
-	}
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
@@ -132,9 +125,6 @@ func (b *TuplenetAPI) DelEdge() {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "python", edgeShellPath, endPointArg, edgePrefix, "--op=remove", vipArg)
-	if !CheckNilParam(ovsTmpDir) {
-		cmd.Env = append(os.Environ(), ovsDir, ovsLog, ovsDbdir, ovsSysConfDir, ovsPkgDatadir)
-	}
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	stdin, _ := cmd.StdinPipe()

@@ -10,13 +10,11 @@ import (
 )
 
 var (
-	controller                                             *etcd3.Controller
-	etcdHost                                               string
-	etcdPrefix                                             string
-	edgeShellPath                                          string
-	ovsTmpDir                                              string
-	edgePrefix, endPointArg                                string
-	ovsDir, ovsLog, ovsDbdir, ovsSysConfDir, ovsPkgDatadir string
+	controller              *etcd3.Controller
+	etcdHost                string
+	etcdPrefix              string
+	edgeShellPath           string
+	edgePrefix, endPointArg string
 )
 
 // set auth string
@@ -33,7 +31,7 @@ func init() {
 		etcdHost = defaultEtcdpoints
 	}
 	etcdPrefix = os.Getenv("ETCD_PREFIX")
-	if CheckNilParam(etcdPrefix)  {
+	if CheckNilParam(etcdPrefix) {
 		etcdPrefix = defaultEtcdPrefix
 	}
 	if controller, err = etcd3.NewController([]string{etcdHost}, etcdPrefix, false); err != nil {
@@ -41,17 +39,11 @@ func init() {
 		return
 	}
 	edgeShellPath = os.Getenv("EDGE_SHELL_PATH")
-	if CheckNilParam(edgeShellPath)  {
+	if CheckNilParam(edgeShellPath) {
 		edgeShellPath = defaultEdgeShellPath
 	}
-	ovsTmpDir = os.Getenv("OVS_TMP_DIR")
 	edgePrefix = "--prefix=" + etcdPrefix
 	endPointArg = "--endpoint=" + etcdHost
-	ovsDir = "OVS_RUNDIR=" + ovsTmpDir
-	ovsLog = "OVS_LOGDIR=" + ovsTmpDir
-	ovsDbdir = "OVS_DBDIR=" + ovsTmpDir
-	ovsSysConfDir = "OVS_SYSCONFDIR=" + ovsTmpDir
-	ovsPkgDatadir = "OVS_PKGDATADIR=" + ovsTmpDir
 }
 
 func (b *TuplenetAPI) Response(statusCode int, fmtStr string, err error, arg ... interface{}) {
