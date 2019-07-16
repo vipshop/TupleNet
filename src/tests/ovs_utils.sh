@@ -29,10 +29,8 @@ on_ovs_exit()
 ovs_boot()
 {
     local sim_id=$1
-    local path=${ovs_base}/$1
     ovs_setenv $sim_id
-    pmsg "start ovsdb-server instance $sim_id"
-    start_ovs_daemon ovsdb-server --remote=punix:"$path"/db.sock || return 1
+    start_ovsdb_daemon $sim_id || return 1
     ovs-vsctl --no-wait -- init || return 1
     pmsg "start ovs-vswitchd instance $sim_id"
     if [ "$DISABLE_DUMMY" == 1 ]; then
@@ -43,6 +41,35 @@ ovs_boot()
         start_ovs_daemon ovs-vswitchd --enable-dummy=system -vvconn -vofproto_dpif \
                          -vunixctl || return 1
     fi
+}
+
+stop_ovsdb_daemon()
+{
+    sim_id=$1
+    ovs_setenv $sim_id
+    pidfile="$OVS_RUNDIR"/ovsdb-server.pid
+    test -e "$pidfile" && kill -9 `cat "$pidfile"`
+}
+
+restart_ovsdb_daemon()
+{
+    sim_id=$1
+    stop_ovsdb_daemon $sim_id
+    if [ $# == 1 ]; then
+        sleep 1
+    else
+        sleep $2
+    fi
+    start_ovsdb_daemon $sim_id
+}
+
+start_ovsdb_daemon()
+{
+    local sim_id=$1
+    local path=${ovs_base}/$1
+    ovs_setenv $sim_id
+    pmsg "start ovsdb-server instance $sim_id"
+    start_ovs_daemon ovsdb-server --remote=punix:"$path"/db.sock || return 1
 }
 
 # create ovs simulator, this function start ovsdb-server and ovs-vswitchd

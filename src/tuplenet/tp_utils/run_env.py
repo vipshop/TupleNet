@@ -17,6 +17,12 @@ def acquire_outside_env():
         extra['options']['TUPLENET_RUNDIR'] = '/var/run/tuplenet/'
     else:
         extra['options']['TUPLENET_RUNDIR'] = os.path.join(os.environ['TUPLENET_RUNDIR'])
+
+    if not os.environ.has_key('TUPLENET_OVSDB_PATH'):
+        extra['options']['TUPLENET_OVSDB_PATH'] = '/var/run/openvswitch/db.sock'
+    else:
+        extra['options']['TUPLENET_OVSDB_PATH'] = os.environ['TUPLENET_OVSDB_PATH']
+
     # enable ONDEMAND by default
     if not os.environ.has_key('ONDEMAND') or \
        (os.environ.has_key('ONDEMAND') and os.environ['ONDEMAND'] == '1'):
