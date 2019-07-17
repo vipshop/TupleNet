@@ -160,25 +160,6 @@ def config_consume_ip(interface_list):
     logger.info('consume %s as tunnel ip', host_ip)
     extra['consume_ip'] = host_ip
 
-def run_monitor_thread():
-    extra['lock'] = threading.Lock()
-    logger.info("start a monitor thread")
-    mon_ovsdb_thread = cm.start_monitor_ovsdb(entity_zoo, extra)
-    start_time = time.time()
-    while True:
-        # we have to wait here, because sometimes
-        # python may hangs on Popen ovsdb-client.
-        # TODO we should figure out the root cause
-        if time.time() - start_time > 5:
-            logger.error("tuplenet hangs on starting ovsdb-client")
-            killme()
-        with extra['lock']:
-            if extra.has_key('ovsdb-client'):
-                break;
-        time.sleep(0.1)
-        logger.info("waitting for starting ovsdb-client")
-    extra['mon_ovsdb_thread'] = mon_ovsdb_thread
-
 def run_arp_update_thread():
     logger.info("start a arp update thread")
     arp_update_thread = state_update.start_monitor_pkt_controller_tunnel(entity_zoo, extra)
@@ -189,14 +170,16 @@ def run_debug_thread():
     debug_thread = tentacle.start_monitor_debug_info(entity_zoo, extra)
     extra['debug_thread'] = debug_thread
 
+def run_ovsdb_monitor_thread():
+    logger.info("start ovsdb monitor thread")
+    if extra.has_key('ovsdb'):
+        extra['ovsdb'].stop()
+    extra['ovsdb'] = cm.monitor_ovsdb(entity_zoo, extra)
+
 def check_monitor_thread():
-    mon_ovsdb_thread = extra['mon_ovsdb_thread']
     arp_update_thread = extra['arp_update_thread']
     debug_thread = extra['debug_thread']
-    if not mon_ovsdb_thread.isAlive():
-        logger.warning("mon_ovsdb_thread dead, try to restart it")
-        run_monitor_thread()
-
+    ovsdb_monitor_thread = extra['ovsdb'].monitor_thread
     if not arp_update_thread.isAlive():
         logger.warning("arp_update_thread dead, try to restart it")
         run_arp_update_thread()
@@ -204,6 +187,10 @@ def check_monitor_thread():
     if not debug_thread.isAlive():
         logger.warning("debug_thread dead, try to restart it")
         run_debug_thread()
+
+    if not ovsdb_monitor_thread.isAlive():
+        logger.warning("ovsdbmonitor thread is dead, try to restart it")
+        run_ovsdb_monitor_thread()
 
 
 def run_main(interval):
@@ -308,9 +295,9 @@ def main():
     logger.info("accept etcd host:%s", options.host)
     logger.info("features config:%s", extra['options'])
     init_env(options)
-    run_monitor_thread()
     run_arp_update_thread()
     run_debug_thread()
+    run_ovsdb_monitor_thread()
     config_consume_ip(interface_list)
     run_main(options.interval)
 

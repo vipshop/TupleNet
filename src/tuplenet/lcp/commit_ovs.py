@@ -6,6 +6,7 @@ import threading
 import struct, socket
 import time, random, string
 import logicalview as lgview
+import ovsdbman as dbm
 from pyDatalog import pyDatalog
 from onexit import on_parent_exit
 from tp_utils.run_env import get_extra
@@ -114,11 +115,11 @@ def parse_map(map_list):
     return ret_map
 
 def update_ovsport(record, entity_zoo):
-    action_type = record[1]
+    action_type = record[0]
     if action_type in ['new', 'initial', 'delete', 'old', 'insert']:
         # some operations may not contain some essential fields
-        if not isinstance(record[2], int) or \
-           record[3] == None or record[4] == None:
+        if not isinstance(record[1], int) or \
+           record[2] == None or record[3] == None:
             logger.debug('action %s does not container enough info, msg:%s',
                          action_type, record)
             return
@@ -128,10 +129,10 @@ def update_ovsport(record, entity_zoo):
 
     logger.info("ovsport action type:%s", action_type)
 
-    ofport = record[2]
-    name = record[3]
-    external_ids = parse_map(record[4])
-    port_type = record[5]
+    ofport = record[1]
+    name = record[2]
+    external_ids = record[3]
+    port_type = record[4]
 
     # adding an interal port may imply that an new bridge was created,
     # we should update zoo's version to test if tuplenet should rebuild
@@ -157,50 +158,30 @@ def update_ovsport(record, entity_zoo):
         entity_zoo.move_entity2sink(entity_type, name)
     else:
         if ofport < 0:
-            logger.info("do not accept ovsport %s which has negative ofport %d", name, ofport)
+            logger.info("do not accept ovsport %s which has negative ofport %d",
+                        name, ofport)
             return
         logger.info("try to add ovsport entity %s ofport:%d, uuid:%s in zoo",
                     name, ofport, uuid)
         entity_zoo.add_entity(entity_type, name, uuid, ofport, is_remote)
     return
 
+# NOTE: this function would be consume by ovsdbman
+@dbm.ovsdb_resp_handle
+def handle_interface_update(data, entity_zoo):
+    iface_records = dbm.iface_monitor_parse(data)
+    for record in iface_records:
+        update_ovsport(record, entity_zoo)
+
 
 def monitor_ovsdb(entity_zoo, extra):
-    pyDatalog.Logic(extra['logic'])
-    cmd = ['ovsdb-client', 'monitor', 'Interface',
-           'ofport', 'name', 'external_ids', 'type', '--format=json']
-
-    logger.info("start ovsdb-client instance")
-    try:
-        child = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                                 preexec_fn=on_parent_exit('SIGTERM'))
-        with extra['lock']:
-            extra['ovsdb-client'] = child
-        logger.info("monitoring the ovsdb")
-        while child.poll() == None:
-            json_str = child.stdout.readline().strip()
-            output = json.loads(json_str)
-            with entity_zoo.lock:
-                for record in output['data']:
-                    update_ovsport(record, entity_zoo)
-    except ValueError as err:
-        if json_str != "":
-            logger.warning("cannot parse %s to json object", json_str)
-        else:
-            logger.info('json_str is empty, maybe we should exit')
-        subprocess.Popen.kill(child)
-        return
-    except Exception as err:
-        logger.exception("exit ovsdb-client monitor, err:%s", str(err))
-        subprocess.Popen.kill(child)
-        return
-
-def start_monitor_ovsdb(entity_zoo, extra):
-    t = threading.Thread(target = monitor_ovsdb,
-                         args=(entity_zoo, extra))
-    t.setDaemon(True)
-    t.start()
-    return t
+    logger.info("start monitoring ovsdb change")
+    ovsdb = dbm.OvsdbMan(extra['options']['TUPLENET_OVSDB_PATH'])
+    ovsdb.run(pyDatalog.Logic, extra['logic'])
+    ret = ovsdb.monitor_interfaces(handle_interface_update, entity_zoo)
+    if ret is False:
+        raise dbm.OVSDBErr("failed to monitor interfaces update")
+    return ovsdb
 
 def clean_ovs_flows(br = 'br-int'):
     try:

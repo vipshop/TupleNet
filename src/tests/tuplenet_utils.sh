@@ -13,6 +13,7 @@ tuplenet_setenv()
     tuplenet_dir=$tuplenet_base/$sandbox
     TUPLENET_RUNDIR=$tuplenet_dir; export TUPLENET_RUNDIR
     TUPLENET_LOGDIR=$tuplenet_dir; export TUPLENET_LOGDIR
+    TUPLENET_OVSDB_PATH=$OVS_RUNDIR/db.sock; export TUPLENET_OVSDB_PATH
 }
 
 on_tuplenet_exit()
