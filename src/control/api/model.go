@@ -7,6 +7,7 @@ import (
 	"github.com/vipshop/tuplenet/control/controllers/etcd3"
 	"net/http"
 	"fmt"
+	"strings"
 )
 
 var (
@@ -26,15 +27,19 @@ const (
 
 func init() {
 	var err error
+	var tpmpaEtcd []string
 	etcdHost = os.Getenv("ETCD_HOSTS")
 	if CheckNilParam(etcdHost) {
-		etcdHost = defaultEtcdpoints
+		tpmpaEtcd = append(tpmpaEtcd, defaultEtcdpoints)
+	} else {
+		tpmpaEtcd = strings.Split(etcdHost, ",")
 	}
+
 	etcdPrefix = os.Getenv("ETCD_PREFIX")
 	if CheckNilParam(etcdPrefix) {
 		etcdPrefix = defaultEtcdPrefix
 	}
-	if controller, err = etcd3.NewController([]string{etcdHost}, etcdPrefix, false); err != nil {
+	if controller, err = etcd3.NewController(tpmpaEtcd, etcdPrefix, false); err != nil {
 		logger.Errorf("init connect etcd service failed %s", err)
 		return
 	}
