@@ -1,4 +1,5 @@
 import pickle
+import socket
 import os
 import logging
 import threading
@@ -7,7 +8,7 @@ import run_env
 options = run_env.get_extra()['options']
 RUNNING_ENV_PATH = options['TUPLENET_RUNDIR']
 PKT_CONTROLLER_PIPE_PATH = os.path.join(RUNNING_ENV_PATH, 'pkt_controller_pipe')
-DEBUG_PIPE_PATH = os.path.join(RUNNING_ENV_PATH, 'debug_pipe')
+DEBUG_PIPE_PATH = os.path.join(RUNNING_ENV_PATH, 'debug_pipe.sock')
 
 logger = logging.getLogger(__name__)
 logger.info('RUNNING_ENV_PATH:%s', RUNNING_ENV_PATH)
@@ -27,8 +28,28 @@ def read_pipe(path):
     with open(path, 'rb') as fd:
         return pickle.load(fd)
 
-def read_debug_pipe():
-    return read_pipe(DEBUG_PIPE_PATH)
+def create_debug_pipe(addr, fn):
+    MAX_DEBUG_RECV_BUF_SIZE = 10240
+    def read_debug_pipe(param):
+        sock.listen(1)
+        while True:
+            conn, _ = sock.accept()
+            try:
+                while True:
+                    data = conn.recv(MAX_DEBUG_RECV_BUF_SIZE)
+                    if len(data) == 0:
+                        break
+                    feedback = fn(param, data)
+                    if feedback is not None:
+                        conn.sendall(feedback)
+                    else:
+                        conn.sendall("ERROR")
+            except Exception as err:
+                logger.exception("hit error in debug pipe, err:%s", err)
+
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    sock.bind(addr)
+    return read_debug_pipe
 
 def create_pkt_controller_tunnel():
     pipe_fd = os.open(PKT_CONTROLLER_PIPE_PATH, os.O_RDONLY)
@@ -43,8 +64,6 @@ def create_runtime_folder():
             os.makedirs(path)
         if not os.path.exists(PKT_CONTROLLER_PIPE_PATH):
             os.mkfifo(PKT_CONTROLLER_PIPE_PATH)
-        if not os.path.exists(DEBUG_PIPE_PATH):
-            os.mkfifo(DEBUG_PIPE_PATH)
     except Exception as err:
         logger.error("failed to create tuplenet runtime files, err:%s", err)
 
