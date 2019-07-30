@@ -2,14 +2,24 @@
 import sys
 import os
 import pickle
+import socket
 from optparse import OptionParser
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent_dir)
 from tp_utils import pipe
 
+MAX_RECV_BUF = 102400
+
 def write_debug_pipe(obj):
-    with open(pipe.DEBUG_PIPE_PATH, 'wb') as fd:
-        pickle.dump(obj, fd)
+    try:
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.connect(pipe.DEBUG_PIPE_PATH)
+        data = pickle.dumps(obj)
+        sock.sendall(data)
+        data = sock.recv(MAX_RECV_BUF)
+        print(data)
+    except Exception as err:
+        print("failed to get result from DEBUG socket, err:%s" % err)
 
 if __name__ == "__main__":
     usage = """usage: python %prog [options]
