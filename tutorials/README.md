@@ -90,32 +90,19 @@ we should add a nic(which link to physical networking) into a ovs bridge, if you
 ovs-vsctl add-br br0
 ovs-vsctl add-port br0 eth1 (eth1 is the nic links to the physical networking, eth0 rx/tx the tunnel frames)
 ONDEMAND=0 GATEWAY=1 tuplenet --interface eth0 --host 192.168.1.10:2379  (ONDEMAND=0 means this tuplenet instance generate all ovs-flow, GATEWAY=1 means the tuplenet should generate some specified ovs-flows which work on gateway node only)
-ovs-vsctl add-port br-int patchport-outside1 -- set Interface patchport-outside1 type=patch external_ids:iface-id=patchport-outside1 options:peer=patchport-outside1-peer
-ovs-vsctl add-port br0 patchport-outside1-peer -- set Interface patchport-outside1-peer type=patch options:peer=patchport-outside1
 ```
 if you only have one nic(eth0 link to physical networking and eth0 was used to rx/tx tunnel frames)
 ```
 ovs-vsctl add-br br0
 ifconfig br0 up; ifconfig br0 \${eth0_ip}; ovs-vsctl add-port br0 eth0; ifconfig eth0 0; route add default gw \${default_gw}
 ONDEMAND=0 GATEWAY=1 tuplenet --interface br0 --host 192.168.1.10:2379  (ONDEMAND=0 means this tuplenet instance generate all ovs-flow, GATEWAY=1 means the tuplenet should generate some specified ovs-flows which work on gateway node only)
-ovs-vsctl add-port br-int patchport-outside1 -- set Interface patchport-outside1 type=patch external_ids:iface-id=patchport-outside1 options:peer=patchport-outside1-peer
-ovs-vsctl add-port br0 patchport-outside1-peer -- set Interface patchport-outside1-peer type=patch options:peer=patchport-outside1
 ```
 
 
 **2.2 adding new virtual networking device**
 ```
-tpctl lr add LR-edge1 **edge1-node**  (the edge1-node is the host-edge1's system-id in ovsdb, the LR-edge1 pin on host-edge1, all traffic go through LR-edge1 should deliver to host-edge1.)
-tpctl ls add m1
-tpctl ls add outside1
-tpctl lr link LR-central m1 100.10.10.1/24
-tpctl lr link LR-edge1 m1  100.10.10.2/24
-tpctl lr link LR-edge1 outside1 192.168.1.20/24
-tpctl lsr add LR-central to_outside1 0.0.0.0/0 100.10.10.2 LR-central_to_m1
-tpctl lsr add LR-edge1 to_virt1 10.20.0.0/16 100.10.10.1 LR-edge1_to_m1
-tpctl lsr add LR-edge1 to_ext_world1 0.0.0.0/0  192.168.1.1 LR-edge1_to_outside1   (the 192.168.1.1 is the outside default gateway)
-tpctl lsp add outside1 patchport-outside1 255.255.255.255 ff:ff:ff:ff:ff:ee (all patchport's mac should be ff:ff:ff:ff:ff:ee, it tell tuplenet unknow/outter traffic can deliver to this port)
-tpctl lnat add LR-edge1 snat_rule1 10.20.0.0/16 snat 192.168.1.30   (create snat on LR-edge1)
+python tools/edge-operate.py --endpoint=192.168.1.10:2379 --op=init --vip=192.168.1.20/24 --virt=10.20.0.0/16 --ext_gw=192.168.1.1 --phy_br=br0  (execute this cmd on a edge node. 192.168.1.1 is the physical gateway. vip is an ip assgin to the edge1, physical switch can ping this vip to detect if the edge node is alive or not. So please give a vip which can be reach in physcial networking)
+tpctl lnat add tp_LR_edge1 snat_rule1 10.20.0.0/16 snat 192.168.1.30   (create snat on tp_LR_edge1)
 ```
 
 ```
@@ -151,7 +138,7 @@ tpctl lnat add LR-edge1 snat_rule1 10.20.0.0/16 snat 192.168.1.30   (create snat
 ```
 
 
-**2.2 config mtu and try to ping/wget**
+**2.3 config mtu and try to ping/wget**
 ```
 on Host-Alice: ip netns exec ns-alice ip link set dev nseth0 mtu 1400 (if the physical networking mtu is 1500, the mtu of endpoints in overlay networking should minus 100, tuplenet utilizes Geneve to construct frames)
 on Host-Bob: ip netns exec ns-bob ip link set dev nseth0 mtu 1400
@@ -168,21 +155,11 @@ ip netns exec ns-alice wget X.X.X.X
 
 **3.1  install tuplenet on host-edge2 and run the tuplenet as a gateway**
 - reference the commands in 2.1
-- change " patchport-outside1" to " patchport-outside2",  " patchport-outside1-peer" to " patchport-outside2-peer"
 
 **3.2 adding new virtual edge node**
 ```
-tpctl lr add LR-edge2 **edge2-node**  (the edge2-node is the host-edge2's system-id in ovsdb, the LR-edge2 pin on host-edge2, all traffic go through LR-edge2 should deliver to host-edge2.)
-tpctl ls add m2
-tpctl ls add outside2
-tpctl lr link LR-central m2 100.10.10.3/24
-tpctl lr link LR-edge2 m2 100.10.10.2/24
-tpctl lr link LR-edge2 outside2 192.168.1.21/24
-tpctl lsr add LR-central to_outside2 0.0.0.0/0 100.10.10.2 LR-central_to_m2 (ecmp enable once adding same static route policy, ovs side consume frame's dst_ip to hash to each edge node. Bfd enabled as well and it tells the status of edge nodes)
-tpctl lsr add LR-edge2 to_virt2 10.20.0.0/16 100.10.10.3 LR-edge2_to_m2
-tpctl lsr add LR-edge2 to_ext_world2 0.0.0.0/0  192.168.1.1 LR-edge2_to_outside2   (the 192.168.1.1 is the outside default gateway)
-tpctl lsp add outside2 patchport-outside2 255.255.255.255 ff:ff:ff:ff:ff:ee (all patchport's mac should be ff:ff:ff:ff:ff:ee, it tell tuplenet unknow/outter traffic can deliver to this port)
-tpctl lnat add LR-edge2 snat_rule2 10.20.0.0/16 snat 192.168.1.31  (create snat on LR-edge2)
+python tools/edge-operate.py --endpoint=192.168.1.10:2379 --op=add --vip=192.168.1.21/24 --phy_br=br0  (it search the current logical network-view and try to create a new ECMP path to ex-network. edge2 was assigned an ip 192.168.1.21)
+tpctl lnat add tp_LR_edge2 snat_rule2 10.20.0.0/16 snat 192.168.1.31  (create snat on tp_LR_edge2)
 ```
 
 ```
