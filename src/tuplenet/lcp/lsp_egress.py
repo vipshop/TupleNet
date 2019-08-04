@@ -7,10 +7,6 @@ import action
 import tpstatic as st
 
 
-pyDatalog.create_terms('Action1, Action2, Action3, Action4, Action5')
-pyDatalog.create_terms('Match1, Match2, Match3')
-pyDatalog.create_terms('Table, Priority, Match, Action')
-pyDatalog.create_terms('UUID_LR_CHASSIS')
 pyDatalog.create_terms('lsp_forward_packet')
 pyDatalog.create_terms('lsp_judge_loopback')
 pyDatalog.create_terms('lsp_pushout_packet')

@@ -6,12 +6,6 @@ from logicalview import *
 import tpstatic as st
 from flow_common import TABLE_PIPELINE_FORWARD, TABLE_EXTRACT_METADATA, TABLE_DROP_PACKET
 
-pyDatalog.create_terms('Table, Priority, Match, Action')
-pyDatalog.create_terms('Action1, Action2, Action3, Action4, Action5')
-pyDatalog.create_terms('Action6, Action7, Action8, Action9')
-pyDatalog.create_terms('Match1, Match2, Match3, Match4, Match5')
-pyDatalog.create_terms('X, Y, Z, UUID_CHASSIS')
-
 pyDatalog.create_terms('convert_phy_logical')
 pyDatalog.create_terms('arp_feedback_construct')
 pyDatalog.create_terms('output_pkt_by_reg')

@@ -6,11 +6,7 @@ from flow_common import *
 from reg import *
 import tpstatic as st
 
-pyDatalog.create_terms('Table, Priority, Match, Action')
-pyDatalog.create_terms('Action1, Action2, Action3, Action4, Action5')
-pyDatalog.create_terms('Action6, Action7, Action8, Action9, Action10')
-pyDatalog.create_terms('Match1, Match2, Match3, Match4, Match5')
-pyDatalog.create_terms('Route1, Route2, OFPORT1, OFPORT2')
+pyDatalog.create_terms('OFPORT1, OFPORT2')
 pyDatalog.create_terms('PHY_CHASSIS1, PHY_CHASSIS2')
 pyDatalog.create_terms('A,B,C,D,E,F,G,H,X,Y,Z')
 pyDatalog.create_terms('ecmp_aggregate_outport, ecmp_aggregate_outport_readd')

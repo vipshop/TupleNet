@@ -6,10 +6,6 @@ from logicalview import *
 from flow_common import *
 import tpstatic as st
 
-pyDatalog.create_terms('Table, Priority, Match, Action')
-pyDatalog.create_terms('Action1, Action2, Action3, Action4, Action5')
-pyDatalog.create_terms('Action6, Action7, Action8, Action9, Action10')
-pyDatalog.create_terms('Match1, Match2, Match3, Match4, Match5')
 pyDatalog.create_terms('LS1, UUID_LS1')
 
 pyDatalog.create_terms('lsp_output_dst_port')

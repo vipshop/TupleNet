@@ -4,10 +4,6 @@ import match
 from reg import *
 from logicalview import *
 
-pyDatalog.create_terms('Table, Priority, Priority1, Match, Action')
-pyDatalog.create_terms('Action1, Action2, Action3, Action4, Action5')
-pyDatalog.create_terms('Action6, Action7, Action8, Action9, Action10')
-pyDatalog.create_terms('Match1, Match2, Match3, Match4, Match5')
 pyDatalog.create_terms('trace_pipeline_start, trace_pipeline_end')
 pyDatalog.create_terms('trace_pipeline_module')
 
