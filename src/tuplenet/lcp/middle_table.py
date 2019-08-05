@@ -5,14 +5,11 @@ from reg import *
 from logicalview import *
 from flow_common import TABLE_LSP_EGRESS_FIRST, TABLE_LRP_INGRESS_IP_ROUTE, \
                         TABLE_EMBED2_METADATA, TABLE_DROP_PACKET, TABLE_OUTPUT_PKT
-pyDatalog.create_terms('Table, Priority, Match, Action')
-pyDatalog.create_terms('Action1, Action2, Action3, Action4, Action5')
-pyDatalog.create_terms('Match1, Match2, Match3, Match4, Match5')
 pyDatalog.create_terms('embed_metadata, extract_metadata, pipeline_forward')
 pyDatalog.create_terms('redirect_other_chassis')
 pyDatalog.create_terms('_gateway_state_sum, gateway_ofport')
 pyDatalog.create_terms('_gateway_ofport, _gateway_ofport_readd')
-pyDatalog.create_terms('A, B, C, X, Y, Z, UUID_CHASSIS')
+pyDatalog.create_terms('A, B, C, X, Y, Z')
 
 # it does not count deleting-element in, because it was only consume by
 # adding(_gateway_ofport) below

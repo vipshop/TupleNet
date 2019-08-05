@@ -47,8 +47,11 @@ def create_debug_pipe(addr, fn):
             except Exception as err:
                 logger.exception("hit error in debug pipe, err:%s", err)
 
-    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    sock.bind(addr)
+    try:
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.bind(addr)
+    except Exception as err:
+        logger.warning("failed to create and bind %s, err:%s", addr, err)
     return read_debug_pipe
 
 def create_pkt_controller_tunnel():

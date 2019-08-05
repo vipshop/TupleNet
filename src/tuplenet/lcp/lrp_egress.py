@@ -7,12 +7,6 @@ import action
 import nat
 
 
-pyDatalog.create_terms('Table, Priority, Match, Action')
-pyDatalog.create_terms('LRP, LR, LSP, LSP1, MAC, IP_INT')
-pyDatalog.create_terms('Action1, Action2, Action3, Action4, Action5')
-pyDatalog.create_terms('Action6, Action7, Action8, Action9, Action10')
-pyDatalog.create_terms('Match1, Match2, Match3, Match4, Match5, State6')
-pyDatalog.create_terms('UUID_LR_CHASSIS, X, Y, Z')
 pyDatalog.create_terms('lrp_forward_packet')
 pyDatalog.create_terms('lrp_update_eth_dst')
 pyDatalog.create_terms('lrp_ip_snat_stage1, lrp_ip_snat_stage2')

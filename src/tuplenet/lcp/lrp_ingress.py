@@ -7,13 +7,6 @@ from ecmp import *
 from reg import *
 import nat
 
-pyDatalog.create_terms('Table, Priority, Match, Action')
-pyDatalog.create_terms('LRP, LR, LSR, Route, FLOW')
-pyDatalog.create_terms('Action1, Action2, Action3, Action4, Action5')
-pyDatalog.create_terms('Action6, Action7, Action8, Action9, Action10')
-pyDatalog.create_terms('Match1, Match2, Match3, Match4, Match5')
-pyDatalog.create_terms('UUID_LR_CHASSIS')
-
 pyDatalog.create_terms('lrp_pkt_response')
 pyDatalog.create_terms('lrp_drop_unexpect')
 pyDatalog.create_terms('lrp_ip_unsnat_stage1, lrp_ip_unsnat_stage2')

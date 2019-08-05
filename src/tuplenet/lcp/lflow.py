@@ -12,11 +12,6 @@ from reg import *
 from logicalview import *
 from flow_common import *
 
-pyDatalog.create_terms('Table, Priority, Match, Action, LS')
-pyDatalog.create_terms('Match1, Match2, Match3')
-pyDatalog.create_terms('Action1, Action2, Action3, Action4')
-pyDatalog.create_terms('Priority1, Priority2')
-
 pyDatalog.create_terms('build_flows_phy')
 pyDatalog.create_terms('build_flows_mid')
 pyDatalog.create_terms('build_flows_lsp')
