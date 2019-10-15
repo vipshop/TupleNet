@@ -28,6 +28,9 @@ pyDatalog.create_terms('eth_dst')
 pyDatalog.create_terms('arp_proto')
 pyDatalog.create_terms('arp_tpa')
 pyDatalog.create_terms('arp_op')
+pyDatalog.create_terms('tcp_proto')
+pyDatalog.create_terms('tcp_dstport')
+pyDatalog.create_terms('tcp_srcport')
 
 pyDatalog.create_terms('icmp_proto, icmp_type, icmp_code')
 
@@ -89,6 +92,12 @@ def init_match_clause():
     icmp_type(X, Y) <= (Y == [(ICMP_TYPE_IDX, X)])
 
     icmp_code(X, Y) <= (Y == [(ICMP_CODE_IDX, X)])
+
+    tcp_proto(X) <= (X == [(TCP_PROTO_IDX, )])
+
+    tcp_dstport(X, Y) <= (Y == [(TCP_DST_IDX, X)])
+
+    tcp_srcport(X, Y) <= (Y == [(TCP_SRC_IDX, X)])
 
 def convert_flags(flags):
     # e.g flag = 1 means it occupies the first bit

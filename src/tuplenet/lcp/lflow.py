@@ -220,7 +220,7 @@ def init_build_flows_clause(options):
                 (Match == Match1 + Match2)
                 )
 
-    # build const trace flow for in first stage of lsp ingress
+    # build const trace flow in first stage of lsp ingress
     build_flows_lsp(Table, Priority, Match, Action) <= (
                 (Table == TABLE_LSP_TRACE_INGRESS_IN) &
                 action.load(0, NXM_Reg(REG_DST_IDX), Action1) &
@@ -253,6 +253,27 @@ def init_build_flows_clause(options):
                 (Action == Action1 + Action2)
                 )
 
+    # build const flows to forward packet to third party table
+    build_flows_lsp(Table, Priority, Match, Action) <= (
+                (Table == TABLE_LSP_INGRESS_PROCESS_EXT_LOGIC) &
+                (Priority == 0) &
+                match.match_none(Match) &
+                action.resubmit_table(TABLE_THIRD_PARTY, Action1) &
+                action.note(flows_note2idx('process_third_logic'), Action2) &
+                (Action == Action1 + Action2)
+                )
+
+    build_flows_lsp(Table, Priority, Match, Action) <= (
+                (Table == TABLE_THIRD_PARTY) &
+                (Priority == 0) &
+                match.match_none(Match) &
+                action.resubmit_table(TABLE_LSP_INGRESS_PROCESS_EXT_LOGIC+1, Action1) &
+                action.note(flows_note2idx('process_third_logic'), Action2) &
+                (Action == Action1 + Action2)
+                )
+
+    # build trace flow in end stage of lsp egress
+    # build trace flow in end stage of lsp egress
     # build trace flow in end stage of lsp egress
     # because the end stage of lsp egress has no uniq path, so
     # we have to add similar flows(simliar to regular flow) to trace
@@ -452,6 +473,7 @@ def init_build_flows_clause(options):
                 (Action == Action1 + Action2 + Action3)
                 )
 
+
 #---------------------const drop table--------------------------------
     build_flows_drop(Table, Priority, Match, Action) <= (
                 (Priority == 0) &
@@ -469,3 +491,4 @@ def init_build_flows_clause(options):
                 action.note(flows_note2idx('pkt_trace_drop_packet'), Action2) &
                 (Action == Action1 + Action2)
                 )
+

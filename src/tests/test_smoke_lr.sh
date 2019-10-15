@@ -25,7 +25,7 @@ port_add hv1 lsp-portA || exit_test
 port_add hv2 lsp-portB || exit_test
 
 prev_LS=LS-A
-max_lr_num=20 # we cannot make it 50 or bigger, because the ovs may treat the packet as a recircle packet
+max_lr_num=15 # we cannot make it 50 or bigger, because the ovs may treat the packet as a recircle packet
 last_subnet_id=$((max_lr_num+1))
 i=1
 while [ $i -le $max_lr_num ]; do
@@ -63,8 +63,8 @@ packet=`build_icmp_request 000006080703 000006080601 $ip_src $ip_dst $ttl 528d 8
 inject_pkt hv1 lsp-portA "$packet" || exit_test
 wait_for_packet # wait for packet
 
-ttl=ea
-expect_pkt=`build_icmp_request 0000060805${mac_hex} 000006080704 $ip_src $ip_dst $ttl 668d 8510`
+ttl=ef
+expect_pkt=`build_icmp_request 0000060805${mac_hex} 000006080704 $ip_src $ip_dst $ttl 618d 8510`
 real_pkt=`get_tx_pkt hv2 lsp-portB`
 verify_pkt $expect_pkt $real_pkt || exit_test
 
@@ -74,8 +74,8 @@ ttl=fe
 packet=`build_icmp_request 000006080703 000006080601 $ip_src $ip_dst $ttl 528f 8510`
 inject_pkt hv1 lsp-portA "$packet" || exit_test
 wait_for_packet # wait for packet
-ttl=eb
-expect_pkt=`build_icmp_response 000006080601 000006080703 $ip_dst $ip_src $ttl 658f 8d10`
+ttl=f0
+expect_pkt=`build_icmp_response 000006080601 000006080703 $ip_dst $ip_src $ttl 608f 8d10`
 real_pkt=`get_tx_pkt hv1 lsp-portA`
 verify_pkt $expect_pkt $real_pkt || exit_test
 
