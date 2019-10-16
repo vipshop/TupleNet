@@ -98,6 +98,8 @@ ACTION_STR_MAP = {
         Action_mod_nw_dst:'mod_nw_dst:{}',
         Action_mod_nw_ttl:'mod_nw_ttl:{}',
         Action_dec_ttl:'dec_ttl',
+        Action_mod_tp_dst:'mod_tp_dst:{}',
+        Action_mod_tp_src:'mod_tp_src:{}',
 
         Action_resubmit:'resubmit({},{})',
         Action_resubmit_table:'resubmit(,{})',

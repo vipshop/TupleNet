@@ -48,6 +48,8 @@ def create_debug_pipe(addr, fn):
                 logger.exception("hit error in debug pipe, err:%s", err)
 
     try:
+        if os.path.exists(DEBUG_PIPE_PATH):
+            os.remove(DEBUG_PIPE_PATH)
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         sock.bind(addr)
     except Exception as err:

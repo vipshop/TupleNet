@@ -12,6 +12,7 @@ pyDatalog.create_terms('lsp_output_dst_port')
 pyDatalog.create_terms('lsp_lookup_dst_port')
 pyDatalog.create_terms('lsp_arp_controller')
 pyDatalog.create_terms('lsp_arp_response')
+pyDatalog.create_terms('lsp_process_third_logic')
 pyDatalog.create_terms('lsp_untunnel_deliver')
 pyDatalog.create_terms('_lsp_remote_lsp_changed, _lsp_lrp_ls_changed')
 
