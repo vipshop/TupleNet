@@ -1,9 +1,9 @@
 ## Architecture
-TupleNet 的架构是一种面向数据库架构模式，在TupleNet构建的系统中所有TupleNet都是平等的，在控制层面上不会存在中控节点。但是为了使得TupleNet可以互相配合实现虚拟网络，我们使用ETCD作为这个TupleNet系统的中控大脑，ETCD中存储了所有的虚拟节点信息（虚拟交换机，虚拟路由器，以及虚拟port）和物理节点信息（TupleNet所在主机的IP）。
+TupleNet采用的架构是一种面向数据库模式架构，在TupleNet构建的系统中所有TupleNet都是平等的，在控制层面上不会存在中控节点。但是为了使得TupleNet可以互相配合实现虚拟网络，我们使用ETCD作为这个TupleNet系统的中控大脑，ETCD中存储了所有的虚拟节点信息（虚拟交换机，虚拟路由器，以及虚拟port）和物理节点信息（TupleNet所在主机的IP）。
 
-所有的TupleNet都会连接ETCD集群并持续watch这些网络拓扑信息，一旦发生改动（增加，删除）就会自动同步到所有的TupleNet节点，TupleNet将会根据这些变化进行相应的计算，并在本地生成ovs-flow插入到ovs-vswitchd中。整个过程相当于每个TupleNet几点都保存了一份ETCD完整数据，并且ovs-flow生成都由本地完成，通过这种方式我们将数据存储的快速访问和计算都offload到每个TupleNet节点，所以局部TupleNet节点的存活状态并不会影响其他节点。
+所有的TupleNet都会连接ETCD集群并持续watch网络拓扑信息，一旦发生改动（增加，删除）就会自动同步到所有的TupleNet节点，TupleNet将会根据这些变化进行相应的计算，并在本地生成ovs-flow插入到ovs-vswitchd中。整个过程相当于每个TupleNet节点都保存了一份完整网络拓扑数据，此外所有ovs-flow的生成都由本地计算完成，通过这种方式我们将网络拓扑的快速访问和计算都offload到每个TupleNet节点，所以局部TupleNet节点的存活状态并不会影响其他节点。
 
-之所以采用ETCD是因为它非常适合存储持久化的配置信息，即使TupleNet节点数量太大，也可以通过部署etcd proxy 来分散etcd cluster的压力，水平扩展性非常好。
+TupleNet之所以采用ETCD来存储网络拓扑信息是因为它非常适合存储持久化的配置信息，即使TupleNet节点数量太大，也可以通过部署etcd proxy 来分散etcd cluster的压力，ETCD的水平扩展性非常好。
 
 
 
@@ -30,9 +30,9 @@ TupleNet 的架构是一种面向数据库架构模式，在TupleNet构建的系
 
 
 ```
-TupleNet的dataplane使用的是openvswitch（版本大于等于2.8.0）来实现的，OVS是一个很优秀的开源软件交换机，并且被广泛使用，而且特性也很多，例如bonding，Mirroring，BFD。除此之外openvswitch可以通过在runtime时候配置ovs-flow来实现各种各样的网络数据包操作。
+TupleNet的dataplane使用的是openvswitch（版本大于等于2.10.0）来实现的，（OVS是一个很优秀的开源软件交换机，并且被广泛使用，而且特性也很多，例如bonding，Mirroring，BFD。除此之外openvswitch可以通过在runtime时候配置ovs-flow来实现各种各样的网络数据包操作）
 
-为了屏蔽物理网络设备影响，TupleNet通过使用Geneve在physical networking上组建virtual-networking，Geneve是一种扩展性很好的用于组建Overlay network的协议，和VXLAN很类似，它通过UDP来进行二次封包来解决跨越网络的问题。Geneve的扩展性非常好，并且很多网络已经支持Geneve的TSO，速度上和VXLAN，STT是相近的，而Geneve可以支持option headers，可以在一定程度上任意添加metadata，而更多的metadata数据为更好描述encapsulated报文提供了便捷。
+为了屏蔽物理网络设备影响，TupleNet通过使用Geneve在physical networking上组建virtual-networking，Geneve是一种扩展性很好的，可用于组建Overlay network的协议。它和VXLAN很类似，通过UDP来进行二次封包来解决跨越网络的问题。Geneve的扩展性非常好，并且很多网络已经支持Geneve的TSO，速度上和STT是相近的。此外Geneve可以支持option headers，可以在一定程度上任意添加metadata，而更多的metadata数据意味着能更方便地描述encapsulated的报文信息。
 
 ```
       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -47,12 +47,12 @@ TupleNet的dataplane使用的是openvswitch（版本大于等于2.8.0）来实�
 ## Implementation of control-plane
 
 ### Python and pyDatalog
-TupleNet的绝大部分代码是python书写的，因为python灵活，易于排查问题的特点，非常适合开发控制平面，能快速迭代出新的网络功能。虽然control-plane使用解析性动态语言后性能不如编译型程序快，但是control-plane并不会影响datapath的效率，不会引入数据包的转发耗时。所以我们认为使用python 动态语言来实现control-plane是非常合适的。
+TupleNet的绝大部分代码是python书写的。Python灵活，易于排查问题的特点，非常适合开发控制平面，能快速迭代出新的网络功能。虽然control-plane使用解析性动态语言后性能不如编译型程序快，但是control-plane并不会影响datapath的效率，不会引入数据包的转发耗时。所以我们认为使用python这种动态语言来实现control-plane也是非常合适的。
 
-在虚拟网络中，网络报文的行为需要实时根据目前的虚拟网络网络拓扑和物理网络拓扑来决定，而虚拟网络拓扑在实际使用中是易变的，且变化是频繁的。我们需要一种方便的工具能快速帮我们解析实时网络状态的迁移，因为这种状态的变更是完全stateless的，所以我们采用Datalog这种古老的语言帮助我们屏蔽网络拓扑变化带来的编程复杂性。PyDatalog是Datalog在python的一种实现，它语法形式类似Datalog。我们编写好地pyDatalog规则后输入网络拓扑数据就可以用pyDatalog 引擎动态计算出目前需要插入和删除的ovs-flow。pyDatalog是一个python lib库，可以有机地和python结合起来，使得python既有命令式编程能能力，同时也具备声明式编程能力。
+在虚拟网络中，网络报文的行为需要实时根据目前的虚拟网络网络拓扑和物理网络拓扑来决定，而虚拟网络拓扑在实际使用中是易变的，且变化是频繁的。我们需要一种方便的工具能快速帮我们解析实时网络状态的迁移，而且这种状态的变更是完全stateless的。为此我们采用Datalog这种古老的语言帮助我们屏蔽网络拓扑变化带来的编程复杂性。PyDatalog是Datalog在python的一种实现，它语法形式类似Datalog，可以有机地和python结合起来，使得python既有命令式编程能能力，同时也具备声明式编程能力。编写好pyDatalog规则后，根据目前网络拓扑就可以用pyDatalog 引擎动态计算出目前需要插入和删除的ovs-flow。
 
-### Consume ovsdb-client，ovs-vsctl and ovs-ofctl immediately
-TupleNet 没有使用ovs python库来直接和ovsdb来进行通信，也没有直接和ovs-vswitch通信来插入ovs-flows，我们认为绝大部分时候control-path并不会影响datapath的性能，而整个controlplane的耗时瓶颈也不在ovs-flow的插入，而在于flow的计算。所以我们直接采用调用ovsdb-client来监听ovsdb interface的变化，使用ovs-vsctl 和 ovs-ofctl来配置ovs以及往ovs中插入ovs-flow。这种取舍使得我们能精简大量代码，将大量工作直接交给ovs tools，并且大大简化了ovs-flow的生成。
+### Consume ovs-vsctl and ovs-ofctl immediately
+TupleNet没有直接和ovs-vswitch通信来操作ovs-flows。我们认为绝大部分时候control-path并不会影响datapath的性能，而整个controlplane的耗时瓶颈也不在ovs-flow的插入，而在于flow的计算。所以我们直接采用使用ovs-vsctl 和 ovs-ofctl来实时配置ovs。这种取舍使得我们能精简大量代码，将大量工作直接交给ovs tools，并且大大简化了ovs-flow的生成的逻辑。
 
 ## Implementation of data-plane
 目前我们在Geneve的option header中使用64个bit来存储encapsulated frame需要的metadata信息，其中source port ID 和destination port ID（logcial switch和logical router的port都会占用一个port ID，该ID目前根据给定的port IP的后16bit来自动生成）各占用16bit，也就是说一个logical switch或logical router中，最多只能有65536个port。Frame Flag会说明payload里面数据报文的特殊意义，比如表明这个数据包是特殊的需要帮助转发的报文。Command ID是用来和etcd交互的，它用来标记该数据报文属于某个特殊命令，目前被用于pkt-tracing。
@@ -141,7 +141,7 @@ TupleNet 没有使用ovs python库来直接和ovsdb来进行通信，也没有�
 ```
 
 ### Traffic redirecting
-Traffic redirecting是TupleNet的一个重要特性。TupleNet默认启动时候会使用ondemand方式来生成ovs-flow，也就是说当TupleNet收到traffic中的第一个网络报文时候才会生成相应的ovs-flow。这样做的好处是能最大节约TupleNet所在机器的CPU，只计算真正需要的ovs-flow，但是这种方式同时也会带来traffic中首包被丢弃或产生严重延迟的问题。但是如果采用全量计算ovs-flow就会占用大量的CPU资源生成无用的ovs-flow，而且每次网络拓扑的微小变化都要通过pyDatalog来计算。为了解决这个问题，我们引入了redirecting功能。
+Traffic redirecting是TupleNet的一个重要特性。TupleNet默认启动时候会使用ondemand方式来生成ovs-flow，也就是说当TupleNet收到traffic中的第一个网络报文时候才会生成相应的ovs-flow。这样做的好处是能最大节约TupleNet所在机器的CPU，只计算真正需要的ovs-flow，但是这种方式同时也会带来traffic中首包被丢弃或产生严重延迟的问题。但是如果采用全量计算ovs-flow，就会占用大量的CPU资源生成大量无用的ovs-flow，而且每次网络拓扑的微小变化都要通过pyDatalog来计算。为了解决这个问题，我们引入了redirecting功能。
 
 Redirecting主要功能场景有两块：
 -  当某个Edge TupleNet节点和普通的TupleNet节点产生网络路径异常（不能将报文发给对方）时候，BFD会发现它们之间的通路存在问题。这个时候如果Edge TupleNet启动了redirecting功能后就可以将报文先发给其他的Edge节点，收到这个报文的Edge节点判断出这个报文是个redirecting报文后就会帮助转发到相应的TupleNet节点，而这个TupleNet节点通过BFD和ECMP可以自动选择其他路径，跳过有问题的Edge几点，将数据报文转发给正常的Edge节点。
