@@ -15,7 +15,8 @@ before_install:
     - DEB_BUILD_OPTIONS='parallel=8 nocheck' fakeroot debian/rules binary
     - cd -
     - sudo dpkg -i openvswitch-common_*.deb openvswitch-switch_*.deb libopenvswitch-dev_*.deb libopenvswitch_*.deb
-    - pip install pyDatalog etcd3
+    - pip install pyDatalog
+    - pip install etcd3==0.10.0
 
 install:
     - cd src/tuplenet/pkt_controller

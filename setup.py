@@ -60,7 +60,7 @@ setuptools.setup(
         'Programming Language :: Python :: 2',
         'Programming Language :: Python :: 2.7',
         ],
-    install_requires = ['pyDatalog', 'etcd3'],
+    install_requires = ['pyDatalog', 'etcd3==0.10.0'],
     package_data = {'tuplenet':['pkt_controller/pkt_controller'],},
     entry_points = {'console_scripts':['tuplenet = tuplenet.lcp:run_tuplenet']},
     scripts = [TP_CNM_PATH, TP_CNI_PATH, TP_CTL_PATH],
